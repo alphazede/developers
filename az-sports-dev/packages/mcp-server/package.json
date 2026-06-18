@@ -1,0 +1,61 @@
+{
+  "name": "@azs/mcp-server",
+  "version": "1.0.0",
+  "mcpName": "io.github.alphazede/mcp-server",
+  "description": "AlphaZede Sports MCP Server — real-time odds, player props, and parlay analysis via the Model Context Protocol",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "bin": {
+    "azs-mcp-server": "./dist/index.js"
+  },
+  "exports": {
+    ".": "./dist/index.js"
+  },
+  "files": [
+    "dist",
+    "package.json",
+    "README.md",
+    "LICENSE",
+    "server.json"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "pack-dryrun": "npm pack --dry-run --json"
+  },
+  "keywords": [
+    "alphazede",
+    "sports",
+    "mcp",
+    "model-context-protocol",
+    "sports-betting",
+    "fantasy-sports",
+    "sports-analytics",
+    "azs"
+  ],
+  "author": "AlphaZede Sports",
+  "license": "Apache-2.0",
+  "homepage": "https://github.com/alphazede/developers/tree/main/az-sports-dev/packages/mcp-server#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/alphazede/developers.git",
+    "directory": "az-sports-dev/packages/mcp-server"
+  },
+  "bugs": {
+    "url": "https://github.com/alphazede/developers/issues"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.12.1",
+    "zod": "^3.23.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "^5.7.0",
+    "vitest": "^4.1.2"
+  }
+}

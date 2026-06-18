@@ -1,0 +1,2230 @@
+openapi: "3.1.0"
+info:
+  title: "AlphaZede Sports API"
+  version: "v1"
+  summary: "REST endpoints for slate discovery, gameboard views, line movement, futures markets, game forecasts, prop edges, forecast streaming, alerts, fantasy tooling, projection lookups, premium analysis tools, and authenticated developer account management."
+  description: "Public REST contract for AlphaZede Sports developer integrations.\nContract version: 2026-04-01."
+  contact:
+    name: "AlphaZede Sports Developer Support"
+    url: "https://alphazedesports.com/contact"
+  license:
+    name: "Apache-2.0"
+    url: "https://www.apache.org/licenses/LICENSE-2.0.html"
+externalDocs:
+  description: "Public AlphaZede Sports developer repository."
+  url: "https://github.com/alphazede/developers/tree/main/az-sports-dev"
+servers:
+  - url: "https://api.alphazedesports.com"
+    description: "Production AlphaZede Sports API."
+security:
+  - bearerAuth: []
+tags:
+  - name: "Health"
+    description: "Health public API operations."
+  - name: "Games"
+    description: "Games public API operations."
+  - name: "Movement"
+    description: "Movement public API operations."
+  - name: "Futures"
+    description: "Futures public API operations."
+  - name: "Alerts"
+    description: "Alerts public API operations."
+  - name: "ML"
+    description: "ML public API operations."
+  - name: "Fantasy"
+    description: "Fantasy public API operations."
+  - name: "Arbitrage"
+    description: "Arbitrage public API operations."
+  - name: "DFS"
+    description: "DFS public API operations."
+  - name: "SGP"
+    description: "SGP public API operations."
+  - name: "Streaming"
+    description: "Streaming public API operations."
+  - name: "Forecasts"
+    description: "Forecasts public API operations."
+paths:
+  /api/v1/health:
+    get:
+      operationId: "getHealth"
+      tags:
+        - "Health"
+      summary: "Check API availability"
+      description: "Returns a simple status object."
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: "Check API availability response."
+          headers:
+            x-ratelimit-limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            x-ratelimit-remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            x-ratelimit-reset:
+              $ref: "#/components/headers/RateLimitReset"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/getHealthResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+  /api/v1/games/{sport}/{date}:
+    get:
+      operationId: "listGamesBySportAndDate"
+      tags:
+        - "Games"
+      summary: "List games for a sport and date"
+      description: "Date format is YYYY-MM-DD."
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: "List games for a sport and date response."
+          headers:
+            x-ratelimit-limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            x-ratelimit-remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            x-ratelimit-reset:
+              $ref: "#/components/headers/RateLimitReset"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/listGamesBySportAndDateResponse"
+              examples:
+                example1:
+                  summary: "List the NBA slate for a date"
+                  description: "A minimal read request with bearer auth and an uppercase sport segment."
+                  value:
+                    games:
+                      - game_id: "NBA_2026-04-01_BOS_NYK"
+                        home_team: "BOS"
+                        away_team: "NYK"
+                        start_time: "2026-04-01T23:30:00Z"
+                        status: "scheduled"
+                        prop_count: 42
+                        has_sharp_moves: true
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+      parameters:
+        - name: "sport"
+          in: "path"
+          required: true
+          schema:
+            type: "string"
+            minLength: 1
+        - name: "date"
+          in: "path"
+          required: true
+          schema:
+            type: "string"
+            minLength: 1
+  /api/v1/games/{sport}/{game_id}/props:
+    get:
+      operationId: "listGameProps"
+      tags:
+        - "Games"
+      summary: "Fetch display-safe props for one game"
+      description: "Returns display-safe prop fields for public integrations."
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: "Fetch display-safe props for one game response."
+          headers:
+            x-ratelimit-limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            x-ratelimit-remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            x-ratelimit-reset:
+              $ref: "#/components/headers/RateLimitReset"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/listGamePropsResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+      parameters:
+        - name: "sport"
+          in: "path"
+          required: true
+          schema:
+            type: "string"
+            minLength: 1
+        - name: "game_id"
+          in: "path"
+          required: true
+          schema:
+            type: "string"
+            minLength: 1
+  /api/v1/gameboard/{sport}/{game_id}:
+    get:
+      operationId: "getGameboard"
+      tags:
+        - "Games"
+      summary: "Fetch a full gameboard payload"
+      description: "Includes game metadata plus obfuscated props."
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: "Fetch a full gameboard payload response."
+          headers:
+            x-ratelimit-limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            x-ratelimit-remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            x-ratelimit-reset:
+              $ref: "#/components/headers/RateLimitReset"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/getGameboardResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+      parameters:
+        - name: "sport"
+          in: "path"
+          required: true
+          schema:
+            type: "string"
+            minLength: 1
+        - name: "game_id"
+          in: "path"
+          required: true
+          schema:
+            type: "string"
+            minLength: 1
+  /api/v1/movement/{sport}/{game_id}/{prop_id}/history:
+    get:
+      operationId: "getMovementHistory"
+      tags:
+        - "Movement"
+      summary: "Read historical line movement for one prop"
+      description: "Returns a time-ordered history array."
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: "Read historical line movement for one prop response."
+          headers:
+            x-ratelimit-limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            x-ratelimit-remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            x-ratelimit-reset:
+              $ref: "#/components/headers/RateLimitReset"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/getMovementHistoryResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+      parameters:
+        - name: "sport"
+          in: "path"
+          required: true
+          schema:
+            type: "string"
+            minLength: 1
+        - name: "game_id"
+          in: "path"
+          required: true
+          schema:
+            type: "string"
+            minLength: 1
+        - name: "prop_id"
+          in: "path"
+          required: true
+          schema:
+            type: "string"
+            minLength: 1
+  /api/v1/futures/{sport}:
+    get:
+      operationId: "listFutures"
+      tags:
+        - "Futures"
+      summary: "Fetch the futures market surface for a sport"
+      description: "Accepts an optional days_ahead query parameter."
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: "Fetch the futures market surface for a sport response."
+          headers:
+            x-ratelimit-limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            x-ratelimit-remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            x-ratelimit-reset:
+              $ref: "#/components/headers/RateLimitReset"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/listFuturesResponse"
+              examples:
+                example1:
+                  summary: "Read a futures market in Python"
+                  description: "The futures endpoint accepts an optional `days_ahead` query parameter between 1 and 30."
+                  value:
+                    futures:
+                      - game_id: "NBA_2026-04-05_DEN_LAL"
+                        game_date: "2026-04-05"
+                        home_team: "DEN"
+                        away_team: "LAL"
+                        early_lines:
+                          - prop_id: "prop-1"
+                            player: "Nikola Jokic"
+                            stat: "points"
+                            line: 28.5
+                            opening_line: 27.5
+                            line_movement: 1
+                            velocity_class: "SHARP"
+                            sharpest_books:
+                              - book: "FanDuel"
+                                line_movement: 1.5
+                            drift_history:
+                              - timestamp: "2026-04-01T14:00:00Z"
+                                line: 27.5
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+      parameters:
+        - name: "sport"
+          in: "path"
+          required: true
+          schema:
+            type: "string"
+            minLength: 1
+        - name: "days_ahead"
+          in: "query"
+          required: false
+          schema:
+            type: "integer"
+            minimum: 1
+            maximum: 30
+  /api/v1/futures/{sport}/market:
+    get:
+      operationId: "listFuturesMarket"
+      tags:
+        - "Futures"
+      summary: "Alias for the futures market response"
+      description: "Shares the same payload and query rules as /api/v1/futures/{sport}."
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: "Alias for the futures market response response."
+          headers:
+            x-ratelimit-limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            x-ratelimit-remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            x-ratelimit-reset:
+              $ref: "#/components/headers/RateLimitReset"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/listFuturesMarketResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+      parameters:
+        - name: "sport"
+          in: "path"
+          required: true
+          schema:
+            type: "string"
+            minLength: 1
+        - name: "days_ahead"
+          in: "query"
+          required: false
+          schema:
+            type: "integer"
+            minimum: 1
+            maximum: 30
+  /api/v1/futures/{sport}/{prop_id}/drift:
+    get:
+      operationId: "getFuturesDrift"
+      tags:
+        - "Futures"
+      summary: "Read the futures drift history for one prop"
+      description: "Returns a drift-history array with display-safe score fields."
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: "Read the futures drift history for one prop response."
+          headers:
+            x-ratelimit-limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            x-ratelimit-remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            x-ratelimit-reset:
+              $ref: "#/components/headers/RateLimitReset"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/getFuturesDriftResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+      parameters:
+        - name: "sport"
+          in: "path"
+          required: true
+          schema:
+            type: "string"
+            minLength: 1
+        - name: "prop_id"
+          in: "path"
+          required: true
+          schema:
+            type: "string"
+            minLength: 1
+        - name: "days_ahead"
+          in: "query"
+          required: false
+          schema:
+            type: "integer"
+            minimum: 1
+            maximum: 30
+  /api/v1/alerts/history:
+    get:
+      operationId: "listAlertHistory"
+      tags:
+        - "Alerts"
+      summary: "Fetch alert history"
+      description: "Supports type and hours query filters."
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: "Fetch alert history response."
+          headers:
+            x-ratelimit-limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            x-ratelimit-remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            x-ratelimit-reset:
+              $ref: "#/components/headers/RateLimitReset"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/listAlertHistoryResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+  /api/v1/alerts/active:
+    get:
+      operationId: "listActiveAlerts"
+      tags:
+        - "Alerts"
+      summary: "Fetch active alerts"
+      description: "Supports an optional type query filter."
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: "Fetch active alerts response."
+          headers:
+            x-ratelimit-limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            x-ratelimit-remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            x-ratelimit-reset:
+              $ref: "#/components/headers/RateLimitReset"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/listActiveAlertsResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+  /api/v1/ml/projection:
+    get:
+      operationId: "getMlProjection"
+      tags:
+        - "ML"
+      summary: "Fetch one projection lookup"
+      description: "Premium route that requires player, stat, and sport query parameters."
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: "Fetch one projection lookup response."
+          headers:
+            x-ratelimit-limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            x-ratelimit-remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            x-ratelimit-reset:
+              $ref: "#/components/headers/RateLimitReset"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/getMlProjectionResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+  /api/v1/fantasy/providers:
+    get:
+      operationId: "listFantasyProviders"
+      tags:
+        - "Fantasy"
+      summary: "Fetch fantasy provider connection state"
+      description: "Returns provider labels, gated status, trust state, and entitlement flags."
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: "Fetch fantasy provider connection state response."
+          headers:
+            x-ratelimit-limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            x-ratelimit-remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            x-ratelimit-reset:
+              $ref: "#/components/headers/RateLimitReset"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/listFantasyProvidersResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+      parameters:
+        - name: "sport"
+          in: "query"
+          required: false
+          schema:
+            type: "string"
+        - name: "week"
+          in: "query"
+          required: false
+          schema:
+            type: "string"
+        - name: "league_id"
+          in: "query"
+          required: false
+          schema:
+            type: "string"
+  /api/v1/fantasy/leagues:
+    get:
+      operationId: "listFantasyLeagues"
+      tags:
+        - "Fantasy"
+      summary: "Fetch fantasy league summaries"
+      description: "Returns linked league summaries plus provider state and rollout messaging."
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: "Fetch fantasy league summaries response."
+          headers:
+            x-ratelimit-limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            x-ratelimit-remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            x-ratelimit-reset:
+              $ref: "#/components/headers/RateLimitReset"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/listFantasyLeaguesResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+      parameters:
+        - name: "sport"
+          in: "query"
+          required: false
+          schema:
+            type: "string"
+        - name: "week"
+          in: "query"
+          required: false
+          schema:
+            type: "string"
+        - name: "league_id"
+          in: "query"
+          required: false
+          schema:
+            type: "string"
+  /api/v1/fantasy/projections:
+    get:
+      operationId: "listFantasyProjections"
+      tags:
+        - "Fantasy"
+      summary: "Fetch fantasy projections"
+      description: "Supports sport plus optional week/scoring; tennis also accepts tour and date-window filters behind the fantasy rollout flag."
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: "Fetch fantasy projections response."
+          headers:
+            x-ratelimit-limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            x-ratelimit-remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            x-ratelimit-reset:
+              $ref: "#/components/headers/RateLimitReset"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/listFantasyProjectionsResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+      parameters:
+        - name: "sport"
+          in: "query"
+          required: false
+          schema:
+            type: "string"
+        - name: "week"
+          in: "query"
+          required: false
+          schema:
+            type: "string"
+        - name: "league_id"
+          in: "query"
+          required: false
+          schema:
+            type: "string"
+  /api/v1/fantasy/start-sit:
+    get:
+      operationId: "getFantasyStartSit"
+      tags:
+        - "Fantasy"
+      summary: "Get a fantasy start-sit recommendation"
+      description: "Requires league_id UUID and week query parameters; returns a FantasyRecommendationEnvelope."
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: "Get a fantasy start-sit recommendation response."
+          headers:
+            x-ratelimit-limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            x-ratelimit-remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            x-ratelimit-reset:
+              $ref: "#/components/headers/RateLimitReset"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/getFantasyStartSitResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+      parameters:
+        - name: "sport"
+          in: "query"
+          required: false
+          schema:
+            type: "string"
+        - name: "week"
+          in: "query"
+          required: false
+          schema:
+            type: "string"
+        - name: "league_id"
+          in: "query"
+          required: false
+          schema:
+            type: "string"
+  /api/v1/fantasy/waiver:
+    get:
+      operationId: "getFantasyWaiver"
+      tags:
+        - "Fantasy"
+      summary: "Fetch fantasy waiver suggestions"
+      description: "Requires league_id UUID and week query parameters; returns a FantasyRecommendationEnvelope."
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: "Fetch fantasy waiver suggestions response."
+          headers:
+            x-ratelimit-limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            x-ratelimit-remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            x-ratelimit-reset:
+              $ref: "#/components/headers/RateLimitReset"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/getFantasyWaiverResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+      parameters:
+        - name: "sport"
+          in: "query"
+          required: false
+          schema:
+            type: "string"
+        - name: "week"
+          in: "query"
+          required: false
+          schema:
+            type: "string"
+        - name: "league_id"
+          in: "query"
+          required: false
+          schema:
+            type: "string"
+  /api/v1/fantasy/draft-rankings:
+    get:
+      operationId: "getFantasyDraftRankings"
+      tags:
+        - "Fantasy"
+      summary: "Fetch fantasy draft rankings"
+      description: "Supports sport plus optional season, scoring, format, pick, and teams queries."
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: "Fetch fantasy draft rankings response."
+          headers:
+            x-ratelimit-limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            x-ratelimit-remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            x-ratelimit-reset:
+              $ref: "#/components/headers/RateLimitReset"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/getFantasyDraftRankingsResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+      parameters:
+        - name: "sport"
+          in: "query"
+          required: false
+          schema:
+            type: "string"
+        - name: "week"
+          in: "query"
+          required: false
+          schema:
+            type: "string"
+        - name: "league_id"
+          in: "query"
+          required: false
+          schema:
+            type: "string"
+  /api/v1/fantasy/matchup:
+    get:
+      operationId: "getFantasyMatchup"
+      tags:
+        - "Fantasy"
+      summary: "Fetch a fantasy matchup view"
+      description: "Requires sport, player, and opponent query parameters."
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: "Fetch a fantasy matchup view response."
+          headers:
+            x-ratelimit-limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            x-ratelimit-remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            x-ratelimit-reset:
+              $ref: "#/components/headers/RateLimitReset"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/getFantasyMatchupResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+      parameters:
+        - name: "sport"
+          in: "query"
+          required: false
+          schema:
+            type: "string"
+        - name: "week"
+          in: "query"
+          required: false
+          schema:
+            type: "string"
+        - name: "league_id"
+          in: "query"
+          required: false
+          schema:
+            type: "string"
+  /api/v1/fantasy/trends:
+    get:
+      operationId: "getFantasyTrends"
+      tags:
+        - "Fantasy"
+      summary: "Fetch fantasy trend data"
+      description: "Supports sport plus optional days, scoring, and position query parameters."
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: "Fetch fantasy trend data response."
+          headers:
+            x-ratelimit-limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            x-ratelimit-remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            x-ratelimit-reset:
+              $ref: "#/components/headers/RateLimitReset"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/getFantasyTrendsResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+      parameters:
+        - name: "sport"
+          in: "query"
+          required: false
+          schema:
+            type: "string"
+        - name: "week"
+          in: "query"
+          required: false
+          schema:
+            type: "string"
+        - name: "league_id"
+          in: "query"
+          required: false
+          schema:
+            type: "string"
+  /api/v1/fantasy/leagues/{league_id}/roster:
+    get:
+      operationId: "getFantasyLeagueRoster"
+      tags:
+        - "Fantasy"
+      summary: "Fetch the scaffolded fantasy league roster view"
+      description: "Returns contract-backed roster-tab metadata for a single league."
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: "Fetch the scaffolded fantasy league roster view response."
+          headers:
+            x-ratelimit-limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            x-ratelimit-remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            x-ratelimit-reset:
+              $ref: "#/components/headers/RateLimitReset"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/getFantasyLeagueRosterResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+      parameters:
+        - name: "league_id"
+          in: "path"
+          required: true
+          schema:
+            type: "string"
+            minLength: 1
+        - name: "sport"
+          in: "query"
+          required: false
+          schema:
+            type: "string"
+        - name: "week"
+          in: "query"
+          required: false
+          schema:
+            type: "string"
+        - name: "league_id"
+          in: "query"
+          required: false
+          schema:
+            type: "string"
+  /api/v1/fantasy/leagues/{league_id}/matchup:
+    get:
+      operationId: "getFantasyLeagueMatchup"
+      tags:
+        - "Fantasy"
+      summary: "Fetch the scaffolded fantasy league matchup view"
+      description: "Returns contract-backed matchup-tab metadata for a single league."
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: "Fetch the scaffolded fantasy league matchup view response."
+          headers:
+            x-ratelimit-limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            x-ratelimit-remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            x-ratelimit-reset:
+              $ref: "#/components/headers/RateLimitReset"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/getFantasyLeagueMatchupResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+      parameters:
+        - name: "league_id"
+          in: "path"
+          required: true
+          schema:
+            type: "string"
+            minLength: 1
+        - name: "sport"
+          in: "query"
+          required: false
+          schema:
+            type: "string"
+        - name: "week"
+          in: "query"
+          required: false
+          schema:
+            type: "string"
+        - name: "league_id"
+          in: "query"
+          required: false
+          schema:
+            type: "string"
+  /api/v1/fantasy/leagues/{league_id}/waivers:
+    get:
+      operationId: "getFantasyLeagueWaivers"
+      tags:
+        - "Fantasy"
+      summary: "Fetch the scaffolded fantasy league waiver view"
+      description: "Returns contract-backed waiver-tab metadata for a single league."
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: "Fetch the scaffolded fantasy league waiver view response."
+          headers:
+            x-ratelimit-limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            x-ratelimit-remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            x-ratelimit-reset:
+              $ref: "#/components/headers/RateLimitReset"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/getFantasyLeagueWaiversResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+      parameters:
+        - name: "league_id"
+          in: "path"
+          required: true
+          schema:
+            type: "string"
+            minLength: 1
+        - name: "sport"
+          in: "query"
+          required: false
+          schema:
+            type: "string"
+        - name: "week"
+          in: "query"
+          required: false
+          schema:
+            type: "string"
+        - name: "league_id"
+          in: "query"
+          required: false
+          schema:
+            type: "string"
+  /api/v1/fantasy/leagues/{league_id}/trades:
+    get:
+      operationId: "getFantasyLeagueTrades"
+      tags:
+        - "Fantasy"
+      summary: "Fetch the scaffolded fantasy league trades view"
+      description: "Returns contract-backed trade-tab metadata for a single league."
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: "Fetch the scaffolded fantasy league trades view response."
+          headers:
+            x-ratelimit-limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            x-ratelimit-remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            x-ratelimit-reset:
+              $ref: "#/components/headers/RateLimitReset"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/getFantasyLeagueTradesResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+      parameters:
+        - name: "league_id"
+          in: "path"
+          required: true
+          schema:
+            type: "string"
+            minLength: 1
+        - name: "sport"
+          in: "query"
+          required: false
+          schema:
+            type: "string"
+        - name: "week"
+          in: "query"
+          required: false
+          schema:
+            type: "string"
+        - name: "league_id"
+          in: "query"
+          required: false
+          schema:
+            type: "string"
+  /api/v1/players/{canonical_id}/profile:
+    get:
+      operationId: "getUnifiedPlayerProfile"
+      tags:
+        - "Fantasy"
+      summary: "Fetch the unified player profile contract"
+      description: "Returns profile modules, trust state, and fantasy entitlements for a canonical player."
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: "Fetch the unified player profile contract response."
+          headers:
+            x-ratelimit-limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            x-ratelimit-remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            x-ratelimit-reset:
+              $ref: "#/components/headers/RateLimitReset"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/getUnifiedPlayerProfileResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+      parameters:
+        - name: "canonical_id"
+          in: "path"
+          required: true
+          schema:
+            type: "string"
+            minLength: 1
+  /api/v1/players/{canonical_id}/fantasy:
+    get:
+      operationId: "getFantasyPlayerProfile"
+      tags:
+        - "Fantasy"
+      summary: "Fetch the fantasy player-profile slice"
+      description: "Returns fantasy-specific profile modules for a canonical player."
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: "Fetch the fantasy player-profile slice response."
+          headers:
+            x-ratelimit-limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            x-ratelimit-remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            x-ratelimit-reset:
+              $ref: "#/components/headers/RateLimitReset"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/getFantasyPlayerProfileResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+      parameters:
+        - name: "canonical_id"
+          in: "path"
+          required: true
+          schema:
+            type: "string"
+            minLength: 1
+        - name: "sport"
+          in: "query"
+          required: false
+          schema:
+            type: "string"
+        - name: "week"
+          in: "query"
+          required: false
+          schema:
+            type: "string"
+        - name: "league_id"
+          in: "query"
+          required: false
+          schema:
+            type: "string"
+  /api/v1/players/{canonical_id}/betting:
+    get:
+      operationId: "getBettingPlayerProfile"
+      tags:
+        - "Fantasy"
+      summary: "Fetch the betting player-profile slice"
+      description: "Returns betting-specific profile modules for a canonical player."
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: "Fetch the betting player-profile slice response."
+          headers:
+            x-ratelimit-limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            x-ratelimit-remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            x-ratelimit-reset:
+              $ref: "#/components/headers/RateLimitReset"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/getBettingPlayerProfileResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+      parameters:
+        - name: "canonical_id"
+          in: "path"
+          required: true
+          schema:
+            type: "string"
+            minLength: 1
+  /api/v1/arb/active:
+    get:
+      operationId: "listActiveArbs"
+      tags:
+        - "Arbitrage"
+      summary: "List active arbitrage opportunities"
+      description: "Premium route gated by tier."
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: "List active arbitrage opportunities response."
+          headers:
+            x-ratelimit-limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            x-ratelimit-remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            x-ratelimit-reset:
+              $ref: "#/components/headers/RateLimitReset"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/listActiveArbsResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+  /api/v1/dfs/lineups:
+    get:
+      operationId: "getDfsLineups"
+      tags:
+        - "DFS"
+      summary: "Fetch optimized DFS lineups for a sport and platform"
+      description: "Requires sport and platform query parameters."
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: "Fetch optimized DFS lineups for a sport and platform response."
+          headers:
+            x-ratelimit-limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            x-ratelimit-remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            x-ratelimit-reset:
+              $ref: "#/components/headers/RateLimitReset"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/getDfsLineupsResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+  /api/v1/sgp/evaluate:
+    post:
+      operationId: "evaluateSgp"
+      tags:
+        - "SGP"
+      summary: "Evaluate a same-game parlay correlation profile"
+      description: "Premium route with a JSON request body."
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: "Evaluate a same-game parlay correlation profile response."
+          headers:
+            x-ratelimit-limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            x-ratelimit-remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            x-ratelimit-reset:
+              $ref: "#/components/headers/RateLimitReset"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/evaluateSgpResponse"
+              examples:
+                example1:
+                  summary: "Evaluate an SGP in JavaScript"
+                  description: "A premium request with a JSON body and a typed response envelope."
+                  value:
+                    correlation_coefficient: 0.31
+                    shared_games: 24
+                    historical_joint_hit_rate: 0.54
+                    sportsbook_parlay_odds: 4.75
+                    ev_percentage: 0.078
+                    recommendation: "Positive EV"
+                    archetype: "same-team combo"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SgpEvaluateRequest"
+  /api/v1/stream/{sport}:
+    get:
+      operationId: "streamSportUpdates"
+      tags:
+        - "Streaming"
+      summary: "Subscribe to sport-specific SSE updates"
+      description: "Streams heartbeat, shutdown, and JSON event payloads."
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: "Subscribe to sport-specific SSE updates response."
+          headers:
+            x-ratelimit-limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            x-ratelimit-remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            x-ratelimit-reset:
+              $ref: "#/components/headers/RateLimitReset"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/streamSportUpdatesResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+      parameters:
+        - name: "sport"
+          in: "path"
+          required: true
+          schema:
+            type: "string"
+            minLength: 1
+  /api/v1/forecasts/{sport}:
+    get:
+      operationId: "listForecastsBySport"
+      tags:
+        - "Forecasts"
+      summary: "List the latest forecasts for a sport and date"
+      description: "Feature-flagged surface. Free tier returns win probabilities only. Supports an optional date query parameter (YYYY-MM-DD)."
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: "List the latest forecasts for a sport and date response."
+          headers:
+            x-ratelimit-limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            x-ratelimit-remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            x-ratelimit-reset:
+              $ref: "#/components/headers/RateLimitReset"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/listForecastsBySportResponse"
+              examples:
+                example1:
+                  summary: "Read the MLB forecast slate"
+                  description: "Forecast responses are tier-aware. Free tier examples show the probability snapshot only."
+                  value:
+                    sport: "mlb"
+                    date: "2026-04-11"
+                    count: 1
+                    forecasts:
+                      - forecast_id: "550e8400-e29b-41d4-a716-446655440000"
+                        game_id: "mlb-2026-04-11-NYY-BOS"
+                        league: "AL"
+                        generated_at: "2026-04-11T14:00:00Z"
+                        forecast:
+                          home_win_prob: 0.58
+                          away_win_prob: 0.42
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+      parameters:
+        - name: "sport"
+          in: "path"
+          required: true
+          schema:
+            type: "string"
+            minLength: 1
+        - name: "date"
+          in: "query"
+          required: false
+          schema:
+            type: "string"
+            format: "date"
+  /api/v1/forecasts/{sport}/{game_id}:
+    get:
+      operationId: "getGameForecast"
+      tags:
+        - "Forecasts"
+      summary: "Fetch the latest forecast for one game"
+      description: "Feature-flagged surface. Returns the latest available forecast for the game and strips forecast detail by tier."
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: "Fetch the latest forecast for one game response."
+          headers:
+            x-ratelimit-limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            x-ratelimit-remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            x-ratelimit-reset:
+              $ref: "#/components/headers/RateLimitReset"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/getGameForecastResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+      parameters:
+        - name: "sport"
+          in: "path"
+          required: true
+          schema:
+            type: "string"
+            minLength: 1
+        - name: "game_id"
+          in: "path"
+          required: true
+          schema:
+            type: "string"
+            minLength: 1
+        - name: "date"
+          in: "query"
+          required: false
+          schema:
+            type: "string"
+            format: "date"
+  /api/v1/forecasts/schedule:
+    get:
+      operationId: "listForecastSchedule"
+      tags:
+        - "Forecasts"
+      summary: "List forecast availability across upcoming games"
+      description: "Feature-flagged surface. Supports sport, date, and status query filters."
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: "List forecast availability across upcoming games response."
+          headers:
+            x-ratelimit-limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            x-ratelimit-remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            x-ratelimit-reset:
+              $ref: "#/components/headers/RateLimitReset"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/listForecastScheduleResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+      parameters:
+        - name: "date"
+          in: "query"
+          required: false
+          schema:
+            type: "string"
+            format: "date"
+  /api/v1/forecasts/{sport}/history:
+    get:
+      operationId: "getForecastHistory"
+      tags:
+        - "Forecasts"
+      summary: "Fetch historical forecasts paired with actual outcomes"
+      description: "Feature-flagged surface. Free tier is limited to the last 7 days and hides final scores. Supports date or start/end pagination filters."
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: "Fetch historical forecasts paired with actual outcomes response."
+          headers:
+            x-ratelimit-limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            x-ratelimit-remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            x-ratelimit-reset:
+              $ref: "#/components/headers/RateLimitReset"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/getForecastHistoryResponse"
+              examples:
+                example1:
+                  summary: "Review recent forecast accuracy inputs"
+                  description: "Historical responses pair the original forecast snapshot with the actual outcome so callers can compute their own metrics."
+                  value:
+                    sport: "mlb"
+                    date_range:
+                      start: "2026-04-05"
+                      end: "2026-04-11"
+                    count: 1
+                    page: 1
+                    per_page: 50
+                    total_pages: 1
+                    results:
+                      - forecast_id: "550e8400-e29b-41d4-a716-446655440001"
+                        game_id: "mlb-2026-04-10-NYY-BOS"
+                        game_date: "2026-04-10"
+                        home_team: "BOS"
+                        away_team: "NYY"
+                        predicted_winner: "BOS"
+                        predicted_win_prob: 0.58
+                        actual_winner: "NYY"
+                        correct: false
+                        forecast:
+                          home_win_prob: 0.58
+                          away_win_prob: 0.42
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+      parameters:
+        - name: "sport"
+          in: "path"
+          required: true
+          schema:
+            type: "string"
+            minLength: 1
+        - name: "date"
+          in: "query"
+          required: false
+          schema:
+            type: "string"
+            format: "date"
+  /api/v1/props/{sport}/edges:
+    get:
+      operationId: "listPropEdges"
+      tags:
+        - "Forecasts"
+      summary: "Fetch player prop edges computed from forecast distributions"
+      description: "Feature-flagged surface. Free tier returns the top 3 edges without forecast detail. Supports game_id, player_id, stat, and min_edge filters."
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: "Fetch player prop edges computed from forecast distributions response."
+          headers:
+            x-ratelimit-limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            x-ratelimit-remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            x-ratelimit-reset:
+              $ref: "#/components/headers/RateLimitReset"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/listPropEdgesResponse"
+              examples:
+                example1:
+                  summary: "List filtered prop edges"
+                  description: "The edge surface supports stat, player, game, and minimum-edge filters."
+                  value:
+                    sport: "mlb"
+                    date: "2026-04-11"
+                    count: 1
+                    edges:
+                      - game_id: "mlb-2026-04-11-NYY-BOS"
+                        player_id: "gerrit-cole-123"
+                        player_name: "Gerrit Cole"
+                        stat: "strikeouts"
+                        line: 7.5
+                        direction: "over"
+                        edge: 0.082
+                        market_prob: 0.48
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+      parameters:
+        - name: "sport"
+          in: "path"
+          required: true
+          schema:
+            type: "string"
+            minLength: 1
+        - name: "date"
+          in: "query"
+          required: false
+          schema:
+            type: "string"
+            format: "date"
+        - name: "game_id"
+          in: "query"
+          required: false
+          schema:
+            type: "string"
+        - name: "player_id"
+          in: "query"
+          required: false
+          schema:
+            type: "string"
+        - name: "stat"
+          in: "query"
+          required: false
+          schema:
+            type: "string"
+        - name: "min_edge"
+          in: "query"
+          required: false
+          schema:
+            type: "number"
+            minimum: 0
+  /api/v1/stream/forecasts/{sport}:
+    get:
+      operationId: "streamForecasts"
+      tags:
+        - "Forecasts"
+      summary: "Subscribe to real-time forecast arrival events via SSE"
+      description: "Feature-flagged surface. Free tier receives probability summaries only. Max 3 concurrent forecast streams per identity."
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: "Subscribe to real-time forecast arrival events via SSE response."
+          headers:
+            x-ratelimit-limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            x-ratelimit-remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            x-ratelimit-reset:
+              $ref: "#/components/headers/RateLimitReset"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/streamForecastsResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+      parameters:
+        - name: "sport"
+          in: "path"
+          required: true
+          schema:
+            type: "string"
+            minLength: 1
+        - name: "date"
+          in: "query"
+          required: false
+          schema:
+            type: "string"
+            format: "date"
+components:
+  securitySchemes:
+    bearerAuth:
+      type: "http"
+      scheme: "bearer"
+      bearerFormat: "API key"
+      description: "Send `Authorization: Bearer <azs_...>` with a managed API key."
+  headers:
+    RateLimitLimit:
+      description: "The active per-minute request ceiling for the authenticated caller."
+      schema:
+        type: "integer"
+        minimum: 1
+    RateLimitRemaining:
+      description: "The remaining request count in the current rolling minute window."
+      schema:
+        type: "integer"
+        minimum: 0
+    RateLimitReset:
+      description: "Unix timestamp for the start of the next request window."
+      schema:
+        type: "integer"
+    RetryAfter:
+      description: "Number of seconds to wait before retrying the same request."
+      schema:
+        type: "integer"
+        minimum: 0
+  responses:
+    BadRequest:
+      description: "BAD_REQUEST: The request shape or parameter values were invalid."
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorEnvelope"
+    Unauthorized:
+      description: "AZS_AUTH_001: Missing or invalid bearer token or API key. AZS_AUTH_002: Additional account verification is required before the action can continue. AZS_AUTH_003: The credential expired or could not be verified."
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorEnvelope"
+    Forbidden:
+      description: "AZS_AUTH_004: The account behind the credential is suspended. AZS_PERM_001: The caller lacks the required subscription tier for the endpoint. AZS_PERM_002: The API key does not have access to the requested endpoint. AZS_PERM_003: The credential is not permitted to access this operation."
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorEnvelope"
+    NotFound:
+      description: "AZS_DATA_001: The requested sport was not recognized. AZS_DATA_002: The requested route or game resource was not found. AZS_DATA_003: The requested prop resource was not found."
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorEnvelope"
+    TooManyRequests:
+      description: "AZS_RATE_001: The caller exceeded the active rate limit window. AZS_RATE_002: A behavioral rate downgrade was applied."
+      headers:
+        retry-after:
+          $ref: "#/components/headers/RetryAfter"
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorEnvelope"
+    ServerError:
+      description: "The API returned a sanitized server error with a trace identifier."
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorEnvelope"
+    ServiceUnavailable:
+      description: "AZS_SYS_002: The service is temporarily unavailable."
+      headers:
+        retry-after:
+          $ref: "#/components/headers/RetryAfter"
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorEnvelope"
+  schemas:
+    ErrorEnvelope:
+      type: "object"
+      additionalProperties: false
+      required:
+        - "code"
+        - "message"
+      properties:
+        code:
+          type: "string"
+        message:
+          type: "string"
+        trace_id:
+          type: "string"
+    SgpLeg:
+      type: "object"
+      additionalProperties: false
+      required:
+        - "player"
+        - "stat"
+        - "line"
+        - "direction"
+      properties:
+        player:
+          type: "string"
+        stat:
+          type: "string"
+        line:
+          type: "number"
+        direction:
+          type: "string"
+          enum:
+            - "over"
+            - "under"
+    SgpEvaluateRequest:
+      type: "object"
+      additionalProperties: false
+      required:
+        - "sport"
+        - "game_id"
+        - "sportsbook_parlay_odds"
+        - "legs"
+      properties:
+        sport:
+          type: "string"
+        game_id:
+          type: "string"
+        sportsbook_parlay_odds:
+          type: "number"
+        legs:
+          type: "array"
+          minItems: 1
+          items:
+            $ref: "#/components/schemas/SgpLeg"
+    getHealthResponse:
+      type: "object"
+      additionalProperties: true
+      description: "Check API availability response payload."
+    listGamesBySportAndDateResponse:
+      type: "object"
+      additionalProperties: true
+      description: "List games for a sport and date response payload."
+    listGamePropsResponse:
+      type: "object"
+      additionalProperties: true
+      description: "Fetch display-safe props for one game response payload."
+    getGameboardResponse:
+      type: "object"
+      additionalProperties: true
+      description: "Fetch a full gameboard payload response payload."
+    getMovementHistoryResponse:
+      type: "object"
+      additionalProperties: true
+      description: "Read historical line movement for one prop response payload."
+    listFuturesResponse:
+      type: "object"
+      additionalProperties: true
+      description: "Fetch the futures market surface for a sport response payload."
+    listFuturesMarketResponse:
+      type: "object"
+      additionalProperties: true
+      description: "Alias for the futures market response response payload."
+    getFuturesDriftResponse:
+      type: "object"
+      additionalProperties: true
+      description: "Read the futures drift history for one prop response payload."
+    listAlertHistoryResponse:
+      type: "object"
+      additionalProperties: true
+      description: "Fetch alert history response payload."
+    listActiveAlertsResponse:
+      type: "object"
+      additionalProperties: true
+      description: "Fetch active alerts response payload."
+    getMlProjectionResponse:
+      type: "object"
+      additionalProperties: true
+      description: "Fetch one projection lookup response payload."
+    listFantasyProvidersResponse:
+      type: "object"
+      additionalProperties: true
+      description: "Fetch fantasy provider connection state response payload."
+    listFantasyLeaguesResponse:
+      type: "object"
+      additionalProperties: true
+      description: "Fetch fantasy league summaries response payload."
+    listFantasyProjectionsResponse:
+      type: "object"
+      additionalProperties: true
+      description: "Fetch fantasy projections response payload."
+    getFantasyStartSitResponse:
+      type: "object"
+      additionalProperties: true
+      description: "Get a fantasy start-sit recommendation response payload."
+    getFantasyWaiverResponse:
+      type: "object"
+      additionalProperties: true
+      description: "Fetch fantasy waiver suggestions response payload."
+    getFantasyDraftRankingsResponse:
+      type: "object"
+      additionalProperties: true
+      description: "Fetch fantasy draft rankings response payload."
+    getFantasyMatchupResponse:
+      type: "object"
+      additionalProperties: true
+      description: "Fetch a fantasy matchup view response payload."
+    getFantasyTrendsResponse:
+      type: "object"
+      additionalProperties: true
+      description: "Fetch fantasy trend data response payload."
+    getFantasyLeagueRosterResponse:
+      type: "object"
+      additionalProperties: true
+      description: "Fetch the scaffolded fantasy league roster view response payload."
+    getFantasyLeagueMatchupResponse:
+      type: "object"
+      additionalProperties: true
+      description: "Fetch the scaffolded fantasy league matchup view response payload."
+    getFantasyLeagueWaiversResponse:
+      type: "object"
+      additionalProperties: true
+      description: "Fetch the scaffolded fantasy league waiver view response payload."
+    getFantasyLeagueTradesResponse:
+      type: "object"
+      additionalProperties: true
+      description: "Fetch the scaffolded fantasy league trades view response payload."
+    getUnifiedPlayerProfileResponse:
+      type: "object"
+      additionalProperties: true
+      description: "Fetch the unified player profile contract response payload."
+    getFantasyPlayerProfileResponse:
+      type: "object"
+      additionalProperties: true
+      description: "Fetch the fantasy player-profile slice response payload."
+    getBettingPlayerProfileResponse:
+      type: "object"
+      additionalProperties: true
+      description: "Fetch the betting player-profile slice response payload."
+    listActiveArbsResponse:
+      type: "object"
+      additionalProperties: true
+      description: "List active arbitrage opportunities response payload."
+    getDfsLineupsResponse:
+      type: "object"
+      additionalProperties: true
+      description: "Fetch optimized DFS lineups for a sport and platform response payload."
+    evaluateSgpResponse:
+      type: "object"
+      additionalProperties: true
+      description: "Evaluate a same-game parlay correlation profile response payload."
+    streamSportUpdatesResponse:
+      type: "object"
+      additionalProperties: true
+      description: "Subscribe to sport-specific SSE updates response payload."
+    listForecastsBySportResponse:
+      type: "object"
+      additionalProperties: true
+      description: "List the latest forecasts for a sport and date response payload."
+    getGameForecastResponse:
+      type: "object"
+      additionalProperties: true
+      description: "Fetch the latest forecast for one game response payload."
+    listForecastScheduleResponse:
+      type: "object"
+      additionalProperties: true
+      description: "List forecast availability across upcoming games response payload."
+    getForecastHistoryResponse:
+      type: "object"
+      additionalProperties: true
+      description: "Fetch historical forecasts paired with actual outcomes response payload."
+    listPropEdgesResponse:
+      type: "object"
+      additionalProperties: true
+      description: "Fetch player prop edges computed from forecast distributions response payload."
+    streamForecastsResponse:
+      type: "object"
+      additionalProperties: true
+      description: "Subscribe to real-time forecast arrival events via SSE response payload."

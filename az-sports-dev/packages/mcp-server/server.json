@@ -1,0 +1,112 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.alphazede/mcp-server",
+  "version": "1.0.0",
+  "description": "AlphaZede Sports MCP Server — real-time odds, player props, and parlay analysis via the Model Context Protocol",
+  "repository": {
+    "url": "https://github.com/alphazede/developers/tree/main/az-sports-dev",
+    "source": "github",
+    "subfolder": "packages/mcp-server"
+  },
+  "packages": [
+    {
+      "registryType": "npm",
+      "identifier": "@azs/mcp-server",
+      "version": "1.0.0",
+      "transport": {
+        "type": "stdio"
+      }
+    }
+  ],
+  "_meta": {
+    "io.github.alphazede": {
+      "tools": [
+        {
+          "name": "analyze_parlay"
+        },
+        {
+          "name": "explain_edge"
+        },
+        {
+          "name": "find_game_markets"
+        },
+        {
+          "name": "get_alerts"
+        },
+        {
+          "name": "get_arb_opportunities"
+        },
+        {
+          "name": "get_daily_picks"
+        },
+        {
+          "name": "get_dfs_lineups"
+        },
+        {
+          "name": "get_fantasy_projections"
+        },
+        {
+          "name": "get_fantasy_workspace"
+        },
+        {
+          "name": "get_forecasts"
+        },
+        {
+          "name": "get_futures"
+        },
+        {
+          "name": "get_ml_projection"
+        },
+        {
+          "name": "price_player_prop"
+        }
+      ],
+      "hosts": [
+        {
+          "id": "claude-desktop",
+          "display_name": "Claude Desktop"
+        },
+        {
+          "id": "claude-code",
+          "display_name": "Claude Code"
+        },
+        {
+          "id": "cursor",
+          "display_name": "Cursor"
+        },
+        {
+          "id": "cline",
+          "display_name": "Cline"
+        },
+        {
+          "id": "codex-cli",
+          "display_name": "Codex CLI"
+        },
+        {
+          "id": "gemini-cli",
+          "display_name": "Gemini CLI"
+        },
+        {
+          "id": "chatgpt-desktop",
+          "display_name": "ChatGPT Desktop"
+        },
+        {
+          "id": "zed",
+          "display_name": "Zed"
+        },
+        {
+          "id": "continue",
+          "display_name": "Continue"
+        },
+        {
+          "id": "windsurf",
+          "display_name": "Windsurf"
+        },
+        {
+          "id": "open-interpreter",
+          "display_name": "Open Interpreter"
+        }
+      ]
+    }
+  }
+}

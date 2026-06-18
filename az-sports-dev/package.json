@@ -1,0 +1,35 @@
+{
+  "name": "az-sports-dev",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Public developer assets for AlphaZede Sports MCP and API access.",
+  "type": "module",
+  "license": "Apache-2.0",
+  "homepage": "https://github.com/alphazede/developers/tree/main/az-sports-dev#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/alphazede/developers.git",
+    "directory": "az-sports-dev"
+  },
+  "bugs": {
+    "url": "https://github.com/alphazede/developers/issues"
+  },
+  "keywords": [
+    "alphazede",
+    "sports",
+    "api",
+    "mcp",
+    "openapi",
+    "sdk"
+  ],
+  "packageManager": "pnpm@10.14.0",
+  "scripts": {
+    "build": "pnpm -r build",
+    "test": "pnpm -r test"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "^5.7.0",
+    "vitest": "^4.1.2"
+  }
+}

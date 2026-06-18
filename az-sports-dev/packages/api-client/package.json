@@ -1,0 +1,52 @@
+{
+  "name": "@azs/api-client",
+  "version": "0.1.0",
+  "description": "Public TypeScript client for the AlphaZede Sports API.",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist/*.js",
+    "dist/*.d.ts",
+    "package.json",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit",
+    "test": "node --test dist/__tests__/*.test.js",
+    "pack-dryrun": "npm pack --dry-run --json"
+  },
+  "keywords": [
+    "alphazede",
+    "sports",
+    "api",
+    "sdk",
+    "typescript"
+  ],
+  "author": "AlphaZede Sports",
+  "license": "Apache-2.0",
+  "homepage": "https://github.com/alphazede/developers/tree/main/az-sports-dev/packages/api-client#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/alphazede/developers.git",
+    "directory": "az-sports-dev/packages/api-client"
+  },
+  "bugs": {
+    "url": "https://github.com/alphazede/developers/issues"
+  },
+  "engines": {
+    "node": ">=20.11.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "^5.7.0"
+  }
+}

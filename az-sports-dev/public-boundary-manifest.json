@@ -1,0 +1,798 @@
+{
+  "schemaVersion": 1,
+  "repository": "developers/az-sports-dev",
+  "entries": [
+    {
+      "path": ".cursor/rules/azs-public-developer.mdc",
+      "kind": "file",
+      "classification": "public-developer-asset",
+      "sourceId": "generator:cursor-rule",
+      "digestMode": "file-sha256",
+      "sha256": "8041e24d0bd36191c47b1e5d9efbeada19c72218d83d5b2d3c1d9a6122cf14d2",
+      "bytes": 2544
+    },
+    {
+      "path": ".gitignore",
+      "kind": "file",
+      "classification": "public-developer-asset",
+      "sourceId": "template:root-gitignore",
+      "digestMode": "file-sha256",
+      "sha256": "356653573d70f01acbed4ea0ab1e061fa7bc07cc8452ef76e895f8070e313291",
+      "bytes": 68
+    },
+    {
+      "path": ".mcp.example.json",
+      "kind": "file",
+      "classification": "public-developer-asset",
+      "sourceId": "generator:mcp-example-config",
+      "digestMode": "file-sha256",
+      "sha256": "6e01415424c9c749b91a67627522bea36717d2492bb7c9471a00c5b3ad7fb6fb",
+      "bytes": 227
+    },
+    {
+      "path": "AGENTS.md",
+      "kind": "file",
+      "classification": "public-developer-asset",
+      "sourceId": "generator:agent-mirror",
+      "digestMode": "file-sha256",
+      "sha256": "e0c0561bcdb252440f5ec4a6e6bde4ad1e86824f3422cecf079378e66967e4e8",
+      "bytes": 2399
+    },
+    {
+      "path": "agents.txt",
+      "kind": "file",
+      "classification": "public-developer-asset",
+      "sourceId": "generator:agents-index",
+      "digestMode": "file-sha256",
+      "sha256": "940c7d44b2c94863f43d09f2cd84f90c7b91c4c42979b8fcb30a49cf2fb534be",
+      "bytes": 1293
+    },
+    {
+      "path": "api/openapi.json",
+      "kind": "file",
+      "classification": "public-developer-asset",
+      "sourceId": "generator:openapi-json",
+      "digestMode": "file-sha256",
+      "sha256": "b75444c648020118b63dddcbc4ed1d49fe2e34623d1c04e9930a26443c9c6924",
+      "bytes": 102442
+    },
+    {
+      "path": "api/openapi.yaml",
+      "kind": "file",
+      "classification": "public-developer-asset",
+      "sourceId": "generator:openapi-yaml",
+      "digestMode": "file-sha256",
+      "sha256": "1d83322d502fa08dbe3953a4aebf9626a24d65107df4aa2a8e685e24de3d2049",
+      "bytes": 75572
+    },
+    {
+      "path": "CLAUDE.md",
+      "kind": "file",
+      "classification": "public-developer-asset",
+      "sourceId": "generator:agent-mirror",
+      "digestMode": "file-sha256",
+      "sha256": "d83f39035c4cf4470daf46190001d10aa328eaa462982e3138aee9e39e74fc07",
+      "bytes": 2386
+    },
+    {
+      "path": "CODEX.md",
+      "kind": "file",
+      "classification": "public-developer-asset",
+      "sourceId": "generator:agent-mirror",
+      "digestMode": "file-sha256",
+      "sha256": "e849d02620bee4f4a2d8842f97079137fab99999b215d49edbb9a05f682b5602",
+      "bytes": 2421
+    },
+    {
+      "path": "docs/api.md",
+      "kind": "file",
+      "classification": "public-developer-asset",
+      "sourceId": "generator:api-doc",
+      "digestMode": "file-sha256",
+      "sha256": "83796f5532fde4b61a7e2b56b9baadd7a3707ac32ec4f978afadff9dfda1da6d",
+      "bytes": 1899
+    },
+    {
+      "path": "docs/authentication.md",
+      "kind": "file",
+      "classification": "public-developer-asset",
+      "sourceId": "template:doc-auth",
+      "digestMode": "file-sha256",
+      "sha256": "5ded3723f66ae61fb93693a002d4ae023c766a2e265e0dde6ed5881c09db1316",
+      "bytes": 1238
+    },
+    {
+      "path": "docs/mcp-install.md",
+      "kind": "file",
+      "classification": "public-developer-asset",
+      "sourceId": "generator:mcp-install-doc",
+      "digestMode": "file-sha256",
+      "sha256": "002635e1a25261f14419c95ea093382984a6b9de02fe6c5875a7966dec8f3062",
+      "bytes": 1654
+    },
+    {
+      "path": "docs/rate-limits.md",
+      "kind": "file",
+      "classification": "public-developer-asset",
+      "sourceId": "generator:rate-limit-doc",
+      "digestMode": "file-sha256",
+      "sha256": "3fe050ea1d35036fc0b5de9fdf4abd431d03466939fa622468d943d6b3e2cb81",
+      "bytes": 1307
+    },
+    {
+      "path": "examples/api-client-end-to-end.ts",
+      "kind": "file",
+      "classification": "public-developer-asset",
+      "sourceId": "template:example-api-client",
+      "digestMode": "file-sha256",
+      "sha256": "3e7c4dfbd249094286beb79c0bfc25f1266a04418f7b386b184fcc58239743be",
+      "bytes": 442
+    },
+    {
+      "path": "examples/api-quickstart.ts",
+      "kind": "file",
+      "classification": "public-developer-asset",
+      "sourceId": "template:example-api-quickstart",
+      "digestMode": "file-sha256",
+      "sha256": "eb4982bf41842807d127ac3e7cd1295ee2a426593e2c42ad22a90d60d2d831ec",
+      "bytes": 442
+    },
+    {
+      "path": "examples/mcp-host-config.json",
+      "kind": "file",
+      "classification": "public-developer-asset",
+      "sourceId": "template:example-mcp-config",
+      "digestMode": "file-sha256",
+      "sha256": "33ad433d568fd9b6ac31f6f4df43f53cf431a70769986103a044dc39e1782d4f",
+      "bytes": 195
+    },
+    {
+      "path": "GEMINI.md",
+      "kind": "file",
+      "classification": "public-developer-asset",
+      "sourceId": "generator:agent-mirror",
+      "digestMode": "file-sha256",
+      "sha256": "3d75bd53e0262498857a449846a9b250fbb1a65a9c729a35704ddc8480dc97db",
+      "bytes": 2385
+    },
+    {
+      "path": "LICENSE",
+      "kind": "file",
+      "classification": "public-developer-asset",
+      "sourceId": "source:root-license",
+      "digestMode": "file-sha256",
+      "sha256": "77386c054dea5e9a5d765328125123fa6df356c42999f09839878339ac3639db",
+      "bytes": 10800
+    },
+    {
+      "path": "llms.txt",
+      "kind": "file",
+      "classification": "public-developer-asset",
+      "sourceId": "generator:llms-index",
+      "digestMode": "file-sha256",
+      "sha256": "e290ef69f913beeb478da5dd1ab7d5d634e3fa6e0a317911728f4ea16ada932a",
+      "bytes": 4241
+    },
+    {
+      "path": "package.json",
+      "kind": "file",
+      "classification": "public-developer-asset",
+      "sourceId": "template:root-package-json",
+      "digestMode": "file-sha256",
+      "sha256": "cd8df10ed0f2c1e177a971efe704189f98a93ff88ed29a90409e3de5b61ea863",
+      "bytes": 826
+    },
+    {
+      "path": "packages/api-client/.npmignore",
+      "kind": "file",
+      "classification": "public-developer-asset",
+      "sourceId": "generator:api-client-npmignore",
+      "digestMode": "file-sha256",
+      "sha256": "2549b5b6ce1935e1d4bc4146d70dabf55c89665a889209f65ab919a92cfaf16e",
+      "bytes": 147
+    },
+    {
+      "path": "packages/api-client/LICENSE",
+      "kind": "file",
+      "classification": "public-developer-asset",
+      "sourceId": "source:api-client-license",
+      "digestMode": "file-sha256",
+      "sha256": "77386c054dea5e9a5d765328125123fa6df356c42999f09839878339ac3639db",
+      "bytes": 10800
+    },
+    {
+      "path": "packages/api-client/package.json",
+      "kind": "file",
+      "classification": "public-developer-asset",
+      "sourceId": "generator:api-client-package-json",
+      "digestMode": "file-sha256",
+      "sha256": "147826f8d041dfb418a64e1f38b1375700b21539f8393c1708bb50a8ecfeedfa",
+      "bytes": 1215
+    },
+    {
+      "path": "packages/api-client/README.md",
+      "kind": "file",
+      "classification": "public-developer-asset",
+      "sourceId": "template:api-client-readme",
+      "digestMode": "file-sha256",
+      "sha256": "2773a119090cada5d358f06f5484b1cde42dc3b032b57292469318db10f1ea5f",
+      "bytes": 533
+    },
+    {
+      "path": "packages/api-client/src/__tests__/client.test.ts",
+      "kind": "file",
+      "classification": "public-developer-asset",
+      "sourceId": "template:api-client-test",
+      "digestMode": "file-sha256",
+      "sha256": "956759391701dba38a302769f5a049801ac6f028aba4857d13f7acfda6c53620",
+      "bytes": 2113
+    },
+    {
+      "path": "packages/api-client/src/index.ts",
+      "kind": "file",
+      "classification": "public-developer-asset",
+      "sourceId": "template:api-client-source",
+      "digestMode": "file-sha256",
+      "sha256": "7cf867589dd6a46263db5c12bc7897a4e946636418240e3ef6f795ced5c0ad64",
+      "bytes": 4693
+    },
+    {
+      "path": "packages/api-client/src/operations.ts",
+      "kind": "file",
+      "classification": "public-developer-asset",
+      "sourceId": "generator:api-client-operations",
+      "digestMode": "file-sha256",
+      "sha256": "e75cf8ba734482dc02c57e4b735fc35cd29d88081bd2406365c2c4ee60cac2e4",
+      "bytes": 3555
+    },
+    {
+      "path": "packages/api-client/tsconfig.json",
+      "kind": "file",
+      "classification": "public-developer-asset",
+      "sourceId": "generator:api-client-tsconfig",
+      "digestMode": "file-sha256",
+      "sha256": "30a17bbd26580eb5e93f5669aab0f49bfba9d19412278fc125e3521d54248afc",
+      "bytes": 474
+    },
+    {
+      "path": "packages/mcp-server/.npmignore",
+      "kind": "file",
+      "classification": "public-developer-asset",
+      "sourceId": "generator:mcp-npmignore",
+      "digestMode": "file-sha256",
+      "sha256": "f33b30c24c1545c255488ed2564216cbad481ef6918170b012880df328a9151a",
+      "bytes": 148
+    },
+    {
+      "path": "packages/mcp-server/LICENSE",
+      "kind": "file",
+      "classification": "public-developer-asset",
+      "sourceId": "source:mcp-license",
+      "digestMode": "file-sha256",
+      "sha256": "77386c054dea5e9a5d765328125123fa6df356c42999f09839878339ac3639db",
+      "bytes": 10800
+    },
+    {
+      "path": "packages/mcp-server/package.json",
+      "kind": "file",
+      "classification": "public-developer-asset",
+      "sourceId": "generator:mcp-package-json",
+      "digestMode": "file-sha256",
+      "sha256": "71c176ed88feddaa8ed165a301351baa32e832e16aa2f78f6ef0db8e62d29bc5",
+      "bytes": 1474
+    },
+    {
+      "path": "packages/mcp-server/README.md",
+      "kind": "file",
+      "classification": "public-developer-asset",
+      "sourceId": "source:mcp-readme",
+      "digestMode": "file-sha256",
+      "sha256": "87fb3eadf11f2f40d3c4e55b03e837a639ab0b85b3efc02a6edf07fa15eee6f8",
+      "bytes": 7830
+    },
+    {
+      "path": "packages/mcp-server/server.json",
+      "kind": "file",
+      "classification": "public-developer-asset",
+      "sourceId": "generator:mcp-server-json",
+      "digestMode": "file-sha256",
+      "sha256": "b2a0e4577a0aa0ced8e3a63550747c9c88ca074901ba43242eeb3cdd9044b6a9",
+      "bytes": 2473
+    },
+    {
+      "path": "packages/mcp-server/src/__tests__/public-package.test.ts",
+      "kind": "file",
+      "classification": "public-developer-asset",
+      "sourceId": "template:mcp-public-test",
+      "digestMode": "file-sha256",
+      "sha256": "4328fae20d38a70b66e15059a5c999f310ebc479f96c8866dee87c7ef0539095",
+      "bytes": 522
+    },
+    {
+      "path": "packages/mcp-server/src/allowlist.ts",
+      "kind": "file",
+      "classification": "public-developer-asset",
+      "sourceId": "source:mcp-runtime",
+      "digestMode": "file-sha256",
+      "sha256": "7fe57adf1c06e25e035a2e1070cca994a2e37d4f683e9d9127be6bc957940347",
+      "bytes": 3595
+    },
+    {
+      "path": "packages/mcp-server/src/cli/client-id.ts",
+      "kind": "file",
+      "classification": "public-developer-asset",
+      "sourceId": "source:mcp-runtime",
+      "digestMode": "file-sha256",
+      "sha256": "1b57e1c595c689024686f544faa9989c3986daad0c464a43c443f4fcab647d1d",
+      "bytes": 1019
+    },
+    {
+      "path": "packages/mcp-server/src/cli/dispatcher.ts",
+      "kind": "file",
+      "classification": "public-developer-asset",
+      "sourceId": "source:mcp-runtime",
+      "digestMode": "file-sha256",
+      "sha256": "64fc107acb1dfd0ced3070ee421617ef79acd47e0aef3693088f0e0850ec4a23",
+      "bytes": 1778
+    },
+    {
+      "path": "packages/mcp-server/src/cli/index.ts",
+      "kind": "file",
+      "classification": "public-developer-asset",
+      "sourceId": "source:mcp-runtime",
+      "digestMode": "file-sha256",
+      "sha256": "2e7ab29ad367e6cc850ee33146fd5b0875a1198c271198aea4cb3ed3bf92fa35",
+      "bytes": 160
+    },
+    {
+      "path": "packages/mcp-server/src/cli/login.ts",
+      "kind": "file",
+      "classification": "public-developer-asset",
+      "sourceId": "source:mcp-runtime",
+      "digestMode": "file-sha256",
+      "sha256": "896b8c41326b01a086ad5045e3148eb784026e39c910d2e1f8ff1c66a30a844d",
+      "bytes": 10918
+    },
+    {
+      "path": "packages/mcp-server/src/cli/logout.ts",
+      "kind": "file",
+      "classification": "public-developer-asset",
+      "sourceId": "source:mcp-runtime",
+      "digestMode": "file-sha256",
+      "sha256": "5e1617f1141a4ce6da3306507c147e0c409a320548da0bcf5e72f9a897b3e1e9",
+      "bytes": 513
+    },
+    {
+      "path": "packages/mcp-server/src/cli/serve-http.ts",
+      "kind": "file",
+      "classification": "public-developer-asset",
+      "sourceId": "source:mcp-runtime",
+      "digestMode": "file-sha256",
+      "sha256": "226f1de00eb387cfa056dfa7f1ab7bf5ba91ad1596f6b7a7f257c77addd309e1",
+      "bytes": 970
+    },
+    {
+      "path": "packages/mcp-server/src/cli/serve.ts",
+      "kind": "file",
+      "classification": "public-developer-asset",
+      "sourceId": "source:mcp-runtime",
+      "digestMode": "file-sha256",
+      "sha256": "f6c766995784391ed7985c3af263aba2830df751b73281da585f3376d7b18873",
+      "bytes": 1228
+    },
+    {
+      "path": "packages/mcp-server/src/cli/usage.ts",
+      "kind": "file",
+      "classification": "public-developer-asset",
+      "sourceId": "source:mcp-runtime",
+      "digestMode": "file-sha256",
+      "sha256": "bb279e973f67260311c394bf99a657a1f3966becc9723630794d1237f42d63e4",
+      "bytes": 4595
+    },
+    {
+      "path": "packages/mcp-server/src/cli/whoami.ts",
+      "kind": "file",
+      "classification": "public-developer-asset",
+      "sourceId": "source:mcp-runtime",
+      "digestMode": "file-sha256",
+      "sha256": "8970bdcb5dee3a0235807970f3facaa226f1b31f0ffc67a81f2ce4ad3f1093c4",
+      "bytes": 3688
+    },
+    {
+      "path": "packages/mcp-server/src/client.ts",
+      "kind": "file",
+      "classification": "public-developer-asset",
+      "sourceId": "source:mcp-runtime",
+      "digestMode": "file-sha256",
+      "sha256": "d7de690b2c85a1b9296f34150def7432acd70633dff0d23a2e166d677f4afdc4",
+      "bytes": 14694
+    },
+    {
+      "path": "packages/mcp-server/src/errors.ts",
+      "kind": "file",
+      "classification": "public-developer-asset",
+      "sourceId": "source:mcp-runtime",
+      "digestMode": "file-sha256",
+      "sha256": "477fc584121ba2abbbd1d1431fa08a95ddf84be2192c03a1e80056eca81e663b",
+      "bytes": 3400
+    },
+    {
+      "path": "packages/mcp-server/src/format.ts",
+      "kind": "file",
+      "classification": "public-developer-asset",
+      "sourceId": "source:mcp-runtime",
+      "digestMode": "file-sha256",
+      "sha256": "6371ab57366bf4de09176fe024fdf62d71c6cb89f43a374262af95dc75793268",
+      "bytes": 12388
+    },
+    {
+      "path": "packages/mcp-server/src/formatter-bindings.ts",
+      "kind": "file",
+      "classification": "public-developer-asset",
+      "sourceId": "source:mcp-runtime",
+      "digestMode": "file-sha256",
+      "sha256": "ad05eb17ce14c8f3899b26195a1e4d6927e0491b761ea954449c1f88e8a99bab",
+      "bytes": 1261
+    },
+    {
+      "path": "packages/mcp-server/src/hmac-keys.ts",
+      "kind": "file",
+      "classification": "public-developer-asset",
+      "sourceId": "source:mcp-runtime",
+      "digestMode": "file-sha256",
+      "sha256": "73578aaad890faf0503597af977f22f5287ebc378e14db65e5d9b1ae4f5aa26b",
+      "bytes": 4097
+    },
+    {
+      "path": "packages/mcp-server/src/http-headers.ts",
+      "kind": "file",
+      "classification": "public-developer-asset",
+      "sourceId": "source:mcp-runtime",
+      "digestMode": "file-sha256",
+      "sha256": "cdcbda2089a7c2bc1c20bcc215e0d43d292cc6c9b1a204ad7e6bbf9bd6844cab",
+      "bytes": 1180
+    },
+    {
+      "path": "packages/mcp-server/src/identity-classifier.ts",
+      "kind": "file",
+      "classification": "public-developer-asset",
+      "sourceId": "source:mcp-runtime",
+      "digestMode": "file-sha256",
+      "sha256": "15dd829175b0ece8f5f1c3995c56bec2a27378a7cfc7da3886db4291f65472a8",
+      "bytes": 417
+    },
+    {
+      "path": "packages/mcp-server/src/index.ts",
+      "kind": "file",
+      "classification": "public-developer-asset",
+      "sourceId": "source:mcp-runtime",
+      "digestMode": "file-sha256",
+      "sha256": "db05f35d97ef826bc1b0b4344dc1bb9676b38b41d1d04e9184ddb72f91e4a4aa",
+      "bytes": 9590
+    },
+    {
+      "path": "packages/mcp-server/src/middleware.ts",
+      "kind": "file",
+      "classification": "public-developer-asset",
+      "sourceId": "source:mcp-runtime",
+      "digestMode": "file-sha256",
+      "sha256": "f38b0a7306a9a6b43b145a9b8bf8faf0f6edd8a61e67f9ebd305b8dab8d6e360",
+      "bytes": 13971
+    },
+    {
+      "path": "packages/mcp-server/src/observability.ts",
+      "kind": "file",
+      "classification": "public-developer-asset",
+      "sourceId": "source:mcp-runtime",
+      "digestMode": "file-sha256",
+      "sha256": "9c86a6089d5460f50827fcc0f5286e2e7c3575f38cbe2390385d3a0e4e7a5ca6",
+      "bytes": 6296
+    },
+    {
+      "path": "packages/mcp-server/src/output-sink-registry.ts",
+      "kind": "file",
+      "classification": "public-developer-asset",
+      "sourceId": "source:mcp-runtime",
+      "digestMode": "file-sha256",
+      "sha256": "13bc1bc2886923d6a1fea057e77ca954313419a477659a93b62705c9b13f0361",
+      "bytes": 10985
+    },
+    {
+      "path": "packages/mcp-server/src/public-types.ts",
+      "kind": "file",
+      "classification": "public-developer-asset",
+      "sourceId": "template:mcp-public-types",
+      "digestMode": "file-sha256",
+      "sha256": "cb836aa2fdd1dedfdf7dda7baf1f7f8982e3dab7431e3b4214fdff746a937680",
+      "bytes": 1896
+    },
+    {
+      "path": "packages/mcp-server/src/scrubber.ts",
+      "kind": "file",
+      "classification": "public-developer-asset",
+      "sourceId": "source:mcp-runtime",
+      "digestMode": "file-sha256",
+      "sha256": "edc68ec42a22968e51903d1aa7345e1efbaa7868cfd4066ff11d5e7548eeea6e",
+      "bytes": 725
+    },
+    {
+      "path": "packages/mcp-server/src/token-store.ts",
+      "kind": "file",
+      "classification": "public-developer-asset",
+      "sourceId": "source:mcp-runtime",
+      "digestMode": "file-sha256",
+      "sha256": "5d0ac8bd05c331654278375fdbaf4e67f186ed6eb158d055190830ccaf7d7a86",
+      "bytes": 10613
+    },
+    {
+      "path": "packages/mcp-server/src/tool.ts",
+      "kind": "file",
+      "classification": "public-developer-asset",
+      "sourceId": "source:mcp-runtime",
+      "digestMode": "file-sha256",
+      "sha256": "3e93158822e7d31d431d66216a33f4d37370ddce7e7203421482e844860cfd3f",
+      "bytes": 2937
+    },
+    {
+      "path": "packages/mcp-server/src/tools/analyze-parlay.ts",
+      "kind": "file",
+      "classification": "public-developer-asset",
+      "sourceId": "source:mcp-runtime",
+      "digestMode": "file-sha256",
+      "sha256": "ed07a5ac1a558d5a0da6047e2d29ca6c12768757e58f1d3e7cc93f56d9c9a289",
+      "bytes": 2994
+    },
+    {
+      "path": "packages/mcp-server/src/tools/explain-edge.ts",
+      "kind": "file",
+      "classification": "public-developer-asset",
+      "sourceId": "source:mcp-runtime",
+      "digestMode": "file-sha256",
+      "sha256": "69336cccf91fd4ab040206dd3ad6950e4ca8e84711e7fe5014a4e4d6098dba9f",
+      "bytes": 2241
+    },
+    {
+      "path": "packages/mcp-server/src/tools/find-game-markets.ts",
+      "kind": "file",
+      "classification": "public-developer-asset",
+      "sourceId": "source:mcp-runtime",
+      "digestMode": "file-sha256",
+      "sha256": "6871bbf477860c02ad6663ec111b938ccede328635316d541f6d894184a0538f",
+      "bytes": 2046
+    },
+    {
+      "path": "packages/mcp-server/src/tools/get-alerts.ts",
+      "kind": "file",
+      "classification": "public-developer-asset",
+      "sourceId": "source:mcp-runtime",
+      "digestMode": "file-sha256",
+      "sha256": "66fa26da9f14d972e0fc1281f7a31d6bff1ce65dd219afc62ccea60f0dec8ddf",
+      "bytes": 1925
+    },
+    {
+      "path": "packages/mcp-server/src/tools/get-arb-opportunities.ts",
+      "kind": "file",
+      "classification": "public-developer-asset",
+      "sourceId": "source:mcp-runtime",
+      "digestMode": "file-sha256",
+      "sha256": "bc2528addc130eafdb7b24bc885face99c7ca750d5d2626bb232235516a033e6",
+      "bytes": 1599
+    },
+    {
+      "path": "packages/mcp-server/src/tools/get-daily-picks.ts",
+      "kind": "file",
+      "classification": "public-developer-asset",
+      "sourceId": "source:mcp-runtime",
+      "digestMode": "file-sha256",
+      "sha256": "67eb46b66577805585bd0d9548dbef35bc5893046f5f58a4e7d86c4eb9b000ff",
+      "bytes": 5362
+    },
+    {
+      "path": "packages/mcp-server/src/tools/get-dfs-lineups.ts",
+      "kind": "file",
+      "classification": "public-developer-asset",
+      "sourceId": "source:mcp-runtime",
+      "digestMode": "file-sha256",
+      "sha256": "bf3b3660d6034ba2b1a9621ab8850d7f90b16614515260386f7dbbffe8a459f4",
+      "bytes": 2311
+    },
+    {
+      "path": "packages/mcp-server/src/tools/get-fantasy-projections.ts",
+      "kind": "file",
+      "classification": "public-developer-asset",
+      "sourceId": "source:mcp-runtime",
+      "digestMode": "file-sha256",
+      "sha256": "e8f5b68b01d727950c6e989a8d3921eb1f377a76bde4231dcc7f3df50e845b90",
+      "bytes": 4654
+    },
+    {
+      "path": "packages/mcp-server/src/tools/get-fantasy-workspace.ts",
+      "kind": "file",
+      "classification": "public-developer-asset",
+      "sourceId": "source:mcp-runtime",
+      "digestMode": "file-sha256",
+      "sha256": "388bc24d573689376a22539bc90e7650b0df3a4781a4f14a7baadaa16468b3f7",
+      "bytes": 8092
+    },
+    {
+      "path": "packages/mcp-server/src/tools/get-forecasts.ts",
+      "kind": "file",
+      "classification": "public-developer-asset",
+      "sourceId": "source:mcp-runtime",
+      "digestMode": "file-sha256",
+      "sha256": "db18ed06155fc84fa263b8c0509811c7a1972fc3be4db6a63f8119d2829d6df8",
+      "bytes": 2050
+    },
+    {
+      "path": "packages/mcp-server/src/tools/get-futures.ts",
+      "kind": "file",
+      "classification": "public-developer-asset",
+      "sourceId": "source:mcp-runtime",
+      "digestMode": "file-sha256",
+      "sha256": "2b079b0397e0ac82990cfe05c4adda3794580567d9db490c1695f42c69f3e977",
+      "bytes": 2060
+    },
+    {
+      "path": "packages/mcp-server/src/tools/get-ml-projection.ts",
+      "kind": "file",
+      "classification": "public-developer-asset",
+      "sourceId": "source:mcp-runtime",
+      "digestMode": "file-sha256",
+      "sha256": "bcbaf0b2b0c682e35370ee6d0ec043b10d8510005fb2ca66ae0f3b6479dc8711",
+      "bytes": 1902
+    },
+    {
+      "path": "packages/mcp-server/src/tools/index.ts",
+      "kind": "file",
+      "classification": "public-developer-asset",
+      "sourceId": "source:mcp-runtime",
+      "digestMode": "file-sha256",
+      "sha256": "9d8268748f39ddc94cf28013cb14cb4666c16cd5afdd6eb0f8a92803ea7b9449",
+      "bytes": 1377
+    },
+    {
+      "path": "packages/mcp-server/src/tools/price-player-prop.ts",
+      "kind": "file",
+      "classification": "public-developer-asset",
+      "sourceId": "source:mcp-runtime",
+      "digestMode": "file-sha256",
+      "sha256": "68ae72ca3511cf5c85663671417915fad9024f3b2f96239746fa1fa624f47574",
+      "bytes": 3131
+    },
+    {
+      "path": "packages/mcp-server/src/transport/http.ts",
+      "kind": "file",
+      "classification": "public-developer-asset",
+      "sourceId": "source:mcp-runtime",
+      "digestMode": "file-sha256",
+      "sha256": "53d10f0bde23f382a63b79484d5f05eb2d15a6ef577872f53eaa495352079dfe",
+      "bytes": 11917
+    },
+    {
+      "path": "packages/mcp-server/src/transport/index.ts",
+      "kind": "file",
+      "classification": "public-developer-asset",
+      "sourceId": "source:mcp-runtime",
+      "digestMode": "file-sha256",
+      "sha256": "d71f271ccb929cccf69d48b36ba8ce668f089f1cb2cd432ca2199f95d1d21157",
+      "bytes": 1495
+    },
+    {
+      "path": "packages/mcp-server/src/transport/request-validation.ts",
+      "kind": "file",
+      "classification": "public-developer-asset",
+      "sourceId": "source:mcp-runtime",
+      "digestMode": "file-sha256",
+      "sha256": "f6bc613fc67ca5a933af7f57e72e74bcd44b1d828c0bef917e09bb8428f782ec",
+      "bytes": 9432
+    },
+    {
+      "path": "packages/mcp-server/src/types.ts",
+      "kind": "file",
+      "classification": "public-developer-asset",
+      "sourceId": "source:mcp-runtime",
+      "digestMode": "file-sha256",
+      "sha256": "c4ce47ab141a6fc69f5b32a02bd0f3a6ad09b62d328e272f6b2aaae320829fd8",
+      "bytes": 1693
+    },
+    {
+      "path": "packages/mcp-server/src/util.ts",
+      "kind": "file",
+      "classification": "public-developer-asset",
+      "sourceId": "source:mcp-runtime",
+      "digestMode": "file-sha256",
+      "sha256": "881ce010992676c1b73fde1d3096dc790aaa0c771488681a56ecdde8e3c73882",
+      "bytes": 1832
+    },
+    {
+      "path": "packages/mcp-server/tsconfig.json",
+      "kind": "file",
+      "classification": "public-developer-asset",
+      "sourceId": "generator:mcp-tsconfig",
+      "digestMode": "file-sha256",
+      "sha256": "d529ef02884a7439e694e0425d5e351afbd3265ad9f352634b28ccdd9b5d167d",
+      "bytes": 493
+    },
+    {
+      "path": "packages/mcp-server/vitest.config.ts",
+      "kind": "file",
+      "classification": "public-developer-asset",
+      "sourceId": "generator:mcp-vitest-config",
+      "digestMode": "file-sha256",
+      "sha256": "46056229dfd4f56c17bbbf671a3050658a9e4ade62d17224cef1d4834366b9f9",
+      "bytes": 166
+    },
+    {
+      "path": "pnpm-workspace.yaml",
+      "kind": "file",
+      "classification": "public-developer-asset",
+      "sourceId": "template:root-workspace",
+      "digestMode": "file-sha256",
+      "sha256": "d115dc6c83ba283a7d17146ad456056f3f70b003edb8c312a52880b48b034001",
+      "bytes": 25
+    },
+    {
+      "path": "QWEN.md",
+      "kind": "file",
+      "classification": "public-developer-asset",
+      "sourceId": "generator:agent-mirror",
+      "digestMode": "file-sha256",
+      "sha256": "d900d59bc1f4ec009feb404a68b5b5fd017fdbe896d9a1fca21d6e97a9e851fc",
+      "bytes": 2379
+    },
+    {
+      "path": "README.md",
+      "kind": "file",
+      "classification": "public-developer-asset",
+      "sourceId": "template:root-readme",
+      "digestMode": "file-sha256",
+      "sha256": "a86b62f865ae390ffbc418a4a0b770d417c44f017528520e7ecf1f5bd3e8a11c",
+      "bytes": 2392
+    },
+    {
+      "path": "recipes/fantasy-prep.md",
+      "kind": "file",
+      "classification": "public-developer-asset",
+      "sourceId": "template:recipe-fantasy-prep",
+      "digestMode": "file-sha256",
+      "sha256": "3ec23042603eeaa8bb0a1bdd78e54507bdf4e86327aef95abbf850d4604b2d48",
+      "bytes": 690
+    },
+    {
+      "path": "recipes/forecast-review.md",
+      "kind": "file",
+      "classification": "public-developer-asset",
+      "sourceId": "template:recipe-forecast-review",
+      "digestMode": "file-sha256",
+      "sha256": "431915c00b5b4ceba4ec2b08973889fc99521afd9987bf7500317be9efa228f8",
+      "bytes": 663
+    },
+    {
+      "path": "recipes/line-movement-review.md",
+      "kind": "file",
+      "classification": "public-developer-asset",
+      "sourceId": "template:recipe-line-movement",
+      "digestMode": "file-sha256",
+      "sha256": "7d4745b95524e6dd3d403670661f133e9eedcc08b409780077e05c38c98aeead",
+      "bytes": 676
+    },
+    {
+      "path": "SECURITY.md",
+      "kind": "file",
+      "classification": "public-developer-asset",
+      "sourceId": "template:root-security",
+      "digestMode": "file-sha256",
+      "sha256": "c58c8d876ed67f24bcd62d608173a9fde2f9b0df22456b5fcfde9381f5502553",
+      "bytes": 1113
+    },
+    {
+      "path": "public-boundary-manifest.json",
+      "kind": "manifest",
+      "classification": "public-boundary-evidence",
+      "sourceId": "generator:public-boundary-manifest",
+      "digestMode": "manifest-self-null-canonical",
+      "sha256": "5a45ad522d0d6370b9767b8673c93d89018ee75056931ecbfe9c2c0d5cc49c0b",
+      "bytes": 27982
+    }
+  ]
+}

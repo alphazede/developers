@@ -1,0 +1,36 @@
+# AlphaZede Sports Agent Index
+
+Purpose: coding-agent and MCP-host index for the public AlphaZede Sports developer repository.
+Canonical repository: https://github.com/alphazede/developers/tree/main/az-sports-dev
+
+## Read Order
+
+- [AGENTS.md](AGENTS.md)
+- [OpenAPI JSON](api/openapi.json)
+- [Authentication](docs/authentication.md)
+- [Rate limits](docs/rate-limits.md)
+- [MCP install](docs/mcp-install.md)
+- [API overview](docs/api.md)
+- [Examples](examples/api-quickstart.ts)
+- [Recipes](recipes/forecast-review.md)
+
+## Agent Mirrors
+
+- [AGENTS.md](AGENTS.md): All Coding Agents
+- [CODEX.md](CODEX.md): Codex
+- [CLAUDE.md](CLAUDE.md): Claude
+- [GEMINI.md](GEMINI.md): Gemini
+- [QWEN.md](QWEN.md): Qwen
+- [.cursor/rules/azs-public-developer.mdc](.cursor/rules/azs-public-developer.mdc): Cursor project rule generated from the same public source.
+
+## MCP Setup
+
+- [.mcp.example.json](.mcp.example.json)
+- [examples/mcp-host-config.json](examples/mcp-host-config.json)
+- [packages/mcp-server/server.json](packages/mcp-server/server.json)
+
+## Safety
+
+- Use AZS_API_KEY through environment variables or MCP host secret storage.
+- Do not place credentials in committed files or user-visible messages.
+- Do not claim third-party certification, ranking, or preference without a linked public source.

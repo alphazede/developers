@@ -1,0 +1,65 @@
+# AlphaZede Sports Developers
+
+> Public developer repository for AlphaZede Sports API, MCP server, and TypeScript API client integrations.
+
+Canonical repository: https://github.com/alphazede/developers/tree/main/az-sports-dev
+Public API base URL: https://api.alphazedesports.com
+Last updated: 2026-05-29
+
+## Primary Files
+
+- [OpenAPI JSON](/api/openapi.json): OpenAPI 3.1 JSON contract.
+- [OpenAPI YAML](/api/openapi.yaml): OpenAPI 3.1 YAML contract mechanically derived from JSON.
+- [API overview](/docs/api.md): Human-readable API overview.
+- [Authentication](/docs/authentication.md): API key and bearer-auth guidance.
+- [Rate limits](/docs/rate-limits.md): Public request budgets and retry behavior.
+- [MCP install](/docs/mcp-install.md): MCP host setup guidance.
+- [TypeScript API client](/packages/api-client/README.md): Public SDK package.
+- [MCP server](/packages/mcp-server/README.md): Public MCP package.
+- [Agent index](/agents.txt): Coding-agent consumption index.
+
+## Usage Boundaries
+
+- Authenticate with Authorization: Bearer <AZS_API_KEY>.
+- Do not infer endpoints absent from the OpenAPI contract.
+- Use package metadata and README files for install commands.
+- Security reporting goes through the public contact route with topic Security.
+
+## Endpoint Index
+
+- GET /api/v1/health :: getHealth; Bearer token or API key
+- GET /api/v1/games/{sport}/{date} :: listGamesBySportAndDate; Bearer token or API key
+- GET /api/v1/games/{sport}/{game_id}/props :: listGameProps; Bearer token or API key
+- GET /api/v1/gameboard/{sport}/{game_id} :: getGameboard; Bearer token or API key
+- GET /api/v1/movement/{sport}/{game_id}/{prop_id}/history :: getMovementHistory; Bearer token or API key
+- GET /api/v1/futures/{sport} :: listFutures; Bearer token or API key
+- GET /api/v1/futures/{sport}/market :: listFuturesMarket; Bearer token or API key
+- GET /api/v1/futures/{sport}/{prop_id}/drift :: getFuturesDrift; Bearer token or API key
+- GET /api/v1/alerts/history :: listAlertHistory; Bearer token or API key
+- GET /api/v1/alerts/active :: listActiveAlerts; Bearer token or API key
+- GET /api/v1/ml/projection :: getMlProjection; Pro or enterprise
+- GET /api/v1/fantasy/providers :: listFantasyProviders; Bearer token or API key
+- GET /api/v1/fantasy/leagues :: listFantasyLeagues; Bearer token or API key
+- GET /api/v1/fantasy/projections :: listFantasyProjections; Bearer token or API key
+- GET /api/v1/fantasy/start-sit :: getFantasyStartSit; Bearer token or API key
+- GET /api/v1/fantasy/waiver :: getFantasyWaiver; Bearer token or API key
+- GET /api/v1/fantasy/draft-rankings :: getFantasyDraftRankings; Bearer token or API key
+- GET /api/v1/fantasy/matchup :: getFantasyMatchup; Bearer token or API key
+- GET /api/v1/fantasy/trends :: getFantasyTrends; Bearer token or API key
+- GET /api/v1/fantasy/leagues/{league_id}/roster :: getFantasyLeagueRoster; Bearer token or API key
+- GET /api/v1/fantasy/leagues/{league_id}/matchup :: getFantasyLeagueMatchup; Bearer token or API key
+- GET /api/v1/fantasy/leagues/{league_id}/waivers :: getFantasyLeagueWaivers; Bearer token or API key
+- GET /api/v1/fantasy/leagues/{league_id}/trades :: getFantasyLeagueTrades; Bearer token or API key
+- GET /api/v1/players/{canonical_id}/profile :: getUnifiedPlayerProfile; Bearer token or API key
+- GET /api/v1/players/{canonical_id}/fantasy :: getFantasyPlayerProfile; Bearer token or API key
+- GET /api/v1/players/{canonical_id}/betting :: getBettingPlayerProfile; Bearer token or API key
+- GET /api/v1/arb/active :: listActiveArbs; Pro or enterprise
+- GET /api/v1/dfs/lineups :: getDfsLineups; Pro or enterprise
+- POST /api/v1/sgp/evaluate :: evaluateSgp; Pro or enterprise
+- GET /api/v1/stream/{sport} :: streamSportUpdates; Bearer token or API key
+- GET /api/v1/forecasts/{sport} :: listForecastsBySport; Bearer token or API key
+- GET /api/v1/forecasts/{sport}/{game_id} :: getGameForecast; Bearer token or API key
+- GET /api/v1/forecasts/schedule :: listForecastSchedule; Bearer token or API key
+- GET /api/v1/forecasts/{sport}/history :: getForecastHistory; Bearer token or API key
+- GET /api/v1/props/{sport}/edges :: listPropEdges; Bearer token or API key
+- GET /api/v1/stream/forecasts/{sport} :: streamForecasts; Bearer token or API key

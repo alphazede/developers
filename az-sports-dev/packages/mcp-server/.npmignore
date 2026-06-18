@@ -1,0 +1,7 @@
+# Source is public in the repository; npm publishes dist-only artifacts.
+src/
+tsconfig*.json
+vitest.config.ts
+*.tsbuildinfo
+node_modules/
+coverage/

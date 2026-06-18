@@ -1,0 +1,7 @@
+# Source is public in the repository; npm publishes dist-only artifacts.
+src/
+dist/__tests__/
+tsconfig*.json
+*.tsbuildinfo
+node_modules/
+coverage/
