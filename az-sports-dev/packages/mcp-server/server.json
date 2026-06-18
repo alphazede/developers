@@ -4,9 +4,9 @@
   "version": "1.0.0",
   "description": "AlphaZede Sports MCP Server — real-time odds, player props, and parlay analysis via the Model Context Protocol",
   "repository": {
-    "url": "https://github.com/alphazede/developers/tree/main/az-sports-dev",
+    "url": "https://github.com/alphazede/developers",
     "source": "github",
-    "subfolder": "packages/mcp-server"
+    "subfolder": "az-sports-dev/packages/mcp-server"
   },
   "packages": [
     {

@@ -296,8 +296,8 @@
       "classification": "public-developer-asset",
       "sourceId": "generator:mcp-server-json",
       "digestMode": "file-sha256",
-      "sha256": "b2a0e4577a0aa0ced8e3a63550747c9c88ca074901ba43242eeb3cdd9044b6a9",
-      "bytes": 2473
+      "sha256": "20e75004b5245618dba802aad9ec298cca8c6b222b80707a554b5f7f531998aa",
+      "bytes": 2463
     },
     {
       "path": "packages/mcp-server/src/__tests__/public-package.test.ts",
@@ -791,7 +791,7 @@
       "classification": "public-boundary-evidence",
       "sourceId": "generator:public-boundary-manifest",
       "digestMode": "manifest-self-null-canonical",
-      "sha256": "5a45ad522d0d6370b9767b8673c93d89018ee75056931ecbfe9c2c0d5cc49c0b",
+      "sha256": "83a46005698f2292908857ca7b4fd0bc81d27a891ee3837cfbb88733010b98a9",
       "bytes": 27982
     }
   ]
