@@ -45,7 +45,7 @@ export async function runUsage(args: string[] = []): Promise<number> {
   }
 
   const apiUrl = resolveApiUrl(args);
-  if (!apiUrl.ok) {
+  if (apiUrl.ok === false) {
     writeCliStderr(`${apiUrl.error}\n`);
     return 1;
   }

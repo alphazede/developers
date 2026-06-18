@@ -318,6 +318,15 @@
       "bytes": 3595
     },
     {
+      "path": "packages/mcp-server/src/auth-token.ts",
+      "kind": "file",
+      "classification": "public-developer-asset",
+      "sourceId": "source:mcp-runtime",
+      "digestMode": "file-sha256",
+      "sha256": "eca3cf45e8b10bc9da572fd74c64f1173797ecfdd42a2e3ed70ebc402ea16806",
+      "bytes": 1392
+    },
+    {
       "path": "packages/mcp-server/src/cli/client-id.ts",
       "kind": "file",
       "classification": "public-developer-asset",
@@ -386,8 +395,8 @@
       "classification": "public-developer-asset",
       "sourceId": "source:mcp-runtime",
       "digestMode": "file-sha256",
-      "sha256": "bb279e973f67260311c394bf99a657a1f3966becc9723630794d1237f42d63e4",
-      "bytes": 4595
+      "sha256": "376c0a4f5d93398f76429b1162c8fd1293db4ba719f1ed5a7e4a0050620db482",
+      "bytes": 4604
     },
     {
       "path": "packages/mcp-server/src/cli/whoami.ts",
@@ -395,8 +404,8 @@
       "classification": "public-developer-asset",
       "sourceId": "source:mcp-runtime",
       "digestMode": "file-sha256",
-      "sha256": "8970bdcb5dee3a0235807970f3facaa226f1b31f0ffc67a81f2ce4ad3f1093c4",
-      "bytes": 3688
+      "sha256": "67d4a437b8a72833bf4aa50cbcf3e13b068476c605de16982d8920e76e7dd090",
+      "bytes": 3697
     },
     {
       "path": "packages/mcp-server/src/client.ts",
@@ -696,6 +705,15 @@
       "bytes": 1693
     },
     {
+      "path": "packages/mcp-server/src/url-utils.ts",
+      "kind": "file",
+      "classification": "public-developer-asset",
+      "sourceId": "source:mcp-runtime",
+      "digestMode": "file-sha256",
+      "sha256": "515f9dc9c91049e4548536fdf626e7005e97437ecdd7be48804b4b950998096d",
+      "bytes": 1618
+    },
+    {
       "path": "packages/mcp-server/src/util.ts",
       "kind": "file",
       "classification": "public-developer-asset",
@@ -791,8 +809,8 @@
       "classification": "public-boundary-evidence",
       "sourceId": "generator:public-boundary-manifest",
       "digestMode": "manifest-self-null-canonical",
-      "sha256": "83a46005698f2292908857ca7b4fd0bc81d27a891ee3837cfbb88733010b98a9",
-      "bytes": 27982
+      "sha256": "35fd1b63ef7fd5a18d6af344ca99d85b40d258cd135ecc62c77f94288e881778",
+      "bytes": 28619
     }
   ]
 }
