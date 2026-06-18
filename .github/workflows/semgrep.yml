@@ -1,0 +1,33 @@
+name: Semgrep
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    - cron: '47 8 * * 1'
+
+permissions:
+  contents: read
+
+jobs:
+  scan:
+    name: Semgrep scan
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.13'
+
+      - name: Install Semgrep
+        run: python -m pip install --disable-pip-version-check semgrep
+
+      - name: Run Semgrep
+        run: semgrep scan --config p/secrets --config p/javascript --config p/typescript --error az-sports-dev
