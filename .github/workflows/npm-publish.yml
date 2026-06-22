@@ -1,0 +1,93 @@
+name: Publish npm Package
+
+on:
+  workflow_dispatch:
+    inputs:
+      package:
+        description: Package to publish
+        required: true
+        type: choice
+        options:
+          - api-client
+          - mcp-server
+      confirm:
+        description: Type PUBLISH to confirm npm publication
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  publish:
+    name: Publish selected package
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: npm-publish
+    if: inputs.confirm == 'PUBLISH'
+    defaults:
+      run:
+        working-directory: az-sports-dev
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Set up Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+          registry-url: https://registry.npmjs.org
+          package-manager-cache: false
+
+      - name: Use latest npm
+        run: npm install -g npm@latest
+
+      - name: Set up pnpm
+        run: |
+          corepack enable
+          corepack prepare pnpm@10.14.0 --activate
+
+      - name: Resolve package target
+        id: target
+        run: |
+          case "${{ inputs.package }}" in
+            api-client)
+              echo "dir=packages/api-client" >> "$GITHUB_OUTPUT"
+              echo "name=@azs/api-client" >> "$GITHUB_OUTPUT"
+              echo "version=0.1.0" >> "$GITHUB_OUTPUT"
+              ;;
+            mcp-server)
+              echo "dir=packages/mcp-server" >> "$GITHUB_OUTPUT"
+              echo "name=@azs/mcp-server" >> "$GITHUB_OUTPUT"
+              echo "version=1.0.0" >> "$GITHUB_OUTPUT"
+              ;;
+            *)
+              echo "Unsupported package: ${{ inputs.package }}" >&2
+              exit 2
+              ;;
+          esac
+
+      - name: Verify package metadata
+        run: |
+          node -e "const fs=require('fs'); const p=JSON.parse(fs.readFileSync('${{ steps.target.outputs.dir }}/package.json','utf8')); if (p.name !== '${{ steps.target.outputs.name }}' || p.version !== '${{ steps.target.outputs.version }}') { throw new Error('package metadata mismatch: ' + p.name + '@' + p.version); }"
+
+      - name: Install dependencies
+        run: pnpm install
+
+      - name: Build packages
+        run: pnpm -r build
+
+      - name: Test packages
+        run: pnpm -r test
+
+      - name: Preview package contents
+        run: npm pack --dry-run --json
+        working-directory: az-sports-dev/${{ steps.target.outputs.dir }}
+
+      - name: Publish with provenance
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: npm publish --provenance --access public
+        working-directory: az-sports-dev/${{ steps.target.outputs.dir }}
