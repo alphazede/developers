@@ -5,7 +5,7 @@ The AlphaZede Sports MCP server exposes public sports analytics tools to MCP-com
 ## Quickstart
 
 ```bash
-npm install -g @azs/mcp-server
+npm install -g @alphadezede/mcp-server
 azs-mcp-server serve
 ```
 
@@ -20,7 +20,7 @@ For hosts that launch packages directly, use [`.mcp.example.json`](../.mcp.examp
       "command": "npx",
       "args": [
         "-y",
-        "@azs/mcp-server",
+        "@alphadezede/mcp-server",
         "serve"
       ],
       "env": {

@@ -32,7 +32,7 @@ Install dependencies and build the package from the repo root:
 
 ```bash
 pnpm install
-pnpm --filter @azs/mcp-server build
+pnpm --filter @alphadezede/mcp-server build
 ```
 
 During local development, link the binary globally from this package directory:

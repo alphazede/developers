@@ -1,4 +1,4 @@
-import { createAzsClient } from "@azs/api-client";
+import { createAzsClient } from "@alphadezede/api-client";
 
 const apiKey = process.env.AZS_API_KEY;
 

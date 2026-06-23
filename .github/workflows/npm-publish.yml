@@ -55,12 +55,12 @@ jobs:
           case "${{ inputs.package }}" in
             api-client)
               echo "dir=packages/api-client" >> "$GITHUB_OUTPUT"
-              echo "name=@azs/api-client" >> "$GITHUB_OUTPUT"
+              echo "name=@alphadezede/api-client" >> "$GITHUB_OUTPUT"
               echo "version=0.1.0" >> "$GITHUB_OUTPUT"
               ;;
             mcp-server)
               echo "dir=packages/mcp-server" >> "$GITHUB_OUTPUT"
-              echo "name=@azs/mcp-server" >> "$GITHUB_OUTPUT"
+              echo "name=@alphadezede/mcp-server" >> "$GITHUB_OUTPUT"
               echo "version=1.0.0" >> "$GITHUB_OUTPUT"
               ;;
             *)

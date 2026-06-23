@@ -3,7 +3,7 @@
 Typed TypeScript client for the public AlphaZede Sports API.
 
 ```ts
-import { createAzsClient } from "@azs/api-client";
+import { createAzsClient } from "@alphadezede/api-client";
 
 const azs = createAzsClient({
   apiKey: process.env.AZS_API_KEY,

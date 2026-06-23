@@ -1,14 +1,14 @@
 # Security Policy
 
-AlphaZede Sports accepts vulnerability reports for the public developer repository, `@azs/mcp-server`, and `@azs/api-client`.
+AlphaZede Sports accepts vulnerability reports for the public developer repository, `@alphadezede/mcp-server`, and `@alphadezede/api-client`.
 
 ## Supported Versions
 
 | Surface | Supported version |
 |---|---|
 | Public developer repository | Current `main` branch after publication |
-| `@azs/mcp-server` | Latest published package version |
-| `@azs/api-client` | Latest published package version |
+| `@alphadezede/mcp-server` | Latest published package version |
+| `@alphadezede/api-client` | Latest published package version |
 
 ## Reporting A Vulnerability
 

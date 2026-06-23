@@ -21,7 +21,7 @@ See [examples/api-quickstart.ts](examples/api-quickstart.ts).
 MCP quickstart:
 
 ```bash
-npm install -g @azs/mcp-server
+npm install -g @alphadezede/mcp-server
 azs-mcp-server serve
 ```
 

@@ -1,5 +1,5 @@
 {
-  "name": "@azs/mcp-server",
+  "name": "@alphadezede/mcp-server",
   "version": "1.0.0",
   "mcpName": "io.github.alphazede/mcp-server",
   "description": "AlphaZede Sports MCP Server — real-time odds, player props, and parlay analysis via the Model Context Protocol",

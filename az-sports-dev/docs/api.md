@@ -31,10 +31,10 @@ Contract version: `2026-04-01`
 
 ## API Client
 
-Use [@azs/api-client](../packages/api-client/README.md) for TypeScript integrations. The client is generated from the same public operation allowlist as the OpenAPI contract.
+Use [@alphadezede/api-client](../packages/api-client/README.md) for TypeScript integrations. The client is generated from the same public operation allowlist as the OpenAPI contract.
 
 ```ts
-import { createAzsClient } from "@azs/api-client";
+import { createAzsClient } from "@alphadezede/api-client";
 
 const azs = createAzsClient({ apiKey: process.env.AZS_API_KEY });
 const health = await azs.getHealth();

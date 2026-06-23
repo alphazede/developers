@@ -1,5 +1,5 @@
 {
-  "name": "@azs/api-client",
+  "name": "@alphadezede/api-client",
   "version": "0.1.0",
   "description": "Public TypeScript client for the AlphaZede Sports API.",
   "type": "module",
