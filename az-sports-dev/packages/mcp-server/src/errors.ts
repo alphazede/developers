@@ -29,7 +29,7 @@ export function mapHttpError(statusCode: number): string {
     return "Invalid request parameters. Please check your input and try again.";
   }
   if (statusCode === 401) {
-    return "Invalid or missing API key. Please check your AZS_API_KEY configuration.";
+    return "Invalid or missing API key. Please check your host secret configuration.";
   }
   if (statusCode === 402) {
     return "This feature requires a paid subscription. Please upgrade your plan.";

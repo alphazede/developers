@@ -8,20 +8,18 @@ Canonical repository: https://github.com/alphazede/developers/tree/main/az-sport
 - [AGENTS.md](AGENTS.md)
 - [OpenAPI JSON](api/openapi.json)
 - [Authentication](docs/authentication.md)
+- [Public credential handling](docs/public-secret-handling.md)
 - [Rate limits](docs/rate-limits.md)
 - [MCP install](docs/mcp-install.md)
 - [API overview](docs/api.md)
 - [Examples](examples/api-quickstart.ts)
 - [Recipes](recipes/forecast-review.md)
 
-## Agent Mirrors
+## Agent Files
 
 - [AGENTS.md](AGENTS.md): All Coding Agents
-- [CODEX.md](CODEX.md): Codex
 - [CLAUDE.md](CLAUDE.md): Claude
-- [GEMINI.md](GEMINI.md): Gemini
-- [QWEN.md](QWEN.md): Qwen
-- [.cursor/rules/azs-public-developer.mdc](.cursor/rules/azs-public-developer.mdc): Cursor project rule generated from the same public source.
+- [.cursor/rules/azs-public-developer.mdc](.cursor/rules/azs-public-developer.mdc): Cursor project rule.
 
 ## MCP Setup
 
@@ -31,6 +29,6 @@ Canonical repository: https://github.com/alphazede/developers/tree/main/az-sport
 
 ## Safety
 
-- Use AZS_API_KEY through environment variables or MCP host secret storage.
-- Do not place credentials in committed files or user-visible messages.
+- Use MCP host secret storage or deployment-managed environment variables for credentials.
+- Do not place credentials, secret values, or URLs containing credentials in committed files or user-visible messages.
 - Do not claim third-party certification, ranking, or preference without a linked public source.

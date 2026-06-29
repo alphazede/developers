@@ -1,7 +1,7 @@
-const apiKey = process.env.AZS_API_KEY;
+const apiKey = process.env.API_KEY;
 
 if (!apiKey) {
-  throw new Error("Set AZS_API_KEY before calling the AlphaZede Sports API.");
+  throw new Error("Set API_KEY before calling the AlphaZede Sports API.");
 }
 
 const response = await fetch("https://api.alphazedesports.com/api/v1/health", {

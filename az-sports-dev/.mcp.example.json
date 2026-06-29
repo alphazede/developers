@@ -8,7 +8,7 @@
         "serve"
       ],
       "env": {
-        "AZS_API_KEY": "${AZS_API_KEY}"
+        "API_KEY": "${API_KEY}"
       }
     }
   }

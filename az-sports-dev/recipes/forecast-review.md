@@ -1,6 +1,6 @@
 # Forecast Review Recipe
 
-Use this recipe after configuring the MCP server with `AZS_API_KEY`.
+Use this recipe after configuring the MCP server with host-managed secret storage or `azs-mcp-server login`.
 
 ## Request Template
 

@@ -295,7 +295,8 @@ OAuth protected-resource discovery is available at:
 | Variable | Description | Default |
 | --- | --- | --- |
 | `AZS_API_URL` | Upstream AlphaZede Sports API base URL. | `https://api.alphazedesports.com` |
-| `AZS_API_KEY` | Optional local token fallback. OAuth token storage is preferred. System tokens require `AZS_MCP_DEV_MODE=1` and stdio. | Unset |
+| `API_KEY` | Optional local API key fallback for host-managed secret injection. If set to an AlphaZede Sports OAuth or API key, it is used before stored OAuth credentials. Unrelated ambient values are ignored unless `AZS_MCP_DEV_MODE=1` allows a system token. OAuth token storage is recommended for interactive hosts. | Unset |
+| `AZS_API_KEY` | Deprecated compatibility alias for existing deployments. If set, it is used when `API_KEY` is unset. Prefer `API_KEY` or OAuth login for new setups. | Unset |
 | `AZS_LOG_LEVEL` | Server log level. | `info` |
 | `AZS_TIMEZONE` | Timezone used by date/time formatting helpers. | `America/New_York` |
 | `AZS_MCP_CLIENT_ID` | Default OAuth client ID and outbound gateway attribution when token storage does not provide one. | Assigned per integration |

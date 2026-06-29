@@ -24,8 +24,9 @@ Generated from the public Agent Instruction Source 2026-05-29.
 
 ## Credential Handling
 
-- Use `AZS_API_KEY` through environment variables or MCP host secret storage.
-- Never place API keys in committed files, code comments, issue text, public examples, or user-visible messages.
+- Use MCP host secret storage or deployment-managed environment variables for credentials.
+- Do not tell agents to use a company-specific API-key variable unless the runtime contract requires that exact name.
+- Never place API keys, bearer tokens, secret values, or URLs containing credentials in committed files, code comments, issue text, public examples, or user-visible messages.
 - If a credential appears exposed, tell the user to rotate it before continuing with live calls.
 
 ## Public Boundary

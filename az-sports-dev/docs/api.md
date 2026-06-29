@@ -36,7 +36,12 @@ Use [@alphadezede/api-client](../packages/api-client/README.md) for TypeScript i
 ```ts
 import { createAzsClient } from "@alphadezede/api-client";
 
-const azs = createAzsClient({ apiKey: process.env.AZS_API_KEY });
+const apiKey = process.env.API_KEY;
+if (!apiKey) {
+  throw new Error("Set API_KEY before calling the AlphaZede Sports API.");
+}
+
+const azs = createAzsClient({ apiKey });
 const health = await azs.getHealth();
 console.log(health);
 ```

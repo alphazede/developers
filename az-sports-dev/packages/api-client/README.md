@@ -6,7 +6,7 @@ Typed TypeScript client for the public AlphaZede Sports API.
 import { createAzsClient } from "@alphadezede/api-client";
 
 const azs = createAzsClient({
-  apiKey: process.env.AZS_API_KEY,
+  apiKey: process.env.API_KEY,
 });
 
 const games = await azs.listGamesBySportAndDate({

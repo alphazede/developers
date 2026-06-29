@@ -8,7 +8,7 @@
  *
  * Configuration via environment variables:
  * - AZS_API_URL: API base URL (uses the configured runtime default if unset)
- * - AZS_API_KEY: dev-mode/system fallback token
+ * - API_KEY: optional local API key fallback
  * - AZS_LOG_LEVEL: log level (default: info)
  */
 

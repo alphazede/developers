@@ -34,6 +34,7 @@ azs-mcp-server serve
 | [packages/api-client](packages/api-client/README.md) | Public TypeScript API client. |
 | [packages/mcp-server](packages/mcp-server/README.md) | Public MCP server package and runtime source. |
 | [docs/authentication.md](docs/authentication.md) | API key and bearer-auth guidance. |
+| [docs/public-secret-handling.md](docs/public-secret-handling.md) | Public credential-handling guidance for docs and agent instructions. |
 | [docs/rate-limits.md](docs/rate-limits.md) | Published request budgets and retry behavior. |
 | [docs/api.md](docs/api.md) | Human-readable API overview. |
 | [docs/mcp-install.md](docs/mcp-install.md) | MCP host setup. |
@@ -44,18 +45,15 @@ azs-mcp-server serve
 
 ## Agent Files
 
-The public agent instruction mirrors are generated from one source:
+The public agent guidance is intentionally limited to supported entry points:
 
 - [AGENTS.md](AGENTS.md)
-- [CODEX.md](CODEX.md)
 - [CLAUDE.md](CLAUDE.md)
-- [GEMINI.md](GEMINI.md)
-- [QWEN.md](QWEN.md)
 - [.cursor/rules/azs-public-developer.mdc](.cursor/rules/azs-public-developer.mdc)
 
 ## Safety And Security
 
-- Use `AZS_API_KEY` through environment variables or MCP host secret storage.
+- Use MCP host secret storage or deployment-managed environment variables for credentials.
 - Do not commit credentials, local logs, package tarballs, `node_modules`, or build output.
 - Report vulnerabilities through [SECURITY.md](SECURITY.md).
 - Use only endpoints and package scripts represented in this repository.

@@ -8,8 +8,8 @@
       "classification": "public-developer-asset",
       "sourceId": "generator:cursor-rule",
       "digestMode": "file-sha256",
-      "sha256": "8041e24d0bd36191c47b1e5d9efbeada19c72218d83d5b2d3c1d9a6122cf14d2",
-      "bytes": 2544
+      "sha256": "a517d9a04fdc3ee3462f7f374b31c9eac59c2f528e1be8184142a26d24b70053",
+      "bytes": 2737
     },
     {
       "path": ".gitignore",
@@ -26,8 +26,8 @@
       "classification": "public-developer-asset",
       "sourceId": "generator:mcp-example-config",
       "digestMode": "file-sha256",
-      "sha256": "6e01415424c9c749b91a67627522bea36717d2492bb7c9471a00c5b3ad7fb6fb",
-      "bytes": 227
+      "sha256": "078d18284f84c23f134a308ea05fd714e7d5fe9e813529461d83210b8b3f7406",
+      "bytes": 219
     },
     {
       "path": "AGENTS.md",
@@ -35,8 +35,8 @@
       "classification": "public-developer-asset",
       "sourceId": "generator:agent-mirror",
       "digestMode": "file-sha256",
-      "sha256": "e0c0561bcdb252440f5ec4a6e6bde4ad1e86824f3422cecf079378e66967e4e8",
-      "bytes": 2399
+      "sha256": "5843a1fc6d330cd4c9ee9f6510c60e32b065593c4add22ac0cab340f9de4e4a8",
+      "bytes": 2592
     },
     {
       "path": "agents.txt",
@@ -44,8 +44,8 @@
       "classification": "public-developer-asset",
       "sourceId": "generator:agents-index",
       "digestMode": "file-sha256",
-      "sha256": "940c7d44b2c94863f43d09f2cd84f90c7b91c4c42979b8fcb30a49cf2fb534be",
-      "bytes": 1293
+      "sha256": "91fb312ab5d9a15588e8356e23f99dc420db9c19dcec23af71c7d2a7ac7231ae",
+      "bytes": 1288
     },
     {
       "path": "api/openapi.json",
@@ -71,17 +71,8 @@
       "classification": "public-developer-asset",
       "sourceId": "generator:agent-mirror",
       "digestMode": "file-sha256",
-      "sha256": "d83f39035c4cf4470daf46190001d10aa328eaa462982e3138aee9e39e74fc07",
-      "bytes": 2386
-    },
-    {
-      "path": "CODEX.md",
-      "kind": "file",
-      "classification": "public-developer-asset",
-      "sourceId": "generator:agent-mirror",
-      "digestMode": "file-sha256",
-      "sha256": "e849d02620bee4f4a2d8842f97079137fab99999b215d49edbb9a05f682b5602",
-      "bytes": 2421
+      "sha256": "3dec5caf5d41209c181748240d96a693daff5e5e375971d94706d448c15d6d80",
+      "bytes": 2579
     },
     {
       "path": "docs/api.md",
@@ -89,8 +80,8 @@
       "classification": "public-developer-asset",
       "sourceId": "generator:api-doc",
       "digestMode": "file-sha256",
-      "sha256": "83796f5532fde4b61a7e2b56b9baadd7a3707ac32ec4f978afadff9dfda1da6d",
-      "bytes": 1899
+      "sha256": "bf3c58cdb46310f837415093af3083acb772d536f5baab7de0b8435d69ebd8d3",
+      "bytes": 2019
     },
     {
       "path": "docs/authentication.md",
@@ -98,8 +89,8 @@
       "classification": "public-developer-asset",
       "sourceId": "template:doc-auth",
       "digestMode": "file-sha256",
-      "sha256": "5ded3723f66ae61fb93693a002d4ae023c766a2e265e0dde6ed5881c09db1316",
-      "bytes": 1238
+      "sha256": "e855955bd9afea7cfc1ee8096b7b5ff1b3b53b399cd2b09f3d1b3f99e0a8ccbd",
+      "bytes": 1497
     },
     {
       "path": "docs/mcp-install.md",
@@ -107,8 +98,17 @@
       "classification": "public-developer-asset",
       "sourceId": "generator:mcp-install-doc",
       "digestMode": "file-sha256",
-      "sha256": "002635e1a25261f14419c95ea093382984a6b9de02fe6c5875a7966dec8f3062",
-      "bytes": 1654
+      "sha256": "dfb8db38dbe588d8657efe634f9a24a7765ce051ef6bddb10d87722ea67fde00",
+      "bytes": 1813
+    },
+    {
+      "path": "docs/public-secret-handling.md",
+      "kind": "file",
+      "classification": "public-developer-asset",
+      "sourceId": "template:doc-auth-hygiene",
+      "digestMode": "file-sha256",
+      "sha256": "5a6f10a8e38ef324229b6c07817934be5beb7d490f801464637e8b5cb9b0a3c0",
+      "bytes": 1723
     },
     {
       "path": "docs/rate-limits.md",
@@ -125,7 +125,7 @@
       "classification": "public-developer-asset",
       "sourceId": "template:example-api-client",
       "digestMode": "file-sha256",
-      "sha256": "3e7c4dfbd249094286beb79c0bfc25f1266a04418f7b386b184fcc58239743be",
+      "sha256": "403ed8f77f28e4e08f19726ebbd93eb39bbc166f836374f1ef37ebfead6b4df5",
       "bytes": 442
     },
     {
@@ -134,8 +134,8 @@
       "classification": "public-developer-asset",
       "sourceId": "template:example-api-quickstart",
       "digestMode": "file-sha256",
-      "sha256": "eb4982bf41842807d127ac3e7cd1295ee2a426593e2c42ad22a90d60d2d831ec",
-      "bytes": 442
+      "sha256": "0a42f491b0c13c85e8b5e8b597ba198c54e44e0b913f81cc2ef07aab3bd5586f",
+      "bytes": 434
     },
     {
       "path": "examples/mcp-host-config.json",
@@ -143,17 +143,8 @@
       "classification": "public-developer-asset",
       "sourceId": "template:example-mcp-config",
       "digestMode": "file-sha256",
-      "sha256": "33ad433d568fd9b6ac31f6f4df43f53cf431a70769986103a044dc39e1782d4f",
+      "sha256": "060720b02813863e70d605b143512b1a222b219f1efe834604152d52864ba93b",
       "bytes": 195
-    },
-    {
-      "path": "GEMINI.md",
-      "kind": "file",
-      "classification": "public-developer-asset",
-      "sourceId": "generator:agent-mirror",
-      "digestMode": "file-sha256",
-      "sha256": "3d75bd53e0262498857a449846a9b250fbb1a65a9c729a35704ddc8480dc97db",
-      "bytes": 2385
     },
     {
       "path": "LICENSE",
@@ -170,8 +161,8 @@
       "classification": "public-developer-asset",
       "sourceId": "generator:llms-index",
       "digestMode": "file-sha256",
-      "sha256": "e290ef69f913beeb478da5dd1ab7d5d634e3fa6e0a317911728f4ea16ada932a",
-      "bytes": 4241
+      "sha256": "f773489bb9165856c38d0be6f32faf6b88dacca9299af0adac2dc828a5670a15",
+      "bytes": 4371
     },
     {
       "path": "package.json",
@@ -206,8 +197,8 @@
       "classification": "public-developer-asset",
       "sourceId": "generator:api-client-package-json",
       "digestMode": "file-sha256",
-      "sha256": "147826f8d041dfb418a64e1f38b1375700b21539f8393c1708bb50a8ecfeedfa",
-      "bytes": 1215
+      "sha256": "a7eaa68e56c53f34d6547a6cfd4e327200616b1e9f2ab57afb5676d90c6ee750",
+      "bytes": 1223
     },
     {
       "path": "packages/api-client/README.md",
@@ -215,8 +206,8 @@
       "classification": "public-developer-asset",
       "sourceId": "template:api-client-readme",
       "digestMode": "file-sha256",
-      "sha256": "2773a119090cada5d358f06f5484b1cde42dc3b032b57292469318db10f1ea5f",
-      "bytes": 533
+      "sha256": "ba8b462a8ef6797b87f6e6ad6cb47a97c5236dd12ba881ad0940a98fd6e73fe5",
+      "bytes": 537
     },
     {
       "path": "packages/api-client/src/__tests__/client.test.ts",
@@ -278,8 +269,8 @@
       "classification": "public-developer-asset",
       "sourceId": "generator:mcp-package-json",
       "digestMode": "file-sha256",
-      "sha256": "71c176ed88feddaa8ed165a301351baa32e832e16aa2f78f6ef0db8e62d29bc5",
-      "bytes": 1474
+      "sha256": "9da6ee129a98386725a28ad398c110c63e3957eb96deba6487d25ce17bc9ac37",
+      "bytes": 1482
     },
     {
       "path": "packages/mcp-server/README.md",
@@ -287,8 +278,8 @@
       "classification": "public-developer-asset",
       "sourceId": "source:mcp-readme",
       "digestMode": "file-sha256",
-      "sha256": "87fb3eadf11f2f40d3c4e55b03e837a639ab0b85b3efc02a6edf07fa15eee6f8",
-      "bytes": 7830
+      "sha256": "0613c7cc5d2a2362afb8e6d2bb47712387ccf911a7663f84a4770cd12da3ceb0",
+      "bytes": 8197
     },
     {
       "path": "packages/mcp-server/server.json",
@@ -296,8 +287,8 @@
       "classification": "public-developer-asset",
       "sourceId": "generator:mcp-server-json",
       "digestMode": "file-sha256",
-      "sha256": "20e75004b5245618dba802aad9ec298cca8c6b222b80707a554b5f7f531998aa",
-      "bytes": 2463
+      "sha256": "3293458d23399f195e92d83cddae5065e373ba9c39a2d737dbb21cbbd274a240",
+      "bytes": 2471
     },
     {
       "path": "packages/mcp-server/src/__tests__/public-package.test.ts",
@@ -305,8 +296,8 @@
       "classification": "public-developer-asset",
       "sourceId": "template:mcp-public-test",
       "digestMode": "file-sha256",
-      "sha256": "4328fae20d38a70b66e15059a5c999f310ebc479f96c8866dee87c7ef0539095",
-      "bytes": 522
+      "sha256": "86db069ba7a13147fb01c5f4af7dd43592cba4176de4c7ecffee4eda92e7f05f",
+      "bytes": 2747
     },
     {
       "path": "packages/mcp-server/src/allowlist.ts",
@@ -422,7 +413,7 @@
       "classification": "public-developer-asset",
       "sourceId": "source:mcp-runtime",
       "digestMode": "file-sha256",
-      "sha256": "477fc584121ba2abbbd1d1431fa08a95ddf84be2192c03a1e80056eca81e663b",
+      "sha256": "3212faf37c87ae0e77699becdfdbc26bf328e0294cdc6d091d76c09320c79a3e",
       "bytes": 3400
     },
     {
@@ -476,8 +467,8 @@
       "classification": "public-developer-asset",
       "sourceId": "source:mcp-runtime",
       "digestMode": "file-sha256",
-      "sha256": "db05f35d97ef826bc1b0b4344dc1bb9676b38b41d1d04e9184ddb72f91e4a4aa",
-      "bytes": 9590
+      "sha256": "39996c30ad4bbe9d5e9d4fd072b4881c52fd88f407afb384812cff0c6265e022",
+      "bytes": 9587
     },
     {
       "path": "packages/mcp-server/src/middleware.ts",
@@ -485,8 +476,8 @@
       "classification": "public-developer-asset",
       "sourceId": "source:mcp-runtime",
       "digestMode": "file-sha256",
-      "sha256": "f38b0a7306a9a6b43b145a9b8bf8faf0f6edd8a61e67f9ebd305b8dab8d6e360",
-      "bytes": 13971
+      "sha256": "e31b8e1619b8f1613268bdc1ac53e8bdbf79997507b2e927179e922472ff09c3",
+      "bytes": 14499
     },
     {
       "path": "packages/mcp-server/src/observability.ts",
@@ -750,22 +741,13 @@
       "bytes": 25
     },
     {
-      "path": "QWEN.md",
-      "kind": "file",
-      "classification": "public-developer-asset",
-      "sourceId": "generator:agent-mirror",
-      "digestMode": "file-sha256",
-      "sha256": "d900d59bc1f4ec009feb404a68b5b5fd017fdbe896d9a1fca21d6e97a9e851fc",
-      "bytes": 2379
-    },
-    {
       "path": "README.md",
       "kind": "file",
       "classification": "public-developer-asset",
       "sourceId": "template:root-readme",
       "digestMode": "file-sha256",
-      "sha256": "a86b62f865ae390ffbc418a4a0b770d417c44f017528520e7ecf1f5bd3e8a11c",
-      "bytes": 2392
+      "sha256": "da630b7559e1cddc983a213c7964a167971f1734d4d448a402f8b940ab98a101",
+      "bytes": 2494
     },
     {
       "path": "recipes/fantasy-prep.md",
@@ -782,8 +764,8 @@
       "classification": "public-developer-asset",
       "sourceId": "template:recipe-forecast-review",
       "digestMode": "file-sha256",
-      "sha256": "431915c00b5b4ceba4ec2b08973889fc99521afd9987bf7500317be9efa228f8",
-      "bytes": 663
+      "sha256": "a03d1b20f7433b2ec3e3d459a7c3987021607a358e3a082a289293301325f6c0",
+      "bytes": 703
     },
     {
       "path": "recipes/line-movement-review.md",
@@ -800,8 +782,8 @@
       "classification": "public-developer-asset",
       "sourceId": "template:root-security",
       "digestMode": "file-sha256",
-      "sha256": "c58c8d876ed67f24bcd62d608173a9fde2f9b0df22456b5fcfde9381f5502553",
-      "bytes": 1113
+      "sha256": "239fd545c59304748dfe0b219080b7c67a135f762fbc251c5e9f06a2867ffeee",
+      "bytes": 1340
     },
     {
       "path": "public-boundary-manifest.json",
@@ -809,8 +791,8 @@
       "classification": "public-boundary-evidence",
       "sourceId": "generator:public-boundary-manifest",
       "digestMode": "manifest-self-null-canonical",
-      "sha256": "35fd1b63ef7fd5a18d6af344ca99d85b40d258cd135ecc62c77f94288e881778",
-      "bytes": 28619
+      "sha256": "af98c65a69aca53fc1a3e505577e9d55d9205703278953106aad138b401a8e47",
+      "bytes": 28057
     }
   ]
 }

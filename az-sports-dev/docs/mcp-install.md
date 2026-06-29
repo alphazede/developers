@@ -1,6 +1,6 @@
 # MCP Install
 
-The AlphaZede Sports MCP server exposes public sports analytics tools to MCP-compatible hosts. Install the npm package, provide `AZS_API_KEY` through host-managed environment configuration, and run the server with `serve`.
+The AlphaZede Sports MCP server exposes public sports analytics tools to MCP-compatible hosts. Install the npm package, authenticate with `azs-mcp-server login` or host-managed secret configuration, and run the server with `serve`.
 
 ## Quickstart
 
@@ -24,7 +24,7 @@ For hosts that launch packages directly, use [`.mcp.example.json`](../.mcp.examp
         "serve"
       ],
       "env": {
-        "AZS_API_KEY": "${AZS_API_KEY}"
+        "API_KEY": "${API_KEY}"
       }
     }
   }
@@ -55,7 +55,8 @@ The public server metadata lists 13 tool names. Use the MCP host UI or client lo
 
 ## Security Notes
 
-- Store `AZS_API_KEY` in host-managed environment configuration.
+- Prefer `azs-mcp-server login` or host-managed secret storage for credentials.
+- Use generic local placeholders such as `API_KEY` in examples; keep real variable names and values out of assistant messages.
 - Do not paste credentials into assistant messages.
 - Revoke and rotate any exposed credential before reconnecting the host.
 - Use [SECURITY.md](../SECURITY.md) for vulnerability reporting.

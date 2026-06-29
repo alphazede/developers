@@ -135,42 +135,35 @@ export const extractIdentity: Middleware<
   identityMiddleware(loadConfig())(next)(ctx, input);
 
 export function resolveIdentity(): Identity {
-  let token: string | undefined;
-
-  if (process.env.AZS_API_KEY) {
-    token = process.env.AZS_API_KEY;
-  } else {
-    token = readToken() ?? undefined;
-  }
-
-  if (!token) {
-    throw new Error(
-      "No authentication token found. Run `azs-mcp-server login` to authenticate, or set AZS_API_KEY for dev mode.",
-    );
-  }
-
-  let identity: Identity;
-  try {
-    identity = classifyIdentity(token);
-  } catch (error) {
+  const genericEnvIdentity = classifyOptionalToken(process.env.API_KEY);
+  if (genericEnvIdentity) {
     if (
-      error instanceof Error &&
-      error.message === "Empty token cannot be classified"
+      genericEnvIdentity.kind !== "system" ||
+      process.env.AZS_MCP_DEV_MODE === "1"
     ) {
-      throw new Error(
-        "No authentication token found. Run `azs-mcp-server login` to authenticate, or set AZS_API_KEY for dev mode.",
-      );
+      return genericEnvIdentity;
     }
-    throw error;
   }
 
-  if (identity.kind === "system" && process.env.AZS_MCP_DEV_MODE !== "1") {
+  const legacyEnvIdentity = classifyOptionalToken(process.env.AZS_API_KEY);
+  if (legacyEnvIdentity) {
+    return requireAllowedIdentity(legacyEnvIdentity);
+  }
+
+  const storedIdentity = classifyOptionalToken(readToken());
+  if (storedIdentity) {
+    return requireAllowedIdentity(storedIdentity);
+  }
+
+  if (genericEnvIdentity?.kind === "system") {
     throw new Error(
-      "SystemToken authentication is only allowed in dev mode. Set AZS_MCP_DEV_MODE=1 (stdio only) to enable, or use an OAuth/ApiKey token.",
+      "API_KEY is set but is not an AlphaZede Sports OAuth or API key. Use a host-managed AZS token, run `azs-mcp-server login`, or set AZS_MCP_DEV_MODE=1 for system-token development.",
     );
   }
 
-  return identity;
+  throw new Error(
+    "No authentication token found. Run `azs-mcp-server login` to authenticate, or provide an API key through host-managed secret storage.",
+  );
 }
 
 export function resolveIdentityFromAuthorizationHeader(
@@ -198,6 +191,22 @@ export function bearerTokenFromAuthorization(
   const match = value?.match(/^Bearer\s+(.+)$/i);
   const token = match?.[1]?.trim();
   return token ? token : null;
+}
+
+function classifyOptionalToken(token: string | null | undefined): Identity | null {
+  if (!token || token.trim() === "") {
+    return null;
+  }
+  return classifyIdentity(token);
+}
+
+function requireAllowedIdentity(identity: Identity): Identity {
+  if (identity.kind === "system" && process.env.AZS_MCP_DEV_MODE !== "1") {
+    throw new Error(
+      "SystemToken authentication is only allowed in dev mode. Set AZS_MCP_DEV_MODE=1 (stdio only) to enable, or use an OAuth/ApiKey token.",
+    );
+  }
+  return identity;
 }
 
 function resolveIdentityForContext(ctx: MiddlewareContext): Identity {

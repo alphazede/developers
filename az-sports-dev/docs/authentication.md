@@ -7,18 +7,24 @@ AlphaZede Sports public API integrations authenticate with managed API keys sent
 Send the key on every API request:
 
 ```http
-Authorization: Bearer <AZS_API_KEY>
+Authorization: Bearer <API_KEY>
 Accept: application/json
 ```
 
-Use the `AZS_API_KEY` environment variable in local tooling and deployment secret stores. Do not place live keys in committed files, public examples, issue text, or assistant messages.
+Examples use a generic `API_KEY` placeholder. Store the real key in your deployment secret manager or MCP host secret storage. Do not place live keys in committed files, public examples, issue text, or assistant messages. See [Public Credential Handling](public-secret-handling.md) for the public documentation template.
 
 ## REST Example
 
 ```ts
+const apiKey = process.env.API_KEY;
+
+if (!apiKey) {
+  throw new Error("Set API_KEY before calling the AlphaZede Sports API.");
+}
+
 const response = await fetch("https://api.alphazedesports.com/api/v1/health", {
   headers: {
-    Authorization: `Bearer ${process.env.AZS_API_KEY}`,
+    Authorization: `Bearer ${apiKey}`,
     Accept: "application/json",
   },
 });
@@ -30,7 +36,7 @@ if (!response.ok) {
 
 ## MCP Example
 
-Use [`.mcp.example.json`](../.mcp.example.json) or [examples/mcp-host-config.json](../examples/mcp-host-config.json) and provide `AZS_API_KEY` through your MCP host configuration.
+Use [`.mcp.example.json`](../.mcp.example.json) or [examples/mcp-host-config.json](../examples/mcp-host-config.json) and provide the API key through your MCP host configuration or secret store.
 
 ## Key Hygiene
 

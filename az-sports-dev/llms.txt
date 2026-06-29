@@ -12,6 +12,7 @@ Last updated: 2026-05-29
 - [OpenAPI YAML](/api/openapi.yaml): OpenAPI 3.1 YAML contract mechanically derived from JSON.
 - [API overview](/docs/api.md): Human-readable API overview.
 - [Authentication](/docs/authentication.md): API key and bearer-auth guidance.
+- [Public credential handling](/docs/public-secret-handling.md): Public credential-handling guidance for docs and agent instructions.
 - [Rate limits](/docs/rate-limits.md): Public request budgets and retry behavior.
 - [MCP install](/docs/mcp-install.md): MCP host setup guidance.
 - [TypeScript API client](/packages/api-client/README.md): Public SDK package.
@@ -20,7 +21,7 @@ Last updated: 2026-05-29
 
 ## Usage Boundaries
 
-- Authenticate with Authorization: Bearer <AZS_API_KEY>.
+- Authenticate with Authorization: Bearer <API_KEY>.
 - Do not infer endpoints absent from the OpenAPI contract.
 - Use package metadata and README files for install commands.
 - Security reporting goes through the public contact route with topic Security.
