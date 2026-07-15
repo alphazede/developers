@@ -1,0 +1,62 @@
+schema_version: 1
+tool_revision: okf-v1
+
+frontmatter:
+  required:
+    - type
+    - title
+    - okf_status
+    - tags
+  optional:
+    - public_boundary
+    - freshness
+  status_values:
+    - draft
+    - active
+    - deprecated
+  validation:
+    canonical_docs_frontmatter_state: legacy_baseline
+
+allowed_tags:
+  - api
+  - developer
+  - internal
+  - librarian
+  - public
+  - security
+
+coverage:
+  roots:
+    - .
+  okf_bundle:
+    - docs/okf/index.md
+    - docs/okf/tags.md
+  canonical_docs:
+    - AGENTS.md
+  legacy_docs:
+    - README.md
+    - az-sports-dev/AGENTS.md
+    - az-sports-dev/CLAUDE.md
+    - az-sports-dev/README.md
+    - az-sports-dev/SECURITY.md
+    - az-sports-dev/docs/api.md
+    - az-sports-dev/docs/authentication.md
+    - az-sports-dev/docs/mcp-install.md
+    - az-sports-dev/docs/public-secret-handling.md
+    - az-sports-dev/docs/rate-limits.md
+    - az-sports-dev/packages/api-client/README.md
+    - az-sports-dev/packages/mcp-server/README.md
+    - az-sports-dev/recipes/fantasy-prep.md
+    - az-sports-dev/recipes/forecast-review.md
+    - az-sports-dev/recipes/line-movement-review.md
+  excluded_docs: []
+  bridge_targets: []
+
+excluded_paths:
+  - reports/okf/
+
+reports:
+  schema_check: reports/okf/schema-check.json
+  source_check: reports/okf/source-check.json
+  frontmatter_check: reports/okf/frontmatter-check.json
+  public_boundary: reports/okf/public-boundary.json
