@@ -1,0 +1,21 @@
+# Frozen normalized fixture syntax consumed only by profile.rs conformance tests.
+name=broken-link-tolerance
+selected_profile=bran-strict
+doc.path=concepts/broken-link.md
+doc.source=---\ntype: Playbook\ntitle: Broken link is tolerated\nokf_status: active\ntags: [playbook]\ntimestamp: 2026-07-18T12:00:00Z\nresource: https://example.invalid/playbook\npublic_boundary: public\n---\nSee [missing target](/not-present.md).\n\n# Citations\n
+doc.body=See [missing target](/not-present.md).\n\n# Citations\n
+frontmatter.raw=---\ntype: Playbook\ntitle: Broken link is tolerated\nokf_status: active\ntags: [playbook]\ntimestamp: 2026-07-18T12:00:00Z\nresource: https://example.invalid/playbook\npublic_boundary: public\n---\n
+frontmatter.status=ok
+frontmatter.type=string:Playbook
+frontmatter.title=string:Broken link is tolerated
+frontmatter.okf_status=string:active
+frontmatter.tags=sequence:string:playbook
+frontmatter.timestamp=string:2026-07-18T12:00:00Z
+frontmatter.resource=string:https://example.invalid/playbook
+frontmatter.public_boundary=string:public
+expected.okf.status=pass
+expected.okf.codes=
+expected.strict.status=pass
+expected.strict.codes=
+expected.selected_exit=0
+expected.selection_code=

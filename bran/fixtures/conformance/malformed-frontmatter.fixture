@@ -1,0 +1,14 @@
+# Frozen normalized fixture syntax consumed only by profile.rs conformance tests.
+name=malformed-frontmatter
+selected_profile=okf-v0.1
+doc.path=concepts/malformed.md
+doc.source=---\n: malformed\n---\nBody retained verbatim.\n
+doc.body=Body retained verbatim.\n
+frontmatter.raw=---\n: malformed\n---\n
+frontmatter.status=malformed:unexpected token
+expected.okf.status=fail
+expected.okf.codes=malformed-frontmatter
+expected.strict.status=fail
+expected.strict.codes=malformed-frontmatter
+expected.selected_exit=1
+expected.selection_code=

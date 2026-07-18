@@ -1,0 +1,15 @@
+# Frozen normalized fixture syntax consumed only by profile.rs conformance tests.
+name=minimal-upstream-valid
+selected_profile=okf-v0.1
+doc.path=concepts/minimal.md
+doc.source=---\ntype: BigQuery Dataset\n---\nMinimal upstream-compatible body.\n
+doc.body=Minimal upstream-compatible body.\n
+frontmatter.raw=---\ntype: BigQuery Dataset\n---\n
+frontmatter.status=ok
+frontmatter.type=string:BigQuery Dataset
+expected.okf.status=pass
+expected.okf.codes=
+expected.strict.status=fail
+expected.strict.codes=title,status,tag,freshness,authority,citation-source,relationship,public-boundary
+expected.selected_exit=0
+expected.selection_code=

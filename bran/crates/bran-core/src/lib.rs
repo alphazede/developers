@@ -1,5 +1,15 @@
 //! Exact-release verification primitives for Bran distribution metadata.
 
+pub mod bundle;
+pub mod profile;
+pub mod schema;
+
+// Profile validation exports (Slice 1.2 wiring only)
+pub use crate::profile::{
+    Diagnostic, ProfileOutcome, ProfileValidator, ValidationResult, ValidationStatus, BRAN_STRICT,
+    OKF_V0_1,
+};
+
 use std::collections::BTreeSet;
 use std::error::Error;
 use std::fmt;

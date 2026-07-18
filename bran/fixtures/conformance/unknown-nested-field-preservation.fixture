@@ -1,0 +1,23 @@
+# Frozen normalized fixture syntax consumed only by profile.rs conformance tests.
+name=unknown-nested-field-preservation
+selected_profile=bran-strict
+doc.path=concepts/unknown.md
+doc.source=---\ntype: Dataset\ntitle: Unknown-preserving dataset\nokf_status: active\ntags: [dataset]\ntimestamp: 2026-07-18T12:00:00Z\nresource: https://example.invalid/dataset\npublic_boundary: public\nproducer_extension: {deep: true, label: keep-me}\n---\nSee [missing target](/not-present.md).\n\n# Citations\n
+doc.body=See [missing target](/not-present.md).\n\n# Citations\n
+frontmatter.raw=---\ntype: Dataset\ntitle: Unknown-preserving dataset\nokf_status: active\ntags: [dataset]\ntimestamp: 2026-07-18T12:00:00Z\nresource: https://example.invalid/dataset\npublic_boundary: public\nproducer_extension: {deep: true, label: keep-me}\n---\n
+frontmatter.status=ok
+frontmatter.type=string:Dataset
+frontmatter.title=string:Unknown-preserving dataset
+frontmatter.okf_status=string:active
+frontmatter.tags=sequence:string:dataset
+frontmatter.timestamp=string:2026-07-18T12:00:00Z
+frontmatter.resource=string:https://example.invalid/dataset
+frontmatter.public_boundary=string:public
+frontmatter.producer_extension.deep=bool:true
+frontmatter.producer_extension.label=string:keep-me
+expected.okf.status=pass
+expected.okf.codes=
+expected.strict.status=pass
+expected.strict.codes=
+expected.selected_exit=0
+expected.selection_code=
