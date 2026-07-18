@@ -101,8 +101,8 @@ def validate_asset(asset: Any, tag: str, expected_names: set[str], errors: list[
         errors.append(f"asset {name!r} URL must not use /releases/latest")
     if not is_sha256(asset["sha256"]):
         errors.append(f"asset {name!r} has an invalid sha256")
-    if not isinstance(asset["media_type"], str) or not asset["media_type"]:
-        errors.append(f"asset {name!r} has an invalid media_type")
+    if not isinstance(asset["media_type"], str) or not asset["media_type"].strip():
+        errors.append(f"asset {name!r} has empty media_type")
 
 
 def validate_manifest(manifest: Any) -> list[str]:

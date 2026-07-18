@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://schemas.alphazede.dev/bran/profile-result/schema.json",
   "title": "BRAN dual-profile validation result",
-  "description": "Both profile outcomes are exposed. selected_profile alone controls selected_passed and exit_code. Link targets remain unvalidated.",
+  "description": "This schema is the planned future wire projection of ValidationResult. Both profile outcomes are exposed. selected_profile alone controls selected_passed and exit_code, which are projected/computed from ValidationResult methods (selected_passed(), exit_code()) rather than stored Rust fields. Link targets remain unvalidated.",
   "type": "object",
   "additionalProperties": true,
   "required": ["okf_compatibility", "bran_strict", "selected_profile", "selected_passed", "exit_code", "selected_profile_error"],

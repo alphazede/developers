@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 from __future__ import annotations
-import json, re, sys
+import ast, json, re, sys
 from collections import Counter
 from pathlib import Path
 PHASES = {"1": 6, "2": 6, "3": 7, "4": 2, "5": 4, "6": 0}
@@ -17,6 +17,7 @@ PYTEST = re.compile(r"^def\s+(test_[A-Za-z_]\w*)\s*\(", re.M)
 STABLE = re.compile(r"^P([1-6])-([A-Za-z0-9]+(?:-[A-Za-z0-9]+)*)$")
 SLUG = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 HIDDEN = re.compile(r"\b(?:self[-_ ]?test|probe|cases?|matrix|parameteri[sz]ed)\b", re.I)
+IDENTIFIER = re.compile(r"[A-Za-z_]\w*")
 def fail(errors: list[str]) -> int:
     for error in errors:
         print(f"FAIL test budget: {error}")
@@ -30,6 +31,77 @@ def text(path: Path, errors: list[str]) -> str:
 def body(shell: str, name: str) -> str | None:
     match = re.search(rf"^{re.escape(name)}\(\) \{{\n(.*?)^\}}$", shell, re.M | re.S)
     return match.group(1) if match else None
+def suspicious_identifier(value: str) -> bool:
+    parts = value.lower().split("_")
+    return (any(part in {"case", "cases", "matrix", "matrices", "probe", "probes",
+                         "parameterized", "parameterised", "selftest", "selftests"}
+                for part in parts)
+            or any(parts[index:index + 2] in (["self", "test"], ["self", "tests"])
+                   for index in range(len(parts) - 1)))
+def rust_body(source: str, name: str) -> str | None:
+    match = re.search(rf"#\[test\]\s*(?:#\[[^\]]+\]\s*)*fn\s+{re.escape(name)}\s*\([^)]*\)\s*\{{", source)
+    if match is None:
+        return None
+    opening = match.end() - 1
+    depth, quote, escaped, line_comment, block_comment = 0, None, False, False, 0
+    index = opening
+    while index < len(source):
+        char = source[index]
+        following = source[index:index + 2]
+        if line_comment:
+            line_comment = char != "\n"
+        elif block_comment:
+            if following == "/*": block_comment += 1; index += 1
+            elif following == "*/": block_comment -= 1; index += 1
+        elif quote:
+            if escaped: escaped = False
+            elif char == "\\": escaped = True
+            elif char == quote: quote = None
+        elif following == "//": line_comment = True; index += 1
+        elif following == "/*": block_comment = 1; index += 1
+        elif char in {'"', "'"}: quote = char
+        elif char == "{": depth += 1
+        elif char == "}":
+            depth -= 1
+            if depth == 0: return source[opening + 1:index]
+        index += 1
+    return None
+def hidden_source(runner: str, name: str, source: str, direct: bool) -> bool:
+    if runner == "rust":
+        scoped = rust_body(source, name)
+        return (scoped is None
+                or re.search(r"\b(?:for|while|loop)\b|\.(?:iter|into_iter)\s*\(", scoped) is not None
+                or any(suspicious_identifier(item) for item in IDENTIFIER.findall(scoped)))
+    if runner == "python":
+        try:
+            tree = ast.parse(source)
+        except SyntaxError:
+            return True
+        if not direct:
+            matches = [node for node in tree.body
+                       if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+                       and node.name == name]
+            if len(matches) != 1:
+                return True
+            tree = matches[0]
+        identifiers: list[str] = []
+        for node in ast.walk(tree):
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+                identifiers.append(node.name)
+            elif isinstance(node, ast.Name):
+                identifiers.append(node.id)
+            elif isinstance(node, ast.arg):
+                identifiers.append(node.arg)
+            elif isinstance(node, ast.Attribute):
+                identifiers.append(node.attr)
+        return any(suspicious_identifier(item) for item in identifiers)
+    if runner == "shell":
+        scoped = source if direct else body(source, name)
+        if scoped is None:
+            return True
+        identifiers = re.findall(r"^\s*([A-Za-z_]\w*)\(\)|^\s*([A-Za-z_]\w*)=|\bfor\s+([A-Za-z_]\w*)\s+in|\$\{?([A-Za-z_]\w*)", scoped, re.M)
+        return any(suspicious_identifier(item) for group in identifiers for item in group if item)
+    return False
 def local(root: Path, value: object) -> Path | None:
     if not isinstance(value, str) or not value or Path(value).is_absolute() or ".." in Path(value).parts:
         return None
@@ -37,26 +109,56 @@ def local(root: Path, value: object) -> Path | None:
     return path if path.is_file() else None
 def check_shell(root: Path, journeys: list[dict], errors: list[str]) -> None:
     shell = text(root / "tools/ci/check.sh", errors)
+    functions = {match.group(1): match.group(2) for match in
+                 re.finditer(r"^([A-Za-z_]\w*)\(\) \{\n(.*?)^\}$", shell, re.M | re.S)}
+    executable = lambda value: [line.strip() for line in value.splitlines()
+                                if line.strip() and not line.lstrip().startswith("#")]
+    calls = {name: {line for line in executable(part) if line in functions}
+             for name, part in functions.items()}
+    dispatch_match = re.search(r'^case "\$gate_mode" in\n(.*?)^esac$', shell, re.M | re.S)
+    dispatch: dict[str, set[str]] = {}
+    if dispatch_match:
+        for match in re.finditer(r"^\s*([a-z-]+)\)\n(.*?)(?=^\s*[a-z-]+\)|\Z)",
+                                 dispatch_match.group(1), re.M | re.S):
+            dispatch[match.group(1)] = {line for line in executable(match.group(2))
+                                        if line in functions}
+    expected_dispatch = {"test-budget": {"run_budget"}, "fast": {"run_fast"},
+                         "conformance": {"run_conformance"},
+                         "full": {"run_fast", "run_conformance"}}
+    if dispatch != expected_dispatch:
+        errors.append("check.sh supported gate dispatch is missing or not exact")
+    def reachable(roots: set[str]) -> set[str]:
+        found, pending = set(), list(roots)
+        while pending:
+            current = pending.pop()
+            if current in found or current not in functions: continue
+            found.add(current); pending.extend(calls[current] - found)
+        return found
+    reachable_from_modes = reachable(set().union(*dispatch.values()) if dispatch else set())
     budget = 'python3 "$script_dir/test_budget_check.py" "$script_dir/test-budget.json"'
-    if shell.count(budget) != 1:
-        errors.append("check.sh must invoke the budget checker exactly once")
-    if "--test-budget)" not in shell or "run_budget" not in shell:
-        errors.append("check.sh must expose --test-budget through run_budget")
+    global_commands = [line for line in executable(shell)
+                       if re.match(r"^(?:python3|sh|bash)\s+", line)]
+    all_commands = [(name, line) for name, part in functions.items()
+                    for line in executable(part) if re.match(r"^(?:python3|sh|bash)\s+", line)]
+    budget_sites = [(name, line) for name, line in all_commands if line == budget]
+    if global_commands.count(budget) != 1 or budget_sites != [("run_budget", budget)]:
+        errors.append("check.sh must execute the budget checker exactly once in run_budget")
     for name in ("run_fast", "run_conformance"):
-        if (part := body(shell, name)) is None or len(re.findall(r"^    run_budget$", part, re.M)) != 1:
-            errors.append(f"check.sh {name} must run the budget checker once")
+        if "run_budget" not in reachable({name}):
+            errors.append(f"check.sh {name} must reach run_budget")
     expected = {budget}
     for journey in journeys:
         runner, name, source = (journey[key] for key in ("runner", "name", "source"))
         if isinstance(runner, str) and runner in {"python", "shell"} and name == source:
             commands = ({f'python3 "$bran_root/{source}"'} if runner == "python"
                         else {f'sh "$bran_root/{source}"', f'bash "$bran_root/{source}"'})
-            if sum(shell.count(command) for command in commands) != 1:
-                errors.append(f"check.sh must invoke {source} exactly once without variants")
+            sites = [(owner, line) for owner, line in all_commands if line in commands]
+            if sum(global_commands.count(command) for command in commands) != 1 or len(sites) != 1 or sites[0][0] not in reachable_from_modes:
+                errors.append(f"check.sh must execute {source} exactly once from a supported gate mode")
             expected.update(commands)
-    for line in shell.splitlines():
-        if re.match(r"\s*(?:python3|sh|bash)\s+", line) and line.strip() not in expected:
-            errors.append(f"unregistered direct Python/shell journey or variant: {line.strip()}")
+    for line in global_commands:
+        if line not in expected:
+            errors.append(f"unregistered direct Python/shell journey or variant: {line}")
 def check_fixtures(root: Path, owned: list[str], errors: list[str]) -> None:
     actual = {path.relative_to(root).as_posix() for path in (root / "fixtures").rglob("*") if path.is_file()}
     counts = Counter(owned)
@@ -135,6 +237,8 @@ def main() -> int:
             errors.append(f"{label} Python name must be a direct script or exact def test_* item")
         if runner == "shell" and isinstance(name, str) and name != source and body(content, name) is None:
             errors.append(f"{label} shell name is not an exact function")
+        if isinstance(runner, str) and isinstance(name, str) and hidden_source(runner, name, content, name == source):
+            errors.append(f"{label} source contains a suspicious hidden test multiplier")
         if isinstance(runner, str) and runner in {"golden", "fixture"} and (name != source or not isinstance(source, str) or not source.startswith("fixtures/") or source not in support):
             errors.append(f"{label} {runner} name/source must be its owned fixture")
     if [item.get("stable_id") for item in valid if item.get("phase") == 1] != list(PHASE_ONE) or phases[1] != 6:

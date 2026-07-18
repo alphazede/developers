@@ -1,3 +1,4 @@
+use std::ffi::OsStr;
 use std::process::ExitCode;
 
 const SMOKE_OUTPUT: &str = "{\"version\":\"1\",\"status\":\"ok\"}";
@@ -5,16 +6,22 @@ const MISSING_COMMAND_ERROR: &str = "{\"version\":\"1\",\"error\":\"missing_comm
 const UNKNOWN_COMMAND_ERROR: &str = "{\"version\":\"1\",\"error\":\"unknown_command\"}";
 
 fn main() -> ExitCode {
-    CliApp::run(std::env::args().skip(1)).write_to_stdio()
+    CliApp::run(std::env::args_os().skip(1)).write_to_stdio()
 }
 
 struct CliApp;
 
 impl CliApp {
-    fn run(arguments: impl IntoIterator<Item = String>) -> CliResult {
+    fn run<I>(arguments: I) -> CliResult
+    where
+        I: IntoIterator,
+        I::Item: AsRef<OsStr>,
+    {
         let mut arguments = arguments.into_iter();
         match (arguments.next(), arguments.next()) {
-            (Some(command), None) if command == "smoke" => CliResult::success(SMOKE_OUTPUT),
+            (Some(command), None) if command.as_ref() == OsStr::new("smoke") => {
+                CliResult::success(SMOKE_OUTPUT)
+            }
             (None, _) => CliResult::error(MISSING_COMMAND_ERROR),
             _ => CliResult::error(UNKNOWN_COMMAND_ERROR),
         }
@@ -65,7 +72,7 @@ mod tests {
         assert_eq!(smoke.exit_code, ExitCode::SUCCESS);
         assert!(!smoke.is_error);
 
-        let missing = CliApp::run(Vec::new());
+        let missing = CliApp::run(Vec::<String>::new());
         assert_eq!(missing.output, MISSING_COMMAND_ERROR);
         assert_eq!(missing.exit_code, ExitCode::FAILURE);
         assert!(missing.is_error);
@@ -79,5 +86,14 @@ mod tests {
         assert_eq!(extra.output, UNKNOWN_COMMAND_ERROR);
         assert_eq!(extra.exit_code, ExitCode::FAILURE);
         assert!(extra.is_error);
+
+        #[cfg(unix)]
+        {
+            use std::os::unix::ffi::OsStringExt;
+            let non_utf8 = CliApp::run([std::ffi::OsString::from_vec(vec![0xff])]);
+            assert_eq!(non_utf8.output, UNKNOWN_COMMAND_ERROR);
+            assert_eq!(non_utf8.exit_code, ExitCode::FAILURE);
+            assert!(non_utf8.is_error);
+        }
     }
 }

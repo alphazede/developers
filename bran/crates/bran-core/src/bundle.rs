@@ -378,11 +378,33 @@ mod tests {
         assert_eq!(preserved.schema_version(), BUNDLE_SCHEMA_VERSION);
         assert_eq!(preserved.to_canonical_form(), reordered.to_canonical_form());
         assert!(preserved.to_canonical_form().contains("producer_extension"));
-        assert!(preserved.to_canonical_form().contains("__yaml_number__"));
         let retained = preserved
             .get("concepts/preserved.md")
             .expect("document retained");
         assert_eq!(retained.source(), source);
         assert_eq!(retained.frontmatter().raw(), raw);
+
+        // Direct assertions proving unambiguous typed encoding (no collision):
+        // Number("42") must differ from producer Mapping{"__yaml_number__": String("42")}.
+        let number42 = YamlValue::Number("42".to_owned());
+        let mut prod_collide = BTreeMap::new();
+        prod_collide.insert(
+            "__yaml_number__".to_owned(),
+            YamlValue::String("42".to_owned()),
+        );
+        let prod_map = YamlValue::Mapping(prod_collide);
+        assert_ne!(number42, prod_map);
+        let mut cnum = String::new();
+        crate::schema::write_canonical_yaml_value(&mut cnum, &number42);
+        let mut cmap = String::new();
+        crate::schema::write_canonical_yaml_value(&mut cmap, &prod_map);
+        assert_ne!(cnum, cmap);
+        // typed number lexical value survives
+        assert!(cnum.contains("\"42\""));
+        assert!(cnum.contains("\"number\""));
+        // unknown nested data survive (typed form)
+        let canon = preserved.to_canonical_form();
+        assert!(canon.contains("producer_extension"));
+        assert!(canon.contains("deep"));
     }
 }

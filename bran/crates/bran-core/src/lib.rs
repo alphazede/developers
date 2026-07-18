@@ -394,7 +394,7 @@ impl ReleaseVerifier {
     /// - manifest_asset == "bran-release-manifest.json" (distributed without self-digest)
     /// - exactly seven order-insensitive hashed assets (5 platform + SHA256SUMS + SHA256SUMS.sig)
     /// - exact tag/name/direct URL binding for every asset (no /latest)
-    /// - each asset has lowercase 64-hex sha256 and non-empty media_type
+    /// - each asset has lowercase 64-hex sha256 and non-blank media_type
     /// - checksums bound to the SHA256SUMS asset's sha256 (with correct asset/algorithm)
     /// - OpenPGP signature metadata: asset, format=openpgp, exactly 40 or 64 lowercase hex fingerprint, strict UTC YYYY-MM-DDTHH:MM:SSZ signed_at (full Gregorian calendar/leap-day validated)
     /// - SLSA v1 provenance: format/predicate consts, repository const, source_commit/lockfile_sha256 cross-bound to top level (40/64 hex), build_type https://...

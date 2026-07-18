@@ -6,11 +6,15 @@ on:
     paths:
       - 'bran/**'
       - '.github/workflows/bran-fast.yml'
+      - 'README.md'
+      - 'tools/okf/config.yaml'
   pull_request:
     branches: [main]
     paths:
       - 'bran/**'
       - '.github/workflows/bran-fast.yml'
+      - 'README.md'
+      - 'tools/okf/config.yaml'
 
 permissions:
   contents: read

@@ -14,6 +14,11 @@ pub const BUNDLE_SCHEMA_VERSION: &str = "1";
 /// Scalars, sequences, and mappings are modeled for frontmatter preservation.
 /// Numbers are stored lexically to avoid float drift and ensure exact roundtrips
 /// in canonical form. All collections use BTree for stable ordering.
+///
+/// Canonical encoding (via write_canonical_yaml_value) uses an explicit
+/// typed wrapper for every variant: {"__yaml_type__": "<tag>", "__yaml_value__": <data>}.
+/// This makes every YAML variant unambiguously typed and collision-proof against
+/// any producer-defined mapping keys (including "__yaml_number__" etc.).
 #[derive(Clone, Debug, Eq, PartialEq, Ord, PartialOrd)]
 pub enum YamlValue {
     Null,
@@ -54,26 +59,45 @@ impl YamlValue {
 }
 
 /// Writes a YamlValue in deterministic canonical form.
-/// Ordering is always BTree-derived; insertion order in source does not matter.
-/// This is a stable, byte-identical encoding (no serde).
+/// Every variant is emitted wrapped as an explicitly typed JSON object:
+///   {"__yaml_type__":"<tag>","__yaml_value__":<data>}
+/// Tags: "null", "bool", "number", "string", "sequence", "mapping".
+/// This representation is unambiguous and collision-proof: a producer
+/// Mapping containing "__yaml_number__" (or any reserved key) serializes
+/// differently because user keys live inside a mapping's __yaml_value__ object.
+/// Lexical number strings are preserved verbatim. BTree iteration ensures
+/// key ordering determinism. Output is always valid JSON.
 pub fn write_canonical_yaml_value(out: &mut String, v: &YamlValue) {
+    out.push('{');
+    out.push_str("\"__yaml_type__\":");
     match v {
-        YamlValue::Null => out.push_str("null"),
-        YamlValue::Bool(true) => out.push_str("true"),
-        YamlValue::Bool(false) => out.push_str("false"),
+        YamlValue::Null => {
+            out.push_str("\"null\"");
+            out.push_str(",\"__yaml_value__\":null");
+        }
+        YamlValue::Bool(true) => {
+            out.push_str("\"bool\"");
+            out.push_str(",\"__yaml_value__\":true");
+        }
+        YamlValue::Bool(false) => {
+            out.push_str("\"bool\"");
+            out.push_str(",\"__yaml_value__\":false");
+        }
         YamlValue::Number(s) => {
             // Preserve exact lexical form (including non-JSON-representable like .nan, 0x10, 01)
-            // using a deterministic tagged JSON object so the overall canonical form is always
-            // valid JSON. Raw emission would produce invalid JSON for some YAML lexical numbers.
-            out.push_str("{\"__yaml_number__\":");
+            // as a JSON string inside the typed wrapper.
+            out.push_str("\"number\"");
+            out.push_str(",\"__yaml_value__\":");
             write_escaped_string(out, s);
-            out.push('}');
         }
         YamlValue::String(s) => {
+            out.push_str("\"string\"");
+            out.push_str(",\"__yaml_value__\":");
             write_escaped_string(out, s);
         }
         YamlValue::Sequence(seq) => {
-            out.push('[');
+            out.push_str("\"sequence\"");
+            out.push_str(",\"__yaml_value__\":[");
             for (i, item) in seq.iter().enumerate() {
                 if i > 0 {
                     out.push(',');
@@ -83,7 +107,8 @@ pub fn write_canonical_yaml_value(out: &mut String, v: &YamlValue) {
             out.push(']');
         }
         YamlValue::Mapping(map) => {
-            out.push('{');
+            out.push_str("\"mapping\"");
+            out.push_str(",\"__yaml_value__\":{");
             for (i, (k, val)) in map.iter().enumerate() {
                 if i > 0 {
                     out.push(',');
@@ -95,6 +120,7 @@ pub fn write_canonical_yaml_value(out: &mut String, v: &YamlValue) {
             out.push('}');
         }
     }
+    out.push('}');
 }
 
 fn write_escaped_string(out: &mut String, s: &str) {

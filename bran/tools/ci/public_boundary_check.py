@@ -37,16 +37,17 @@ def repo_root() -> Path:
         raise RuntimeError(f"failed to find git repository root: {exc}") from exc
 
 
-def enumerate_bran_files(git_root: Path) -> list[Path]:
-    """Enumerate exactly the BRAN files Git considers tracked or untracked/nonignored.
-    Uses exactly: git ls-files -z --cached --others --exclude-standard -- bran
+def enumerate_phase1_public_surface_files(git_root: Path) -> list[Path]:
+    """Enumerate exactly the Phase 1 public surface files Git considers tracked or untracked/nonignored.
+    Uses exactly one fail-closed git ls-files call: git ls-files -z --cached --others --exclude-standard --
+    bran README.md .github/workflows/bran-fast.yml tools/okf/config.yaml
     from repository root. Parses NUL-delimited bytes losslessly with os.fsdecode.
     Returned paths are guaranteed to be lexically under repo root (reject absolute
     or parent traversal paths). Raises on any failure.
     """
     try:
         result = subprocess.run(
-            ["git", "ls-files", "-z", "--cached", "--others", "--exclude-standard", "--", "bran"],
+            ["git", "ls-files", "-z", "--cached", "--others", "--exclude-standard", "--", "bran", "README.md", ".github/workflows/bran-fast.yml", "tools/okf/config.yaml"],
             cwd=git_root,
             capture_output=True,
             check=True,
@@ -126,9 +127,9 @@ def main() -> int:
     public_safe_fixture = repo / PUBLIC_SAFE_FIXTURE_RELATIVE
 
     try:
-        enumerated = enumerate_bran_files(repo)
+        enumerated = enumerate_phase1_public_surface_files(repo)
     except Exception as exc:
-        print(f"FAIL failed to enumerate BRAN files with git: {exc}")
+        print(f"FAIL failed to enumerate Phase 1 public surface files with git: {exc}")
         return 1
 
     # Validate public-safe fixture is clean (must be readable valid text)

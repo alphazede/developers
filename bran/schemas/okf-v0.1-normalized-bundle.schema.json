@@ -52,11 +52,66 @@
     },
     "yamlValue": {
       "oneOf": [
-        { "type": "null" },
-        { "type": "boolean" },
-        { "type": "string" },
-        { "type": "array", "items": { "$ref": "#/$defs/yamlValue" } },
-        { "type": "object", "additionalProperties": { "$ref": "#/$defs/yamlValue" } }
+        {
+          "type": "object",
+          "required": ["__yaml_type__", "__yaml_value__"],
+          "properties": {
+            "__yaml_type__": { "const": "null" },
+            "__yaml_value__": { "type": "null" }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": ["__yaml_type__", "__yaml_value__"],
+          "properties": {
+            "__yaml_type__": { "const": "bool" },
+            "__yaml_value__": { "type": "boolean" }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": ["__yaml_type__", "__yaml_value__"],
+          "properties": {
+            "__yaml_type__": { "const": "number" },
+            "__yaml_value__": { "type": "string" }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": ["__yaml_type__", "__yaml_value__"],
+          "properties": {
+            "__yaml_type__": { "const": "string" },
+            "__yaml_value__": { "type": "string" }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": ["__yaml_type__", "__yaml_value__"],
+          "properties": {
+            "__yaml_type__": { "const": "sequence" },
+            "__yaml_value__": {
+              "type": "array",
+              "items": { "$ref": "#/$defs/yamlValue" }
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": ["__yaml_type__", "__yaml_value__"],
+          "properties": {
+            "__yaml_type__": { "const": "mapping" },
+            "__yaml_value__": {
+              "type": "object",
+              "additionalProperties": { "$ref": "#/$defs/yamlValue" }
+            }
+          },
+          "additionalProperties": false
+        }
       ]
     }
   }
