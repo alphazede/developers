@@ -100,6 +100,28 @@
       "support_fixtures": [
         "fixtures/conformance/strict-gap-strict-selected.fixture"
       ]
+    },
+    {
+      "stable_id": "P2-METADATA",
+      "phase": 2,
+      "slice": "2.1",
+      "runner": "rust",
+      "name": "p2_metadata",
+      "category": "unit",
+      "classification": "new",
+      "source": "crates/bran-core/src/metadata/mod.rs",
+      "support_fixtures": []
+    },
+    {
+      "stable_id": "P2-SCANNER",
+      "phase": 2,
+      "slice": "2.1",
+      "runner": "rust",
+      "name": "p2_scanner",
+      "category": "unit",
+      "classification": "new",
+      "source": "crates/bran-core/src/scan/mod.rs",
+      "support_fixtures": []
     }
   ]
 }

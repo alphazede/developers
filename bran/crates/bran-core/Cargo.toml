@@ -6,3 +6,8 @@ license = "MIT OR Apache-2.0"
 
 [lib]
 path = "src/lib.rs"
+
+[[bench]]
+name = "repository_scan"
+path = "../../benches/repository_scan.rs"
+harness = false

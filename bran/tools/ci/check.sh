@@ -3,7 +3,7 @@
 set -eu
 
 usage() {
-    printf '%s\n' "usage: $0 --test-budget|--fast|--conformance|--full" >&2
+    printf '%s\n' "usage: $0 --test-budget|--fast|--conformance|--security|--performance|--full" >&2
     exit 2
 }
 
@@ -18,6 +18,12 @@ case "$1" in
         ;;
     --conformance)
         gate_mode='conformance'
+        ;;
+    --security)
+        gate_mode='security'
+        ;;
+    --performance)
+        gate_mode='performance'
         ;;
     --full)
         gate_mode='full'
@@ -51,13 +57,21 @@ run_conformance() {
     cargo test --manifest-path "$bran_root/Cargo.toml" -p bran-core p1_conformance
 }
 
+run_public_boundary() {
+    python3 "$bran_root/tools/ci/public_boundary_check.py"
+}
+
+run_release_contract() {
+    python3 "$bran_root/tools/ci/release_contract_check.py"
+}
+
 run_fast() {
-    printf '%s\n' 'FAST: running Slice 1.1 gates.'
+    printf '%s\n' 'FAST: running Phase 1 and Slice 2.1 gates.'
 
     run_budget
     cargo fmt --manifest-path "$bran_root/Cargo.toml" --all -- --check
     cargo clippy --manifest-path "$bran_root/Cargo.toml" --workspace --all-targets --all-features -- -D warnings
-    cargo test --manifest-path "$bran_root/Cargo.toml" --workspace --all-targets --all-features p1_ -- --skip p1_conformance
+    cargo test --manifest-path "$bran_root/Cargo.toml" --workspace --all-features -- --skip p1_conformance
 
     # cargo-deny availability failure (clear) then exact check for licenses bans sources (common fast/full gate)
     if ! command -v cargo-deny >/dev/null 2>&1; then
@@ -66,10 +80,29 @@ run_fast() {
     fi
     cargo deny --manifest-path "$bran_root/Cargo.toml" check licenses bans sources
 
-    python3 "$bran_root/tools/ci/release_contract_check.py"
-    python3 "$bran_root/tools/ci/public_boundary_check.py"
+    run_release_contract
+    run_public_boundary
 
-    printf '%s\n' 'PASS Slice 1.1 fast gate'
+    printf '%s\n' 'PASS Phase 1 and Slice 2.1 fast gate'
+}
+
+run_security() {
+    printf '%s\n' 'SECURITY: exercising bounded repository scanning and the public boundary.'
+
+    run_budget
+    cargo test --manifest-path "$bran_root/Cargo.toml" -p bran-core p2_scanner
+    run_public_boundary
+
+    printf '%s\n' 'PASS Slice 2.1 security gate'
+}
+
+run_performance() {
+    printf '%s\n' 'PERFORMANCE: running the bounded repository scanner benchmark.'
+
+    run_budget
+    cargo bench --manifest-path "$bran_root/Cargo.toml" -p bran-core --bench repository_scan
+
+    printf '%s\n' 'PASS Slice 2.1 performance gate'
 }
 
 case "$gate_mode" in
@@ -83,10 +116,18 @@ case "$gate_mode" in
         run_conformance
         printf '%s\n' 'PASS Slice 1.2 conformance gate'
         ;;
+    security)
+        run_security
+        ;;
+    performance)
+        run_performance
+        ;;
     full)
-        printf '%s\n' 'FULL: running fast/security gates and Slice 1.2 conformance.'
+        printf '%s\n' 'FULL: running fast, conformance, security, and performance gates.'
         run_fast
         run_conformance
-        printf '%s\n' 'PASS Slice 1.2 full gate'
+        run_security
+        run_performance
+        printf '%s\n' 'PASS Phase 1 and Slice 2.1 full gate'
         ;;
 esac

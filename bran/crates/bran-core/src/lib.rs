@@ -1,7 +1,9 @@
 //! Exact-release verification primitives for Bran distribution metadata.
 
 pub mod bundle;
+pub mod metadata;
 pub mod profile;
+pub mod scan;
 pub mod schema;
 
 // Profile validation exports (Slice 1.2 wiring only)

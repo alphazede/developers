@@ -124,7 +124,10 @@ def check_shell(root: Path, journeys: list[dict], errors: list[str]) -> None:
                                         if line in functions}
     expected_dispatch = {"test-budget": {"run_budget"}, "fast": {"run_fast"},
                          "conformance": {"run_conformance"},
-                         "full": {"run_fast", "run_conformance"}}
+                         "security": {"run_security"},
+                         "performance": {"run_performance"},
+                         "full": {"run_fast", "run_conformance", "run_security",
+                                  "run_performance"}}
     if dispatch != expected_dispatch:
         errors.append("check.sh supported gate dispatch is missing or not exact")
     def reachable(roots: set[str]) -> set[str]:
@@ -143,7 +146,7 @@ def check_shell(root: Path, journeys: list[dict], errors: list[str]) -> None:
     budget_sites = [(name, line) for name, line in all_commands if line == budget]
     if global_commands.count(budget) != 1 or budget_sites != [("run_budget", budget)]:
         errors.append("check.sh must execute the budget checker exactly once in run_budget")
-    for name in ("run_fast", "run_conformance"):
+    for name in ("run_fast", "run_conformance", "run_security", "run_performance"):
         if "run_budget" not in reachable({name}):
             errors.append(f"check.sh {name} must reach run_budget")
     expected = {budget}
@@ -258,7 +261,7 @@ def main() -> int:
     check_shell(root, valid, errors)
     check_fixtures(root, fixtures, errors)
     if errors: return fail(errors)
-    print(f"PASS test budget: Phase 1=6 manifest={len(journeys)} plan_ceiling=25")
+    print(f"PASS test budget: Phase 1=6 Phase 2=2 manifest={len(journeys)} plan_ceiling=25")
     return 0
 if __name__ == "__main__":
     sys.exit(main())
