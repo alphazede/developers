@@ -1,0 +1,338 @@
+#!/usr/bin/env python3
+"""Verify that synthetic public-boundary canaries stay in their test fixture."""
+
+from __future__ import annotations
+
+import os
+import stat
+import subprocess
+import sys
+import tempfile
+from pathlib import Path
+
+
+MAX_TEXT_FILE_BYTES = 1024 * 1024
+REJECTED_FIXTURE_RELATIVE = Path("bran/fixtures/public-boundary/rejected/synthetic-canaries.txt")
+PUBLIC_SAFE_FIXTURE_RELATIVE = Path("bran/fixtures/public-boundary/public-safe/neutral-product-text.txt")
+
+# Keep the complete canaries out of this source file so the checker (which is itself
+# scanned) does not mask an accidental literal copy here.
+CANARIES = (
+    "AZ_SYNTHETIC_" + "PUBLIC_" + "BOUNDARY_" + "CANARY_" + "ALPHA_7F3A",
+    "AZ_SYNTHETIC_" + "PUBLIC_" + "BOUNDARY_" + "CANARY_" + "OMEGA_9C2D",
+)
+
+
+def repo_root() -> Path:
+    """Return the git repository root by asking git from a location inside the tree."""
+    script_dir = Path(__file__).resolve().parent
+    try:
+        out = subprocess.check_output(
+            ["git", "rev-parse", "--show-toplevel"],
+            cwd=script_dir,
+            text=True,
+            stderr=subprocess.DEVNULL,
+        ).strip()
+        return Path(out)
+    except Exception as exc:
+        raise RuntimeError(f"failed to find git repository root: {exc}") from exc
+
+
+def enumerate_bran_files(git_root: Path) -> list[Path]:
+    """Enumerate exactly the BRAN files Git considers tracked or untracked/nonignored.
+    Uses exactly: git ls-files -z --cached --others --exclude-standard -- bran
+    from repository root. Parses NUL-delimited bytes losslessly with os.fsdecode.
+    Returned paths are guaranteed to be lexically under repo root (reject absolute
+    or parent traversal paths). Raises on any failure.
+    """
+    try:
+        result = subprocess.run(
+            ["git", "ls-files", "-z", "--cached", "--others", "--exclude-standard", "--", "bran"],
+            cwd=git_root,
+            capture_output=True,
+            check=True,
+        )
+        paths: list[Path] = []
+        for entry in result.stdout.split(b"\0"):
+            if not entry:
+                continue
+            rel_str = os.fsdecode(entry)
+            rel = Path(rel_str)
+            if rel.is_absolute() or any(part == ".." for part in rel.parts):
+                raise RuntimeError(f"git ls-files produced escaping path (absolute/parent traversal): {rel_str}")
+            candidate = git_root / rel
+            try:
+                candidate.relative_to(git_root)
+            except ValueError:
+                raise RuntimeError(f"git ls-files produced path outside repository: {rel_str}")
+            paths.append(candidate)
+        paths.sort(key=lambda p: str(p))
+        return paths
+    except subprocess.CalledProcessError as exc:
+        if isinstance(exc.stderr, (bytes, bytearray)):
+            stderr = exc.stderr.decode("utf-8", "replace").strip()
+        else:
+            stderr = str(exc.stderr or "").strip()
+        raise RuntimeError(f"git ls-files failed (exit {exc.returncode}): {stderr}") from exc
+    except FileNotFoundError as exc:
+        raise RuntimeError("git command not found") from exc
+    except Exception as exc:
+        raise RuntimeError(f"enumeration failed: {exc}") from exc
+
+
+def get_text_or_fail(path: Path) -> str:
+    """Return bounded valid UTF-8 text, or raise ValueError describing closed failure.
+    Fails closed (no silent skip) for: missing/non-regular/symlink, no read permission bits,
+    over 1 MiB, read error, NUL/binary, invalid UTF-8.
+    """
+    try:
+        st = path.lstat()
+    except FileNotFoundError:
+        raise ValueError("missing")
+    except OSError as e:
+        raise ValueError(f"unreadable ({e})")
+    if stat.S_ISLNK(st.st_mode):
+        raise ValueError("symlink")
+    if not stat.S_ISREG(st.st_mode):
+        raise ValueError("non-regular")
+    if (st.st_mode & 0o444) == 0:
+        raise ValueError("no read permission bits")
+    if st.st_size > MAX_TEXT_FILE_BYTES:
+        raise ValueError("over 1 MiB")
+    try:
+        data = path.read_bytes()
+    except OSError as e:
+        raise ValueError(f"read error: {e}")
+    if b"\0" in data:
+        raise ValueError("NUL/binary")
+    try:
+        return data.decode("utf-8")
+    except UnicodeDecodeError:
+        raise ValueError("invalid UTF-8")
+
+
+def main() -> int:
+    # Strict CLI: only no args (default check) or exactly --self-test. Reject unknown.
+    if len(sys.argv) > 1:
+        if sys.argv[1:] == ["--self-test"]:
+            return self_test()
+        print("usage: public_boundary_check.py [--self-test]", file=sys.stderr)
+        print("FAIL unknown argument(s)")
+        return 1
+
+    try:
+        repo = repo_root()
+    except Exception as exc:
+        print(f"FAIL failed to determine repo root: {exc}")
+        return 1
+
+    rejected_fixture = repo / REJECTED_FIXTURE_RELATIVE
+    public_safe_fixture = repo / PUBLIC_SAFE_FIXTURE_RELATIVE
+
+    try:
+        enumerated = enumerate_bran_files(repo)
+    except Exception as exc:
+        print(f"FAIL failed to enumerate BRAN files with git: {exc}")
+        return 1
+
+    # Validate public-safe fixture is clean (must be readable valid text)
+    try:
+        safe_text = get_text_or_fail(public_safe_fixture)
+    except ValueError as e:
+        print(f"FAIL public-safe fixture is not readable text: {public_safe_fixture} ({e})")
+        return 1
+    safe_matches = tuple(canary for canary in CANARIES if canary in safe_text)
+    if safe_matches:
+        print("FAIL public-safe fixture contains synthetic boundary canary")
+        return 1
+
+    # Validate rejected fixture contains both canaries (must be readable valid text)
+    try:
+        rej_text = get_text_or_fail(rejected_fixture)
+    except ValueError as e:
+        print(f"FAIL rejected fixture is not readable text: {rejected_fixture} ({e})")
+        return 1
+    rej_matches = tuple(canary for canary in CANARIES if canary in rej_text)
+    if rej_matches != CANARIES:
+        print("FAIL rejected test-only fixture does not contain every synthetic boundary canary")
+        return 1
+
+    # Scan every enumerated file except the single explicitly skipped rejected fixture.
+    # All others must be valid; any closed-fail condition causes FAIL (no silent skips).
+    # The checker itself is scanned.
+    # Skip uses exact lexical repository-relative identity only (no resolve()).
+    # This preserves fail-closed symlink rejection: a symlink alias cannot match lexical.
+    scanned = 0
+    allowed_skips = 0
+    violations: list[tuple[Path, tuple[str, ...]]] = []
+    for path in enumerated:
+        try:
+            rel = path.relative_to(repo)
+        except ValueError:
+            print(f"FAIL enumerated path not lexically under repo: {path}")
+            return 1
+        if rel == REJECTED_FIXTURE_RELATIVE:
+            # explicit, observable skip of ONLY the designated fixture via lexical identity
+            allowed_skips += 1
+            continue
+        try:
+            text = get_text_or_fail(path)
+        except ValueError as exc:
+            try:
+                rel = path.relative_to(repo)
+            except ValueError:
+                rel = path
+            print(f"FAIL {rel}: {exc}")
+            return 1
+        matches = tuple(canary for canary in CANARIES if canary in text)
+        scanned += 1
+        if matches:
+            violations.append((path, matches))
+
+    if violations:
+        print("FAIL synthetic public-boundary canary found outside rejected test fixture")
+        for path, matches in violations:
+            try:
+                rel = path.relative_to(repo)
+            except ValueError:
+                rel = path
+            print(f"  {rel}: {', '.join(matches)}")
+        return 1
+
+    if allowed_skips != 1:
+        print(f"FAIL designated rejected fixture absent from Git enumeration or duplicated (observed count {allowed_skips})")
+        return 1
+
+    print(
+        "PASS public boundary check: "
+        f"scanned={scanned} allowed_skips={allowed_skips} "
+        "public_safe_fixture=clean rejected_test_fixture=detected"
+    )
+    return 0
+
+
+def self_test() -> int:
+    """Stdlib-only --self-test using temp files only. Proves acceptance and rejection cases.
+    Never mutates any repository files. Default mode (no arg) remains the repository scan.
+    """
+    print("self-test: starting")
+    cases_passed = 0
+    try:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp = Path(tmpdir)
+
+            # clean text accepts (get succeeds, no violation)
+            clean = tmp / "clean.txt"
+            clean.write_text("This is clean text with no canaries at all.")
+            try:
+                txt = get_text_or_fail(clean)
+                if "clean text" in txt:
+                    print("PASS self-test: clean text accepts")
+                    cases_passed += 1
+                else:
+                    print("FAIL self-test: clean text content mismatch")
+                    return 1
+            except Exception as e:
+                print(f"FAIL self-test: clean text rejected unexpectedly: {e}")
+                return 1
+
+            # binary (NUL) rejects
+            binary = tmp / "binary.dat"
+            binary.write_bytes(b"data with \0 NUL inside and more")
+            try:
+                get_text_or_fail(binary)
+                print("FAIL self-test: binary did not reject")
+                return 1
+            except ValueError as e:
+                if "NUL" in str(e) or "binary" in str(e).lower():
+                    print("PASS self-test: binary rejects")
+                    cases_passed += 1
+                else:
+                    print(f"FAIL self-test: binary wrong reason: {e}")
+                    return 1
+
+            # oversize rejects
+            oversize = tmp / "oversize.txt"
+            oversize.write_bytes(b"X" * (MAX_TEXT_FILE_BYTES + 1))
+            try:
+                get_text_or_fail(oversize)
+                print("FAIL self-test: oversize did not reject")
+                return 1
+            except ValueError as e:
+                if "1 MiB" in str(e) or "over" in str(e).lower():
+                    print("PASS self-test: oversize rejects")
+                    cases_passed += 1
+                else:
+                    print(f"FAIL self-test: oversize wrong reason: {e}")
+                    return 1
+
+            # invalid UTF-8 rejects
+            invalid = tmp / "invalid-utf8.bin"
+            invalid.write_bytes(b"\xFF\xFE\xFD\xFC")  # invalid UTF-8, no NUL
+            try:
+                get_text_or_fail(invalid)
+                print("FAIL self-test: invalid UTF-8 did not reject")
+                return 1
+            except ValueError as e:
+                if "UTF-8" in str(e) or "utf" in str(e).lower():
+                    print("PASS self-test: invalid UTF-8 rejects")
+                    cases_passed += 1
+                else:
+                    print(f"FAIL self-test: invalid UTF-8 wrong reason: {e}")
+                    return 1
+
+            # zero-read-permission rejects (chmod removes read bits)
+            noread = tmp / "noread.txt"
+            noread.write_text("content that must be rejected due to perms")
+            try:
+                os.chmod(noread, 0o000)
+                try:
+                    get_text_or_fail(noread)
+                    print("FAIL self-test: zero-read-permission did not reject")
+                    return 1
+                except ValueError as e:
+                    if "permission" in str(e).lower() or "read" in str(e).lower():
+                        print("PASS self-test: zero-read-permission rejects")
+                        cases_passed += 1
+                    else:
+                        print(f"FAIL self-test: zero-read-permission wrong reason: {e}")
+                        return 1
+                finally:
+                    os.chmod(noread, 0o600)  # restore for cleanup
+            except Exception as e:
+                print(f"FAIL self-test: zero-read-permission setup error: {e}")
+                return 1
+
+            # symlink rejects (using lstat)
+            target = tmp / "target.txt"
+            target.write_text("target content")
+            symlink = tmp / "symlink.txt"
+            symlink.symlink_to(target)
+            try:
+                get_text_or_fail(symlink)
+                print("FAIL self-test: symlink did not reject")
+                return 1
+            except ValueError as e:
+                if "symlink" in str(e).lower():
+                    print("PASS self-test: symlink rejects")
+                    cases_passed += 1
+                else:
+                    print(f"FAIL self-test: symlink wrong reason: {e}")
+                    return 1
+
+        if cases_passed == 6:
+            print(
+                "PASS self-test: clean text accepts and "
+                "binary, oversize, invalid UTF-8, zero-read-permission, symlink cases reject"
+            )
+            return 0
+        else:
+            print(f"FAIL self-test: only {cases_passed}/6 cases passed")
+            return 1
+    except Exception as e:
+        print(f"FAIL self-test: unexpected error {type(e).__name__}: {e}")
+        return 1
+
+
+if __name__ == "__main__":
+    sys.exit(main())

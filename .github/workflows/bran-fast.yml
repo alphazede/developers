@@ -1,0 +1,47 @@
+name: BRAN Fast
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'bran/**'
+      - '.github/workflows/bran-fast.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'bran/**'
+      - '.github/workflows/bran-fast.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  bran-fast:
+    name: BRAN Fast
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: bran
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # pin v5.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install Rust 1.94.1
+        run: |
+          rustup toolchain install 1.94.1 --profile minimal -c clippy -c rustfmt --no-self-update
+          rustup default 1.94.1
+
+      - name: Require python3 and shellcheck
+        run: |
+          python3 --version
+          shellcheck --version
+
+      - name: Install cargo-deny 0.19.0
+        run: cargo install --locked --version 0.19.0 cargo-deny
+
+      - name: Run fast gate
+        run: ./tools/ci/check.sh --fast
