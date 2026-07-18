@@ -20,6 +20,14 @@ EXPECTED_IDS = (
     "P1-CONFORMANCE",
 )
 EXPECTED_CEILINGS = {"1": 6, "2": 6, "3": 7, "4": 2, "5": 4, "6": 0}
+EXPECTED_SLICE_CEILINGS = {
+    "1.1": 3, "1.2": 3,
+    "2.1": 2, "2.2": 2, "2.3": 2,
+    "3.1": 2, "3.2": 2, "3.3": 1, "3.4": 2,
+    "4.1": 1, "4.2": 1,
+    "5.1": 1, "5.2": 1, "5.3": 0, "5.4": 2,
+    "6.1": 0,
+}
 EXPECTED_JOURNEYS = {
     "P1-CLI": (1, "1.1", "rust", "p1_cli", "unit", "new", "crates/bran-cli/src/main.rs", []),
     "P1-RELEASE": (1, "1.1", "python", "tools/ci/release_contract_check.py", "contract", "new", "tools/ci/release_contract_check.py", ["fixtures/release/valid-exact-release-manifest.json"]),
@@ -32,11 +40,12 @@ EXPECTED_FIELDS = {
     "stable_id", "phase", "slice", "runner", "name", "category",
     "classification", "source", "support_fixtures",
 }
-KNOWN_SLICES = {"1.1", "1.2", "2.1", "2.2", "2.3", "3.1", "3.2", "3.3", "3.4", "4.1", "4.2", "5.1", "5.2", "5.3", "5.4", "6.1"}
-KNOWN_RUNNERS = {"rust", "python"}
+KNOWN_RUNNERS = {"rust", "python", "shell", "golden", "fixture"}
 KNOWN_CLASSIFICATIONS = {"new", "materially-expanded"}
-KNOWN_CATEGORIES = {"unit", "contract", "security", "conformance"}
 RUST_TEST = re.compile(r"#\[test\]\s*(?:#\[[^\]]+\]\s*)*fn\s+([A-Za-z_][A-Za-z0-9_]*)\s*\(")
+PYTHON_TEST = re.compile(r"^def\s+(test_[A-Za-z_][A-Za-z0-9_]*)\s*\(", re.MULTILINE)
+SLUG = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
+STABLE_ID = re.compile(r"^P([1-6])-([A-Za-z0-9]+(?:-[A-Za-z0-9]+)*)$")
 SUSPICIOUS_CASE_ROW = re.compile(r"\b(?:case|cases|matrix|parameteri[sz]ed|self-test)\b", re.IGNORECASE)
 
 
@@ -75,7 +84,23 @@ def function_body(shell: str, name: str) -> str | None:
     return match.group(1) if match else None
 
 
-def inspect_ci(bran_root: Path, errors: list[str]) -> None:
+def direct_script_journeys(journeys: list[dict[str, Any]]) -> dict[str, set[str]]:
+    """Return registered direct scripts, keyed by their required interpreter."""
+    direct = {"python3": set(), "shell": set()}
+    for journey in journeys:
+        if not isinstance(journey, dict):
+            continue
+        runner = journey.get("runner")
+        name = journey.get("name")
+        source = journey.get("source")
+        if runner == "python" and isinstance(name, str) and name == source:
+            direct["python3"].add(source)
+        if runner == "shell" and isinstance(name, str) and name == source:
+            direct["shell"].add(source)
+    return direct
+
+
+def inspect_ci(bran_root: Path, journeys: list[dict[str, Any]], errors: list[str]) -> None:
     check = bran_root / "tools/ci/check.sh"
     try:
         shell = check.read_text(encoding="utf-8")
@@ -94,21 +119,26 @@ def inspect_ci(bran_root: Path, errors: list[str]) -> None:
         if body is None or len(re.findall(r"^    run_budget$", body, re.MULTILINE)) != 1:
             errors.append(f"check.sh {name} must run the budget checker once")
 
-    direct_python = (
-        "tools/ci/release_contract_check.py",
-        "tools/ci/public_boundary_check.py",
-    )
-    for journey in direct_python:
-        invocation = f'python3 "$bran_root/{journey}"'
+    direct = direct_script_journeys(journeys)
+    allowed_lines = {f"    {budget_call}"}
+    for source in sorted(direct["python3"]):
+        invocation = f'python3 "$bran_root/{source}"'
         if shell.count(invocation) != 1:
-            errors.append(f"check.sh must invoke {journey} exactly once without variants")
-    allowed_python = {
-        f"    {budget_call}",
-        *(f'    python3 "$bran_root/{journey}"' for journey in direct_python),
-    }
+            errors.append(f"check.sh must invoke {source} exactly once without variants")
+        allowed_lines.add(f"    {invocation}")
+    for source in sorted(direct["shell"]):
+        invocations = (
+            f'sh "$bran_root/{source}"',
+            f'bash "$bran_root/{source}"',
+        )
+        count = sum(shell.count(invocation) for invocation in invocations)
+        if count != 1:
+            errors.append(f"check.sh must invoke {source} exactly once without variants")
+        allowed_lines.update(f"    {invocation}" for invocation in invocations)
     for line in shell.splitlines():
-        if line.lstrip().startswith("python3 ") and line not in allowed_python:
-            errors.append(f"unregistered direct Python journey or variant: {line.strip()}")
+        stripped = line.strip()
+        if stripped.startswith(("python3 ", "sh ", "bash ")) and line not in allowed_lines:
+            errors.append(f"unregistered direct Python/shell journey or variant: {stripped}")
 
     conformance = 'cargo test --manifest-path "$bran_root/Cargo.toml" -p bran-core p1_conformance'
     if shell.count(conformance) != 1:
@@ -149,14 +179,16 @@ def main() -> int:
     bran_root = Path(__file__).resolve().parents[2]
     errors: list[str] = []
 
-    if set(manifest) != {"schema_version", "plan_ceiling", "phase_ceilings", "journeys"}:
-        errors.append("manifest must contain exactly schema_version, plan_ceiling, phase_ceilings, and journeys")
+    if set(manifest) != {"schema_version", "plan_ceiling", "phase_ceilings", "slice_ceilings", "journeys"}:
+        errors.append("manifest must contain exactly schema_version, plan_ceiling, phase_ceilings, slice_ceilings, and journeys")
     if manifest.get("schema_version") != 1:
         errors.append("manifest schema_version must be 1")
     if manifest.get("plan_ceiling") != 25:
         errors.append("manifest plan_ceiling must be 25")
     if manifest.get("phase_ceilings") != EXPECTED_CEILINGS:
         errors.append("phase_ceilings must exactly encode the approved 6,6,7,2,4,0 ceilings")
+    if manifest.get("slice_ceilings") != EXPECTED_SLICE_CEILINGS:
+        errors.append("slice_ceilings must exactly encode the approved plan allocation")
     if sum(EXPECTED_CEILINGS.values()) != 25:
         errors.append("approved phase ceilings do not total 25")
 
@@ -167,7 +199,8 @@ def main() -> int:
     names: list[str] = []
     rust_registered: Counter[str] = Counter()
     owned_fixtures: set[str] = set()
-    subtotal: Counter[int] = Counter()
+    phase_subtotal: Counter[int] = Counter()
+    slice_subtotal: Counter[str] = Counter()
     for index, journey in enumerate(journeys):
         label = f"journeys[{index}]"
         if not isinstance(journey, dict) or set(journey) != EXPECTED_FIELDS:
@@ -193,15 +226,17 @@ def main() -> int:
         if not isinstance(phase, int) or str(phase) not in EXPECTED_CEILINGS:
             errors.append(f"{label}.phase is unknown")
         else:
-            subtotal[phase] += 1
-        if not isinstance(slice_name, str) or slice_name not in KNOWN_SLICES:
+            phase_subtotal[phase] += 1
+        if not isinstance(slice_name, str) or slice_name not in EXPECTED_SLICE_CEILINGS:
             errors.append(f"{label}.slice is unknown")
-        elif isinstance(phase, int) and not slice_name.startswith(f"{phase}."):
-            errors.append(f"{label}.slice does not belong to phase {phase}")
+        else:
+            slice_subtotal[slice_name] += 1
+            if isinstance(phase, int) and not slice_name.startswith(f"{phase}."):
+                errors.append(f"{label}.slice does not belong to phase {phase}")
         if not isinstance(runner, str) or runner not in KNOWN_RUNNERS:
             errors.append(f"{label}.runner is unknown")
-        if not isinstance(category, str) or category not in KNOWN_CATEGORIES:
-            errors.append(f"{label}.category is unknown")
+        if not isinstance(category, str) or not SLUG.fullmatch(category):
+            errors.append(f"{label}.category must be a nonempty lowercase slug")
         if not isinstance(classification, str) or classification not in KNOWN_CLASSIFICATIONS:
             errors.append(f"{label}.classification is unknown")
         if not isinstance(source, str) or not source or not (bran_root / source).is_file():
@@ -217,8 +252,38 @@ def main() -> int:
                 owned_fixtures.add(fixture)
         if runner == "rust" and isinstance(name, str):
             rust_registered[name] += 1
-        if runner == "python" and (not isinstance(name, str) or name != source):
-            errors.append(f"{label} Python journey name must exactly equal its source path")
+        if isinstance(stable_id, str):
+            stable_match = STABLE_ID.fullmatch(stable_id)
+            if stable_id not in EXPECTED_JOURNEYS:
+                if stable_match is None or not isinstance(phase, int) or stable_match.group(1) != str(phase):
+                    errors.append(f"{label}.stable_id must be a P{{phase}}-prefixed deterministic slug")
+        if runner == "rust" and isinstance(name, str) and isinstance(source, str):
+            try:
+                source_text = (bran_root / source).read_text(encoding="utf-8")
+            except (OSError, UnicodeDecodeError):
+                source_text = ""
+            if name not in RUST_TEST.findall(source_text):
+                errors.append(f"{label} Rust journey is not an exact #[test] function in its source")
+        if runner == "python" and isinstance(name, str) and isinstance(source, str):
+            if name != source:
+                try:
+                    source_text = (bran_root / source).read_text(encoding="utf-8")
+                except (OSError, UnicodeDecodeError):
+                    source_text = ""
+                if name not in PYTHON_TEST.findall(source_text):
+                    errors.append(f"{label} Python journey must be a direct script or exact def test_* item in its source")
+        if runner == "shell" and isinstance(name, str) and isinstance(source, str) and name != source:
+            try:
+                source_text = (bran_root / source).read_text(encoding="utf-8")
+            except (OSError, UnicodeDecodeError):
+                source_text = ""
+            if function_body(source_text, name) is None:
+                errors.append(f"{label} shell journey is not an exact function or scenario in its source")
+        if runner in {"golden", "fixture"}:
+            if not isinstance(name, str) or name != source or not isinstance(source, str) or not source.startswith("fixtures/"):
+                errors.append(f"{label} {runner} journey name and source must be the same fixture path")
+            elif not isinstance(support_fixtures, list) or source not in support_fixtures:
+                errors.append(f"{label} {runner} journey source must be owned as a support fixture")
         if isinstance(stable_id, str) and stable_id in EXPECTED_JOURNEYS:
             observed = (phase, slice_name, runner, name, category, classification, source, support_fixtures)
             if observed != EXPECTED_JOURNEYS[stable_id]:
@@ -230,15 +295,28 @@ def main() -> int:
         errors.append(f"duplicate stable IDs: {', '.join(duplicate_ids)}")
     if duplicate_names:
         errors.append(f"duplicate exact names: {', '.join(duplicate_names)}")
-    if tuple(ids) != EXPECTED_IDS:
-        errors.append("manifest must contain exactly the six approved stable IDs in deterministic order")
-    if len(journeys) != 6 or subtotal[1] != 6:
+    phase_one_ids = [
+        journey.get("stable_id")
+        for journey in journeys
+        if isinstance(journey, dict) and journey.get("phase") == 1
+    ]
+    if tuple(phase_one_ids) != EXPECTED_IDS:
+        errors.append("Phase 1 must contain exactly the six approved stable IDs in deterministic order")
+    if phase_subtotal[1] != 6:
         errors.append("Phase 1 subtotal must be exactly 6")
-    if len(journeys) != 6:
-        errors.append("current manifest total must be exactly 6")
-    for phase, count in sorted(subtotal.items()):
+    later_ordering = [
+        (journey.get("phase"), journey.get("slice"), journey.get("stable_id"))
+        for journey in journeys
+        if isinstance(journey, dict) and isinstance(journey.get("phase"), int) and journey["phase"] > 1
+    ]
+    if later_ordering != sorted(later_ordering, key=lambda item: (item[0], str(item[1]), str(item[2]))):
+        errors.append("later journeys must preserve deterministic phase, slice, and stable ID order")
+    for phase, count in sorted(phase_subtotal.items()):
         if count > EXPECTED_CEILINGS.get(str(phase), 0):
             errors.append(f"phase {phase} exceeds its approved test ceiling")
+    for slice_name, count in sorted(slice_subtotal.items()):
+        if count > EXPECTED_SLICE_CEILINGS.get(slice_name, 0):
+            errors.append(f"slice {slice_name} exceeds its approved test ceiling")
     if len(journeys) > 25:
         errors.append("manifest exceeds the plan-wide test ceiling of 25")
 
@@ -252,11 +330,11 @@ def main() -> int:
         if actual_rust[name] != 1 or count != 1:
             errors.append(f"registered Rust journey is not actually present exactly once: {name}")
 
-    inspect_ci(bran_root, errors)
+    inspect_ci(bran_root, journeys, errors)
     inspect_support_files(bran_root, owned_fixtures, errors)
     if errors:
         return fail(errors)
-    print("PASS test budget: Phase 1=6 manifest=6 plan_ceiling=25")
+    print(f"PASS test budget: Phase 1=6 manifest={len(journeys)} plan_ceiling=25")
     return 0
 
 
