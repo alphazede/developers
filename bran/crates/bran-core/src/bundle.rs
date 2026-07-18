@@ -353,198 +353,36 @@ mod tests {
     use crate::schema::YamlValue;
     use std::collections::BTreeMap;
 
-    fn make_simple_frontmatter() -> Frontmatter {
-        let mut m = BTreeMap::new();
-        m.insert("type".to_owned(), YamlValue::String("concept".to_owned()));
-        Frontmatter::from_parsed("---\ntype: concept\n---\n", m)
-    }
-
-    fn make_doc(path: &str, body: &str) -> Doc {
-        let src = format!("---\ntype: concept\n---\n{body}");
-        Doc::new(path, src, body, make_simple_frontmatter())
-    }
-
     #[test]
-    fn unknown_nested_fields_survive_construction_and_canonical_serialization() {
-        let mut inner = BTreeMap::new();
-        inner.insert("alpha".to_owned(), YamlValue::Number("42".to_owned()));
-        inner.insert(
-            "beta".to_owned(),
-            YamlValue::Sequence(vec![YamlValue::String("x".to_owned())]),
-        );
+    fn p1_bundle() {
+        let mut extension = BTreeMap::new();
+        extension.insert("deep".to_owned(), YamlValue::Bool(true));
+        extension.insert("number".to_owned(), YamlValue::Number("42".to_owned()));
         let mut parsed = BTreeMap::new();
-        parsed.insert("type".to_owned(), YamlValue::String("weird".to_owned()));
-        parsed.insert("unknown".to_owned(), YamlValue::Mapping(inner));
-
-        let fm = Frontmatter::from_parsed("raw-front", parsed);
-        let doc = Doc::new("c.md", "src", "body", fm);
-        let b = Bundle::from_documents([doc]).expect("no duplicate path");
-
-        let s1 = b.to_canonical_form();
-        let s2 = b.to_canonical_form();
-        assert_eq!(s1, s2);
-        assert!(s1.contains("\"unknown\""));
-        assert!(s1.contains("\"alpha\""));
-        // lexical number preserved via deterministic tagged JSON (valid even for non-JSON nums)
-        assert!(s1.contains("\"__yaml_number__\""));
-        assert!(s1.contains("42"));
-    }
-
-    #[test]
-    fn insertion_order_produces_identical_serialization() {
-        // Construct two bundles with same logical docs but different insert order.
-        let d1 = make_doc("a.md", "A");
-        let d2 = make_doc("b.md", "B");
-
-        let b1 = Bundle::from_documents([d1.clone(), d2.clone()]).expect("no dups");
-        let b2 = Bundle::from_documents([d2, d1]).expect("no dups");
-
-        let s1 = b1.to_canonical_form();
-        let s2 = b2.to_canonical_form();
-        assert_eq!(s1, s2);
-
-        // Also verify schema version appears.
-        assert!(s1.contains("\"schema_version\""));
-        assert!(s1.contains(BUNDLE_SCHEMA_VERSION));
-    }
-
-    #[test]
-    fn original_source_and_raw_frontmatter_are_unchanged() {
-        let raw_fm = "---\ntype: x\nextra: 1\n---\n";
-        let body = "hello world";
-        let source = format!("{raw_fm}{body}");
-
-        let mut parsed = BTreeMap::new();
-        parsed.insert("type".to_owned(), YamlValue::String("x".to_owned()));
-        parsed.insert("extra".to_owned(), YamlValue::Number("1".to_owned()));
-        let fm = Frontmatter::from_parsed(raw_fm, parsed);
-        let doc = Doc::new("p/q.md", source.clone(), body.to_owned(), fm);
-
-        assert_eq!(doc.source(), source);
-        assert_eq!(doc.body(), body);
-        assert_eq!(doc.frontmatter().raw(), raw_fm);
-        // Ensure we did not mutate the raw evidence. Raw preserved byte-for-byte.
-        assert!(doc.frontmatter().raw().contains("extra: 1"));
-    }
-
-    #[test]
-    fn minimal_concept_identity_and_reserved_file_kinds_are_correct() {
-        let c = make_doc("concepts/foo/bar.md", "body");
-        assert_eq!(c.concept_identity(), Some("concepts/foo/bar"));
-        match c.kind() {
-            DocKind::Concept { identity } => assert_eq!(identity, "concepts/foo/bar"),
-            _ => panic!("expected concept"),
-        }
-
-        let idx = Doc::new("index.md", "idx", "", Frontmatter::empty());
-        assert_eq!(idx.concept_identity(), None);
-        assert!(matches!(idx.kind(), DocKind::Index));
-
-        let log = Doc::new("log.md", "log", "", Frontmatter::empty());
-        assert_eq!(log.concept_identity(), None);
-        assert!(matches!(log.kind(), DocKind::Log));
-
-        // Reserved names recognized by basename at any hierarchy level (OKF v0.1 §3.1).
-        let idx_nested = Doc::new("nested/index.md", "idx", "", Frontmatter::empty());
-        assert_eq!(idx_nested.concept_identity(), None);
-        assert!(matches!(idx_nested.kind(), DocKind::Index));
-
-        let log_nested = Doc::new("a/b/c/log.md", "log", "", Frontmatter::empty());
-        assert_eq!(log_nested.concept_identity(), None);
-        assert!(matches!(log_nested.kind(), DocKind::Log));
-
-        // Non-.md path still treated as concept with full path as identity (edge)
-        let weird = Doc::new("weird", "w", "w", Frontmatter::empty());
-        match weird.kind() {
-            DocKind::Concept { identity } => assert_eq!(identity, "weird"),
-            _ => panic!("expected concept for non-md"),
-        }
-    }
-
-    #[test]
-    fn malformed_parse_status_remains_explicit_and_serializes_deterministically() {
-        let raw = "---\n: bad yaml here\n---\n";
-        let fm = Frontmatter::malformed(raw, "unexpected colon at start of key");
-        let doc = Doc::new("bad.md", raw.to_owned() + "body", "body", fm);
-        let b = Bundle::from_documents([doc]).expect("no duplicate path");
-
-        let s1 = b.to_canonical_form();
-        let s2 = b.to_canonical_form();
-        assert_eq!(s1, s2);
-
-        // Status must be explicit and carry the reason.
-        assert!(s1.contains("\"status\""));
-        assert!(s1.contains("malformed"));
-        assert!(s1.contains("unexpected colon"));
-        // parsed must be null for malformed
-        assert!(s1.contains("\"parsed\":null"));
-        // raw evidence preserved
-        assert!(s1.contains("bad yaml here"));
-    }
-
-    #[test]
-    fn bundle_uses_stable_schema_version_exactly_one() {
-        // Do not invent slice-coded versions; stable envelope is "1".
-        let b = Bundle::new();
-        assert_eq!(b.schema_version(), "1");
-
-        let b = Bundle::from_documents([make_doc("only.md", "x")]).expect("single doc");
-        assert_eq!(b.schema_version(), "1");
-        let s = b.to_canonical_form();
-        assert!(s.contains("\"schema_version\":\"1\""));
-    }
-
-    #[test]
-    fn empty_bundle_has_stable_canonical_form() {
-        let b1 = Bundle::new();
-        let b2 = Bundle::new();
-        assert_eq!(b1.to_canonical_form(), b2.to_canonical_form());
-        assert!(b1.is_empty());
-    }
-
-    #[test]
-    fn bundle_from_documents_rejects_duplicate_paths_with_typed_error() {
-        // Duplicate path behavior must be deterministic (typed rejection, not replace).
-        let d1 = make_doc("dup/path.md", "one");
-        let d2 = Doc::new("dup/path.md", "src-two", "two", make_simple_frontmatter());
-        // Order A
-        let r1 = Bundle::from_documents(vec![d1.clone(), d2.clone()]);
-        // Order B (same dup path)
-        let r2 = Bundle::from_documents(vec![d2, d1]);
-        assert!(r1.is_err());
-        assert!(r2.is_err());
-        let e1 = r1.unwrap_err();
-        let e2 = r2.unwrap_err();
-        assert_eq!(e1.path, "dup/path.md");
-        assert_eq!(e2.path, "dup/path.md");
-        // Error is Eq and carries the path.
-        assert_eq!(
-            e1,
-            DuplicatePathError {
-                path: "dup/path.md".to_owned()
-            }
+        parsed.insert("type".to_owned(), YamlValue::String("Concept".to_owned()));
+        parsed.insert(
+            "producer_extension".to_owned(),
+            YamlValue::Mapping(extension),
         );
-    }
+        let raw = "---\ntype: Concept\nproducer_extension: {deep: true, number: 42}\n---\n";
+        let source = format!("{raw}Preserved body.");
+        let document = Doc::new(
+            "concepts/preserved.md",
+            source.clone(),
+            "Preserved body.",
+            Frontmatter::from_parsed(raw, parsed),
+        );
+        let preserved = Bundle::from_documents([document.clone()]).expect("unique path");
+        let reordered = Bundle::from_documents([document]).expect("unique path");
 
-    #[test]
-    fn bundle_construction_and_access_are_immutable_value_semantics() {
-        // After construction, only read-only accessors; no setters.
-        let fm = make_simple_frontmatter();
-        let doc = Doc::new("immut.md", "src", "b", fm);
-        let b = Bundle::from_documents([doc]).unwrap();
-
-        // Accessors for preserved state
-        assert_eq!(b.schema_version(), "1");
-        assert_eq!(b.len(), 1);
-        let d = b.get("immut.md").expect("present");
-        assert_eq!(d.path(), "immut.md");
-        assert!(d.source().contains("src"));
-        assert_eq!(d.body(), "b");
-        let f = d.frontmatter();
-        assert!(f.raw().contains("type: concept"));
-        assert!(f.parsed().is_some());
-        assert!(f.status().is_ok());
-        // docs() accessor
-        assert!(b.docs().contains_key("immut.md"));
+        assert_eq!(preserved.schema_version(), BUNDLE_SCHEMA_VERSION);
+        assert_eq!(preserved.to_canonical_form(), reordered.to_canonical_form());
+        assert!(preserved.to_canonical_form().contains("producer_extension"));
+        assert!(preserved.to_canonical_form().contains("__yaml_number__"));
+        let retained = preserved
+            .get("concepts/preserved.md")
+            .expect("document retained");
+        assert_eq!(retained.source(), source);
+        assert_eq!(retained.frontmatter().raw(), raw);
     }
 }

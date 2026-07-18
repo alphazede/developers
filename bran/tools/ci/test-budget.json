@@ -1,0 +1,87 @@
+{
+  "schema_version": 1,
+  "plan_ceiling": 25,
+  "phase_ceilings": {
+    "1": 6,
+    "2": 6,
+    "3": 7,
+    "4": 2,
+    "5": 4,
+    "6": 0
+  },
+  "journeys": [
+    {
+      "stable_id": "P1-CLI",
+      "phase": 1,
+      "slice": "1.1",
+      "runner": "rust",
+      "name": "p1_cli",
+      "category": "unit",
+      "classification": "new",
+      "source": "crates/bran-cli/src/main.rs",
+      "support_fixtures": []
+    },
+    {
+      "stable_id": "P1-RELEASE",
+      "phase": 1,
+      "slice": "1.1",
+      "runner": "python",
+      "name": "tools/ci/release_contract_check.py",
+      "category": "contract",
+      "classification": "new",
+      "source": "tools/ci/release_contract_check.py",
+      "support_fixtures": [
+        "fixtures/release/valid-exact-release-manifest.json"
+      ]
+    },
+    {
+      "stable_id": "P1-PUBLIC-BOUNDARY",
+      "phase": 1,
+      "slice": "1.1",
+      "runner": "python",
+      "name": "tools/ci/public_boundary_check.py",
+      "category": "security",
+      "classification": "new",
+      "source": "tools/ci/public_boundary_check.py",
+      "support_fixtures": [
+        "fixtures/public-boundary/public-safe/neutral-product-text.txt",
+        "fixtures/public-boundary/rejected/synthetic-canaries.txt"
+      ]
+    },
+    {
+      "stable_id": "P1-BUNDLE",
+      "phase": 1,
+      "slice": "1.2",
+      "runner": "rust",
+      "name": "p1_bundle",
+      "category": "unit",
+      "classification": "new",
+      "source": "crates/bran-core/src/bundle.rs",
+      "support_fixtures": []
+    },
+    {
+      "stable_id": "P1-PROFILES",
+      "phase": 1,
+      "slice": "1.2",
+      "runner": "rust",
+      "name": "p1_profiles",
+      "category": "contract",
+      "classification": "new",
+      "source": "crates/bran-core/src/profile.rs",
+      "support_fixtures": []
+    },
+    {
+      "stable_id": "P1-CONFORMANCE",
+      "phase": 1,
+      "slice": "1.2",
+      "runner": "rust",
+      "name": "p1_conformance",
+      "category": "conformance",
+      "classification": "new",
+      "source": "crates/bran-core/src/profile.rs",
+      "support_fixtures": [
+        "fixtures/conformance/strict-gap-strict-selected.fixture"
+      ]
+    }
+  ]
+}

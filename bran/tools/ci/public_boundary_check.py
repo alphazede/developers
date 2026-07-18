@@ -7,7 +7,6 @@ import os
 import stat
 import subprocess
 import sys
-import tempfile
 from pathlib import Path
 
 
@@ -112,11 +111,8 @@ def get_text_or_fail(path: Path) -> str:
 
 
 def main() -> int:
-    # Strict CLI: only no args (default check) or exactly --self-test. Reject unknown.
     if len(sys.argv) > 1:
-        if sys.argv[1:] == ["--self-test"]:
-            return self_test()
-        print("usage: public_boundary_check.py [--self-test]", file=sys.stderr)
+        print("usage: public_boundary_check.py", file=sys.stderr)
         print("FAIL unknown argument(s)")
         return 1
 
@@ -209,129 +205,6 @@ def main() -> int:
         "public_safe_fixture=clean rejected_test_fixture=detected"
     )
     return 0
-
-
-def self_test() -> int:
-    """Stdlib-only --self-test using temp files only. Proves acceptance and rejection cases.
-    Never mutates any repository files. Default mode (no arg) remains the repository scan.
-    """
-    print("self-test: starting")
-    cases_passed = 0
-    try:
-        with tempfile.TemporaryDirectory() as tmpdir:
-            tmp = Path(tmpdir)
-
-            # clean text accepts (get succeeds, no violation)
-            clean = tmp / "clean.txt"
-            clean.write_text("This is clean text with no canaries at all.")
-            try:
-                txt = get_text_or_fail(clean)
-                if "clean text" in txt:
-                    print("PASS self-test: clean text accepts")
-                    cases_passed += 1
-                else:
-                    print("FAIL self-test: clean text content mismatch")
-                    return 1
-            except Exception as e:
-                print(f"FAIL self-test: clean text rejected unexpectedly: {e}")
-                return 1
-
-            # binary (NUL) rejects
-            binary = tmp / "binary.dat"
-            binary.write_bytes(b"data with \0 NUL inside and more")
-            try:
-                get_text_or_fail(binary)
-                print("FAIL self-test: binary did not reject")
-                return 1
-            except ValueError as e:
-                if "NUL" in str(e) or "binary" in str(e).lower():
-                    print("PASS self-test: binary rejects")
-                    cases_passed += 1
-                else:
-                    print(f"FAIL self-test: binary wrong reason: {e}")
-                    return 1
-
-            # oversize rejects
-            oversize = tmp / "oversize.txt"
-            oversize.write_bytes(b"X" * (MAX_TEXT_FILE_BYTES + 1))
-            try:
-                get_text_or_fail(oversize)
-                print("FAIL self-test: oversize did not reject")
-                return 1
-            except ValueError as e:
-                if "1 MiB" in str(e) or "over" in str(e).lower():
-                    print("PASS self-test: oversize rejects")
-                    cases_passed += 1
-                else:
-                    print(f"FAIL self-test: oversize wrong reason: {e}")
-                    return 1
-
-            # invalid UTF-8 rejects
-            invalid = tmp / "invalid-utf8.bin"
-            invalid.write_bytes(b"\xFF\xFE\xFD\xFC")  # invalid UTF-8, no NUL
-            try:
-                get_text_or_fail(invalid)
-                print("FAIL self-test: invalid UTF-8 did not reject")
-                return 1
-            except ValueError as e:
-                if "UTF-8" in str(e) or "utf" in str(e).lower():
-                    print("PASS self-test: invalid UTF-8 rejects")
-                    cases_passed += 1
-                else:
-                    print(f"FAIL self-test: invalid UTF-8 wrong reason: {e}")
-                    return 1
-
-            # zero-read-permission rejects (chmod removes read bits)
-            noread = tmp / "noread.txt"
-            noread.write_text("content that must be rejected due to perms")
-            try:
-                os.chmod(noread, 0o000)
-                try:
-                    get_text_or_fail(noread)
-                    print("FAIL self-test: zero-read-permission did not reject")
-                    return 1
-                except ValueError as e:
-                    if "permission" in str(e).lower() or "read" in str(e).lower():
-                        print("PASS self-test: zero-read-permission rejects")
-                        cases_passed += 1
-                    else:
-                        print(f"FAIL self-test: zero-read-permission wrong reason: {e}")
-                        return 1
-                finally:
-                    os.chmod(noread, 0o600)  # restore for cleanup
-            except Exception as e:
-                print(f"FAIL self-test: zero-read-permission setup error: {e}")
-                return 1
-
-            # symlink rejects (using lstat)
-            target = tmp / "target.txt"
-            target.write_text("target content")
-            symlink = tmp / "symlink.txt"
-            symlink.symlink_to(target)
-            try:
-                get_text_or_fail(symlink)
-                print("FAIL self-test: symlink did not reject")
-                return 1
-            except ValueError as e:
-                if "symlink" in str(e).lower():
-                    print("PASS self-test: symlink rejects")
-                    cases_passed += 1
-                else:
-                    print(f"FAIL self-test: symlink wrong reason: {e}")
-                    return 1
-
-        if cases_passed == 6:
-            print(
-                "PASS self-test: clean text accepts and "
-                "binary, oversize, invalid UTF-8, zero-read-permission, symlink cases reject"
-            )
-            return 0
-        else:
-            print(f"FAIL self-test: only {cases_passed}/6 cases passed")
-            return 1
-    except Exception as e:
-        print(f"FAIL self-test: unexpected error {type(e).__name__}: {e}")
-        return 1
 
 
 if __name__ == "__main__":

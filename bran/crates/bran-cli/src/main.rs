@@ -58,45 +58,26 @@ impl CliResult {
 mod tests {
     use super::{CliApp, ExitCode, MISSING_COMMAND_ERROR, SMOKE_OUTPUT, UNKNOWN_COMMAND_ERROR};
 
-    fn run(arguments: &[&str]) -> super::CliResult {
-        CliApp::run(arguments.iter().map(|argument| (*argument).to_owned()))
-    }
-
     #[test]
-    fn smoke_has_exact_deterministic_output() {
-        let result = run(&["smoke"]);
+    fn p1_cli() {
+        let smoke = CliApp::run(["smoke".to_owned()]);
+        assert_eq!(smoke.output, SMOKE_OUTPUT);
+        assert_eq!(smoke.exit_code, ExitCode::SUCCESS);
+        assert!(!smoke.is_error);
 
-        assert_eq!(result.output, SMOKE_OUTPUT);
-        assert_eq!(result.exit_code, ExitCode::SUCCESS);
-        assert!(!result.is_error);
-        assert_eq!(result.output, "{\"version\":\"1\",\"status\":\"ok\"}");
-    }
+        let missing = CliApp::run(Vec::new());
+        assert_eq!(missing.output, MISSING_COMMAND_ERROR);
+        assert_eq!(missing.exit_code, ExitCode::FAILURE);
+        assert!(missing.is_error);
 
-    #[test]
-    fn missing_command_has_a_stable_versioned_error() {
-        let result = run(&[]);
+        let unknown = CliApp::run(["other".to_owned()]);
+        assert_eq!(unknown.output, UNKNOWN_COMMAND_ERROR);
+        assert_eq!(unknown.exit_code, ExitCode::FAILURE);
+        assert!(unknown.is_error);
 
-        assert_eq!(result.output, MISSING_COMMAND_ERROR);
-        assert_eq!(result.exit_code, ExitCode::FAILURE);
-        assert!(result.is_error);
-        assert_eq!(
-            result.output,
-            "{\"version\":\"1\",\"error\":\"missing_command\"}"
-        );
-    }
-
-    #[test]
-    fn unknown_commands_have_a_stable_versioned_error() {
-        for arguments in [["other"].as_slice(), ["smoke", "extra"].as_slice()] {
-            let result = run(arguments);
-
-            assert_eq!(result.output, UNKNOWN_COMMAND_ERROR);
-            assert_eq!(result.exit_code, ExitCode::FAILURE);
-            assert!(result.is_error);
-            assert_eq!(
-                result.output,
-                "{\"version\":\"1\",\"error\":\"unknown_command\"}"
-            );
-        }
+        let extra = CliApp::run(["smoke".to_owned(), "extra".to_owned()]);
+        assert_eq!(extra.output, UNKNOWN_COMMAND_ERROR);
+        assert_eq!(extra.exit_code, ExitCode::FAILURE);
+        assert!(extra.is_error);
     }
 }

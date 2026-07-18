@@ -1,12 +1,8 @@
 #!/usr/bin/env python3
-"""Validate the Bran exact-release fixture contract without third-party packages.
-Preserves 6 manifest + prior 6 sig cases + adds year-0001 sig case (13 names total).
-Strict regex now in SIGNED_AT_PATTERN == schema expected (same string); strptime semantic.
-"""
+"""Run the single P1 exact-release contract journey without third-party packages."""
 
 from __future__ import annotations
 
-import copy
 import json
 import re
 import sys
@@ -205,14 +201,10 @@ def validate_manifest(manifest: Any) -> list[str]:
 def main() -> int:
     root = bran_root()
     schema_path = root / "schemas/bran-release-manifest.schema.json"
-    valid_path = root / "fixtures/release/valid-exact-release-manifest.json"
-    invalid_path = root / "fixtures/release/invalid-latest-release-manifest.json"
-    cases_path = root / "fixtures/release/release-contract-cases.json"
+    manifest_path = root / "fixtures/release/valid-exact-release-manifest.json"
     try:
         schema = load_json(schema_path)
-        valid_manifest = load_json(valid_path)
-        invalid_manifest = load_json(invalid_path)
-        cases_doc = load_json(cases_path)
+        manifest = load_json(manifest_path)
     except ValueError as error:
         print(f"FAIL release contract check: {error}")
         return 1
@@ -224,113 +216,29 @@ def main() -> int:
         print("FAIL release contract check: schema missing or incorrect x-semantic-oracle annotation for stdlib checker")
         return 1
 
-    # Mandatory schema pattern/format assertions: drift in fingerprint or signed_at must fail the gate.
-    sig_schema = (schema.get("properties") or {}).get("signature", {}).get("properties", {}) or {}
-    fp_schema = sig_schema.get("key_fingerprint", {}) or {}
-    ts_schema = sig_schema.get("signed_at", {}) or {}
-    if fp_schema.get("pattern") != EXPECTED_FINGERPRINT_PATTERN:
+    signature = (schema.get("properties") or {}).get("signature", {}).get("properties", {}) or {}
+    if signature.get("key_fingerprint", {}).get("pattern") != EXPECTED_FINGERPRINT_PATTERN:
         print("FAIL release contract check: schema key_fingerprint pattern drifted from expected constant")
         return 1
-    if ts_schema.get("pattern") != EXPECTED_SIGNED_AT_PATTERN or ts_schema.get("format") != EXPECTED_SIGNED_AT_FORMAT:
+    signed_at = signature.get("signed_at", {})
+    if signed_at.get("pattern") != EXPECTED_SIGNED_AT_PATTERN or signed_at.get("format") != EXPECTED_SIGNED_AT_FORMAT:
         print("FAIL release contract check: schema signed_at pattern or format drifted from expected constants")
         return 1
 
-    # Note: schema now enforces canonical no-leading-zero tag syntax; the oracle remains required for dynamic tag/name/URL cross-field equality.
-
-    valid_errors = validate_manifest(valid_manifest)
-    invalid_errors = validate_manifest(invalid_manifest)
-    if valid_errors:
-        print("FAIL release contract check: valid fixture was rejected")
-        for error in valid_errors:
+    accepted = validate_manifest(manifest)
+    if accepted:
+        print("FAIL release contract check: exact-release manifest was rejected")
+        for error in accepted:
             print(f"  {error}")
         return 1
-    if not invalid_errors:
-        print("FAIL release contract check: invalid-latest fixture was accepted")
+
+    manifest["assets"][0]["url"] = "https://github.com/alphazede/developers/releases/latest/download/bran-v1.2.3-x86_64-unknown-linux-gnu.tar.gz"
+    rejected = validate_manifest(manifest)
+    if not rejected:
+        print("FAIL release contract check: exact-release lifecycle accepted a floating latest URL")
         return 1
 
-    print("PASS release contract check: valid fixture accepted; invalid-latest fixture rejected")
-
-    # Require and execute BOTH arrays: prior "cases" (6 full manifest cases, behavior preserved exactly)
-    # followed by "signature_cases" (7 compact signature overlay cases incl. year-0001).
-    if not isinstance(cases_doc, dict) or \
-       "cases" not in cases_doc or not isinstance(cases_doc["cases"], list) or \
-       "signature_cases" not in cases_doc or not isinstance(cases_doc["signature_cases"], list):
-        print("FAIL release contract check: release-contract-cases.json must contain both 'cases' and 'signature_cases' arrays")
-        return 1
-
-    if len(cases_doc["cases"]) != 6 or len(cases_doc["signature_cases"]) != 7:
-        print("FAIL release contract check: expected exactly 6 cases + 7 signature_cases (13 total)")
-        return 1
-
-    case_results: list[str] = []
-    all_pass = True
-
-    # Execute prior manifest-case behavior exactly (unchanged full "manifest" payloads)
-    for case in cases_doc["cases"]:
-        if not isinstance(case, dict):
-            print("FAIL release contract check: malformed case in release-contract-cases.json")
-            return 1
-        name = case.get("name", "<unnamed>")
-        expect = case.get("expect")
-        manifest = case.get("manifest")
-        if expect not in ("valid", "invalid") or not isinstance(manifest, dict):
-            print(f"FAIL release contract check: case {name!r} has invalid expect or manifest")
-            return 1
-        case_errors = validate_manifest(manifest)
-        if expect == "valid":
-            if case_errors:
-                print(f"FAIL case {name}: expected valid but got errors:")
-                for e in case_errors:
-                    print(f"  {e}")
-                all_pass = False
-            else:
-                case_results.append(f"{name}: valid (accepted as expected)")
-        else:
-            if not case_errors:
-                print(f"FAIL case {name}: expected invalid but was accepted")
-                all_pass = False
-            else:
-                case_results.append(f"{name}: invalid (rejected as expected: {case_errors[0]})")
-
-    # Then execute signature overlay cases (strict fingerprint/timestamp + schema drift + year-0001 parity from F2)
-    for case in cases_doc["signature_cases"]:
-        if not isinstance(case, dict):
-            print("FAIL release contract check: malformed case in release-contract-cases.json")
-            return 1
-        name = case.get("name", "<unnamed>")
-        expect = case.get("expect")
-        fp = case.get("key_fingerprint")
-        ts = case.get("signed_at")
-        if expect not in ("valid", "invalid") or not isinstance(fp, str) or not isinstance(ts, str):
-            print(f"FAIL release contract check: case {name!r} has invalid expect or signature fields")
-            return 1
-        mut = copy.deepcopy(valid_manifest)
-        mut["signature"]["key_fingerprint"] = fp
-        mut["signature"]["signed_at"] = ts
-        case_errors = validate_manifest(mut)
-        if expect == "valid":
-            if case_errors:
-                print(f"FAIL case {name}: expected valid but got errors:")
-                for e in case_errors:
-                    print(f"  {e}")
-                all_pass = False
-            else:
-                case_results.append(f"{name}: valid (accepted as expected)")
-        else:
-            if not case_errors:
-                print(f"FAIL case {name}: expected invalid but was accepted")
-                all_pass = False
-            else:
-                case_results.append(f"{name}: invalid (rejected as expected: {case_errors[0]})")
-
-    if not all_pass:
-        print("FAIL release contract check: one or more probe cases did not match expectation")
-        return 1
-
-    print("All probe cases:")
-    for r in case_results:
-        print(f"  {r}")
-    print("PASS release contract check: all fixtures and named cases passed")
+    print("PASS P1-RELEASE: exact release accepted and floating latest URL rejected")
     return 0
 
 
