@@ -261,7 +261,7 @@ def main() -> int:
     check_shell(root, valid, errors)
     check_fixtures(root, fixtures, errors)
     if errors: return fail(errors)
-    print(f"PASS test budget: Phase 1=6 Phase 2=2 manifest={len(journeys)} plan_ceiling=25")
+    print(f"PASS test budget: Phase 1={phases[1]} Phase 2={phases[2]} manifest={len(journeys)} plan_ceiling=25")
     return 0
 if __name__ == "__main__":
     sys.exit(main())

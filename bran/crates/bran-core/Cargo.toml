@@ -11,3 +11,8 @@ path = "src/lib.rs"
 name = "repository_scan"
 path = "../../benches/repository_scan.rs"
 harness = false
+
+[[bench]]
+name = "knowledge_graph"
+path = "../../benches/knowledge_graph.rs"
+harness = false

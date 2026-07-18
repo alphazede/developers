@@ -122,6 +122,28 @@
       "classification": "new",
       "source": "crates/bran-core/src/scan/mod.rs",
       "support_fixtures": []
+    },
+    {
+      "stable_id": "P2-GRAPH",
+      "phase": 2,
+      "slice": "2.2",
+      "runner": "rust",
+      "name": "p2_graph",
+      "category": "unit",
+      "classification": "new",
+      "source": "crates/bran-core/src/graph/mod.rs",
+      "support_fixtures": []
+    },
+    {
+      "stable_id": "P2-QUERIES",
+      "phase": 2,
+      "slice": "2.2",
+      "runner": "rust",
+      "name": "p2_queries",
+      "category": "unit",
+      "classification": "new",
+      "source": "crates/bran-core/src/graph/mod.rs",
+      "support_fixtures": []
     }
   ]
 }
