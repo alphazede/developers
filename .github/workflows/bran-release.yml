@@ -1,0 +1,106 @@
+name: BRAN Release (build)
+# Manual dispatch only (dry-run build). Builds+uploads CI artifacts only (upload-artifact).
+# No release publish/sign/publish. Exact tag required. No floating triggers.
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Exact tag to build (e.g. bran-v0.1.0). Never uses latest.'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-24.04
+            target: x86_64-unknown-linux-gnu
+            ext: tar.gz
+          - os: ubuntu-24.04
+            target: aarch64-unknown-linux-gnu
+            ext: tar.gz
+            cross: true
+          - os: macos-13
+            target: x86_64-apple-darwin
+            ext: tar.gz
+          - os: macos-14
+            target: aarch64-apple-darwin
+            ext: tar.gz
+          - os: windows-2022
+            target: x86_64-pc-windows-msvc
+            ext: zip
+
+    name: Build ${{ matrix.target }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+
+    steps:
+      - name: Resolve and validate tag (canonical bran-vX.Y.Z)
+        id: tag
+        shell: bash
+        run: |
+          TAG="${{ inputs.tag }}"
+          if ! printf '%s\n' "$TAG" | grep -Eq '^bran-v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$'; then
+            echo "FAIL invalid tag (must be bran-vX.Y.Z): $TAG" >&2
+            exit 1
+          fi
+          printf '%s\n' "value=$TAG" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout exact requested tag
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd
+        with:
+          persist-credentials: false
+          ref: refs/tags/${{ steps.tag.outputs.value }}
+
+      - name: Verify HEAD matches exact tag commit (fail on mismatch)
+        shell: bash
+        run: |
+          TAG="${{ steps.tag.outputs.value }}"
+          EXPECTED=$(git rev-parse --verify "refs/tags/$TAG^{commit}")
+          ACTUAL=$(git rev-parse HEAD)
+          if [ "$ACTUAL" != "$EXPECTED" ]; then
+            printf 'FAIL HEAD %s != deref tag %s (%s)\n' "$ACTUAL" "$TAG" "$EXPECTED" >&2
+            exit 1
+          fi
+          printf 'PASS verified exact tag checkout: %s\n' "$ACTUAL"
+
+      - name: Install Rust 1.94.1 (locked profile)
+        shell: bash
+        run: |
+          rustup toolchain install 1.94.1 --profile minimal --no-self-update
+          rustup default 1.94.1
+
+      - name: Add target (fail on missing, no substitute)
+        shell: bash
+        run: |
+          rustup target add "${{ matrix.target }}"
+
+      - name: Install cross linker (aarch64-linux-gnu only)
+        if: ${{ matrix.cross }}
+        shell: bash
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -yqq gcc-aarch64-linux-gnu
+          echo "CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc" >> "$GITHUB_ENV"
+
+      - name: Build and package (invoke canonical script)
+        shell: bash
+        run: |
+          mkdir -p dist
+          ./bran/tools/ci/build-release.sh \
+            --target "${{ matrix.target }}" \
+            --tag "${{ steps.tag.outputs.value }}" \
+            --dist dist
+
+      - name: Upload CI artifact (for later sealing, not a release)
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # pin v4.6.2
+        with:
+          name: ${{ steps.tag.outputs.value }}-${{ matrix.target }}
+          path: dist/${{ steps.tag.outputs.value }}-${{ matrix.target }}.${{ matrix.ext }}
+          retention-days: 90
+          if-no-files-found: error
