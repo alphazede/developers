@@ -1,13 +1,16 @@
 mod digest;
+mod graph_input;
 mod ignore;
 
 pub use digest::{ContentIdentity, IdentityComparison};
+pub use graph_input::{AffectedGraphNodes, ScanGraphError};
 pub use ignore::{IgnoreDiagnostic, IgnoreMatcher, RuleError, MAX_OKFIGNORE_BYTES};
 
 use crate::metadata::{MetadataParserRegistry, MetadataReport, PackageDefaults};
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::fs::{self, DirEntry};
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 
 const DEFAULT_MAX_FILES: usize = 10_000;
 const DEFAULT_MAX_FILE_BYTES: usize = 256 * 1024;
@@ -20,6 +23,7 @@ pub struct ScanConfig {
     pub max_file_bytes: usize,
     pub max_total_bytes: usize,
     package_defaults: BTreeMap<String, PackageDefaults>,
+    profile: String,
 }
 
 impl Default for ScanConfig {
@@ -39,6 +43,7 @@ impl ScanConfig {
             max_file_bytes,
             max_total_bytes,
             package_defaults: BTreeMap::new(),
+            profile: "default".to_owned(),
         }
     }
 
@@ -51,13 +56,37 @@ impl ScanConfig {
             .insert(safe_directory(directory.as_ref())?, defaults);
         Ok(())
     }
+
+    /// Sets the caller-selected metadata profile recorded in snapshot inputs.
+    pub fn set_profile(&mut self, profile: impl AsRef<str>) -> Result<(), ScanFailure> {
+        let profile = profile.as_ref();
+        if profile.is_empty() || profile.len() > 256 || profile.contains(['/', '\\', '\0']) {
+            return Err(ScanFailure::InvalidProfile {
+                profile: profile.to_owned(),
+            });
+        }
+        self.profile = profile.to_owned();
+        Ok(())
+    }
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ScanEntry {
     pub identity: ContentIdentity,
-    pub source: Vec<u8>,
+    pub source: Arc<[u8]>,
     pub metadata: MetadataReport,
+}
+
+/// All scanner inputs that can alter parsed metadata independently of source
+/// bytes. Snapshots may reuse entries only when this value is identical.
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+pub struct ScanInputFingerprint {
+    pub schema: ContentIdentity,
+    pub parser: ContentIdentity,
+    pub profile: ContentIdentity,
+    pub config: ContentIdentity,
+    pub package_defaults: ContentIdentity,
+    pub ignore: ContentIdentity,
 }
 
 #[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
@@ -71,8 +100,20 @@ pub enum ScanDiagnostic {
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct ScanSnapshot {
-    pub entries: BTreeMap<String, ScanEntry>,
+    pub entries: BTreeMap<String, Arc<ScanEntry>>,
     pub diagnostics: Vec<ScanDiagnostic>,
+    pub inputs: ScanInputFingerprint,
+    pub file_count: usize,
+    pub total_bytes: usize,
+    pub observed_bytes: BTreeMap<String, usize>,
+}
+
+/// The old and new identity for one path requiring graph-neighbor closure.
+#[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
+pub struct AffectedNode {
+    pub path: String,
+    pub previous: Option<ContentIdentity>,
+    pub current: Option<ContentIdentity>,
 }
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
@@ -82,6 +123,7 @@ pub struct ScanChange {
     pub changed: Vec<String>,
     pub removed: Vec<String>,
     pub reused: Vec<String>,
+    pub affected: Vec<AffectedNode>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -92,6 +134,9 @@ pub enum ScanFailure {
     },
     InvalidPackageDirectory {
         directory: String,
+    },
+    InvalidProfile {
+        profile: String,
     },
     InvalidIgnore(IgnoreDiagnostic),
     UnreadableIgnore {
@@ -109,6 +154,10 @@ pub enum ScanFailure {
     },
     RootEscape {
         path: String,
+    },
+    InvalidChangedPath {
+        path: String,
+        reason: String,
     },
 }
 
@@ -140,61 +189,250 @@ impl RepositoryScanner {
     }
 
     pub fn scan(&self) -> Result<ScanSnapshot, ScanFailure> {
-        self.collect(None)
+        self.collect(None, &BTreeSet::new())
     }
 
-    pub fn scan_changed(&self, previous: &ScanSnapshot) -> Result<ScanChange, ScanFailure> {
-        let mut snapshot = self.collect(Some(previous))?;
+    /// Incrementally scans using caller-supplied repository change evidence.
+    /// Paths in `changed_paths` are reparsed even when their bytes match, so a
+    /// caller's observed change is never silently treated as unchanged.
+    pub fn scan_changed(
+        &self,
+        previous: &ScanSnapshot,
+        changed_paths: &BTreeSet<String>,
+    ) -> Result<ScanChange, ScanFailure> {
+        for path in changed_paths {
+            validate_changed_path(path)?;
+        }
+        let (matcher, ignore) = self.read_ignore()?;
+        let inputs = self.inputs(ignore);
+        let mut snapshot = if inputs != previous.inputs {
+            self.collect(None, &BTreeSet::new())?
+        } else {
+            let mut snapshot = previous.clone();
+            snapshot.diagnostics.retain(|diagnostic| {
+                let path = match diagnostic {
+                    ScanDiagnostic::Symlink { path }
+                    | ScanDiagnostic::Unreadable { path, .. }
+                    | ScanDiagnostic::NonUtf8Path { path }
+                    | ScanDiagnostic::UnsupportedInput { path }
+                    | ScanDiagnostic::WeakIdentityMismatch { path } => path,
+                };
+                !changed_paths.contains(path)
+            });
+            snapshot.inputs = inputs;
+            for relative in changed_paths {
+                if relative == ".okfignore" || matcher.is_ignored_relative(relative) {
+                    snapshot.entries.remove(relative);
+                    remove_observed(&mut snapshot, relative);
+                } else {
+                    self.apply_changed_path(relative, &mut snapshot)?;
+                }
+            }
+            if snapshot.file_count > self.config.max_files {
+                return Err(limit(
+                    "<snapshot>",
+                    snapshot.file_count,
+                    self.config.max_files,
+                ));
+            }
+            if snapshot.total_bytes > self.config.max_total_bytes {
+                return Err(limit(
+                    "<snapshot>",
+                    snapshot.total_bytes,
+                    self.config.max_total_bytes,
+                ));
+            }
+            snapshot
+        };
         let mut change = ScanChange::default();
+        let input_changed = snapshot.inputs != previous.inputs;
         for (path, entry) in &snapshot.entries {
             match previous.entries.get(path) {
-                Some(prior) if prior.identity == entry.identity && prior.source == entry.source => {
+                Some(prior)
+                    if !input_changed
+                        && !changed_paths.contains(path)
+                        && prior.identity == entry.identity
+                        && prior.source == entry.source =>
+                {
                     change.reused.push(path.clone());
                 }
                 Some(prior) => {
-                    if prior.identity == entry.identity {
+                    if prior.identity == entry.identity && prior.source != entry.source {
                         snapshot
                             .diagnostics
                             .push(ScanDiagnostic::WeakIdentityMismatch { path: path.clone() });
                     }
                     change.changed.push(path.clone());
+                    change.affected.push(AffectedNode {
+                        path: path.clone(),
+                        previous: Some(prior.identity.clone()),
+                        current: Some(entry.identity.clone()),
+                    });
                 }
-                None => change.added.push(path.clone()),
+                None => {
+                    change.added.push(path.clone());
+                    change.affected.push(AffectedNode {
+                        path: path.clone(),
+                        previous: None,
+                        current: Some(entry.identity.clone()),
+                    });
+                }
             }
         }
         for path in previous.entries.keys() {
             if !snapshot.entries.contains_key(path) {
                 change.removed.push(path.clone());
+                change.affected.push(AffectedNode {
+                    path: path.clone(),
+                    previous: previous
+                        .entries
+                        .get(path)
+                        .map(|entry| entry.identity.clone()),
+                    current: None,
+                });
             }
         }
         snapshot.diagnostics.sort();
+        change.affected.sort();
         change.snapshot = snapshot;
         Ok(change)
     }
 
-    fn collect(&self, previous: Option<&ScanSnapshot>) -> Result<ScanSnapshot, ScanFailure> {
-        let matcher = self.read_ignore()?;
-        let mut snapshot = ScanSnapshot::default();
+    fn apply_changed_path(
+        &self,
+        relative: &str,
+        snapshot: &mut ScanSnapshot,
+    ) -> Result<(), ScanFailure> {
+        validate_changed_path(relative)?;
+        let path = self.root.join(relative);
+        if let Some(prior) = snapshot.entries.remove(relative) {
+            let _ = prior;
+        }
+        remove_observed(snapshot, relative);
+        let metadata = match fs::symlink_metadata(&path) {
+            Ok(metadata) => metadata,
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                return Ok(());
+            }
+            Err(error) => {
+                unreadable(snapshot, relative, error);
+                return Ok(());
+            }
+        };
+        if metadata.file_type().is_symlink() {
+            snapshot.diagnostics.push(ScanDiagnostic::Symlink {
+                path: relative.to_owned(),
+            });
+            return Ok(());
+        }
+        if metadata.is_dir() {
+            return Err(ScanFailure::InvalidChangedPath {
+                path: relative.to_owned(),
+                reason: "changed path must not be a directory".to_owned(),
+            });
+        }
+        if !metadata.is_file() {
+            snapshot.diagnostics.push(ScanDiagnostic::UnsupportedInput {
+                path: relative.to_owned(),
+            });
+            return Ok(());
+        }
+        replace_observed(
+            snapshot,
+            relative,
+            usize::try_from(metadata.len()).unwrap_or(usize::MAX),
+        );
+        let canonical = match fs::canonicalize(&path) {
+            Ok(canonical) => canonical,
+            Err(error) => {
+                unreadable(snapshot, relative, error);
+                return Ok(());
+            }
+        };
+        if !canonical.starts_with(&self.root) {
+            return Err(ScanFailure::RootEscape {
+                path: relative.to_owned(),
+            });
+        }
+        let source = match fs::read(&canonical) {
+            Ok(source) => source,
+            Err(error) => {
+                unreadable(snapshot, relative, error);
+                return Ok(());
+            }
+        };
+        replace_observed(snapshot, relative, source.len());
+        self.check_bytes(
+            relative,
+            source.len(),
+            snapshot.total_bytes.saturating_sub(source.len()),
+        )?;
+        if fs::symlink_metadata(&path).is_ok_and(|item| item.file_type().is_symlink()) {
+            snapshot.diagnostics.push(ScanDiagnostic::Symlink {
+                path: relative.to_owned(),
+            });
+            return Ok(());
+        }
+        let text = match std::str::from_utf8(&source) {
+            Ok(text) => text,
+            Err(_) => {
+                snapshot.diagnostics.push(ScanDiagnostic::UnsupportedInput {
+                    path: relative.to_owned(),
+                });
+                return Ok(());
+            }
+        };
+        let parsed = self
+            .parser
+            .parse(relative, text, &self.defaults_for(relative));
+        snapshot.entries.insert(
+            relative.to_owned(),
+            Arc::new(ScanEntry {
+                identity: ContentIdentity::from_bytes(&source),
+                source: Arc::from(source),
+                metadata: parsed,
+            }),
+        );
+        Ok(())
+    }
+
+    fn collect(
+        &self,
+        previous: Option<&ScanSnapshot>,
+        changed_paths: &BTreeSet<String>,
+    ) -> Result<ScanSnapshot, ScanFailure> {
+        let (matcher, ignore) = self.read_ignore()?;
+        let mut snapshot = ScanSnapshot {
+            inputs: self.inputs(ignore),
+            ..ScanSnapshot::default()
+        };
+        let reusable = previous.is_some_and(|prior| prior.inputs == snapshot.inputs);
         let mut limits = ScanLimits::default();
         self.walk(
             &self.root,
             "",
             0,
             &matcher,
-            previous,
+            reusable.then_some(previous).flatten(),
+            changed_paths,
             &mut snapshot,
             &mut limits,
         )?;
+        snapshot.file_count = snapshot.observed_bytes.len();
+        snapshot.total_bytes = snapshot.observed_bytes.values().sum();
         snapshot.diagnostics.sort();
         Ok(snapshot)
     }
 
-    fn read_ignore(&self) -> Result<IgnoreMatcher, ScanFailure> {
+    fn read_ignore(&self) -> Result<(IgnoreMatcher, ContentIdentity), ScanFailure> {
         let path = self.root.join(".okfignore");
         let metadata = match fs::symlink_metadata(&path) {
             Ok(metadata) => metadata,
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
-                return Ok(IgnoreMatcher::default());
+                return Ok((
+                    IgnoreMatcher::default(),
+                    ContentIdentity::from_bytes(b"okfignore-v1:missing"),
+                ));
             }
             Err(error) => return Err(unreadable_ignore(error)),
         };
@@ -212,7 +450,10 @@ impl RepositoryScanner {
             ));
         }
         let bytes = fs::read(path).map_err(unreadable_ignore)?;
-        IgnoreMatcher::from_okfignore(&bytes).map_err(ScanFailure::InvalidIgnore)
+        let matcher = IgnoreMatcher::from_okfignore(&bytes).map_err(ScanFailure::InvalidIgnore)?;
+        let mut input = b"okfignore-v1:\0".to_vec();
+        input.extend_from_slice(&bytes);
+        Ok((matcher, ContentIdentity::from_bytes(&input)))
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -223,6 +464,7 @@ impl RepositoryScanner {
         depth: usize,
         matcher: &IgnoreMatcher,
         previous: Option<&ScanSnapshot>,
+        changed_paths: &BTreeSet<String>,
         snapshot: &mut ScanSnapshot,
         limits: &mut ScanLimits,
     ) -> Result<(), ScanFailure> {
@@ -306,11 +548,19 @@ impl RepositoryScanner {
                     depth + 1,
                     matcher,
                     previous,
+                    changed_paths,
                     snapshot,
                     limits,
                 )?;
             } else if file_type.is_file() {
-                self.read_file(entry.path(), relative, previous, snapshot, limits)?;
+                self.read_file(
+                    entry.path(),
+                    relative,
+                    previous,
+                    changed_paths,
+                    snapshot,
+                    limits,
+                )?;
             } else {
                 snapshot
                     .diagnostics
@@ -325,6 +575,7 @@ impl RepositoryScanner {
         path: PathBuf,
         relative: String,
         previous: Option<&ScanSnapshot>,
+        changed_paths: &BTreeSet<String>,
         snapshot: &mut ScanSnapshot,
         limits: &mut ScanLimits,
     ) -> Result<(), ScanFailure> {
@@ -354,6 +605,7 @@ impl RepositoryScanner {
             }
         };
         let size = usize::try_from(metadata.len()).unwrap_or(usize::MAX);
+        replace_observed(snapshot, &relative, size);
         self.check_bytes(&relative, size, limits.bytes)?;
         let source = match fs::read(&canonical) {
             Ok(source) => source,
@@ -362,6 +614,7 @@ impl RepositoryScanner {
                 return Ok(());
             }
         };
+        replace_observed(snapshot, &relative, source.len());
         self.check_bytes(&relative, source.len(), limits.bytes)?;
         if fs::symlink_metadata(&path).is_ok_and(|item| item.file_type().is_symlink()) {
             snapshot
@@ -374,7 +627,9 @@ impl RepositoryScanner {
         let reused = previous
             .and_then(|prior| prior.entries.get(&relative))
             .filter(|prior| {
-                prior.identity == identity && prior.source.as_slice() == source.as_slice()
+                !changed_paths.contains(&relative)
+                    && prior.identity == identity
+                    && prior.source.as_ref() == source.as_slice()
             });
         let metadata = if let Some(prior) = reused {
             prior.metadata.clone()
@@ -393,11 +648,11 @@ impl RepositoryScanner {
         };
         snapshot.entries.insert(
             relative,
-            ScanEntry {
+            Arc::new(ScanEntry {
                 identity,
-                source,
+                source: Arc::from(source),
                 metadata,
-            },
+            }),
         );
         Ok(())
     }
@@ -435,6 +690,22 @@ impl RepositoryScanner {
         }
         defaults
     }
+
+    fn inputs(&self, ignore: ContentIdentity) -> ScanInputFingerprint {
+        ScanInputFingerprint {
+            schema: fingerprint("source-metadata-schema-v2"),
+            parser: fingerprint(&self.parser.fingerprint()),
+            profile: fingerprint(&self.config.profile),
+            config: fingerprint(&format!(
+                "max-files={};max-file-bytes={};max-total-bytes={}",
+                self.config.max_files, self.config.max_file_bytes, self.config.max_total_bytes
+            )),
+            package_defaults: fingerprint(&package_defaults_fingerprint(
+                &self.config.package_defaults,
+            )),
+            ignore,
+        }
+    }
 }
 
 #[derive(Default)]
@@ -459,6 +730,46 @@ fn safe_directory(directory: &str) -> Result<String, ScanFailure> {
         });
     }
     Ok(directory.to_owned())
+}
+
+fn validate_changed_path(path: &str) -> Result<(), ScanFailure> {
+    if path.is_empty()
+        || path.starts_with('/')
+        || path.contains('\\')
+        || path.contains('\0')
+        || path.len() > 4096
+        || path
+            .split('/')
+            .any(|part| part.is_empty() || matches!(part, "." | ".."))
+    {
+        return Err(ScanFailure::InvalidChangedPath {
+            path: path.to_owned(),
+            reason: "path must be a normalized relative file path".to_owned(),
+        });
+    }
+    Ok(())
+}
+
+fn remove_observed(snapshot: &mut ScanSnapshot, path: &str) {
+    if let Some(bytes) = snapshot.observed_bytes.remove(path) {
+        snapshot.file_count = snapshot.file_count.saturating_sub(1);
+        snapshot.total_bytes = snapshot.total_bytes.saturating_sub(bytes);
+    }
+}
+
+fn replace_observed(snapshot: &mut ScanSnapshot, path: &str, bytes: usize) {
+    remove_observed(snapshot, path);
+    snapshot.observed_bytes.insert(path.to_owned(), bytes);
+    snapshot.file_count += 1;
+    snapshot.total_bytes = snapshot.total_bytes.saturating_add(bytes);
+}
+
+fn fingerprint(value: &str) -> ContentIdentity {
+    ContentIdentity::from_bytes(value.as_bytes())
+}
+
+fn package_defaults_fingerprint(defaults: &BTreeMap<String, PackageDefaults>) -> String {
+    format!("{defaults:?}")
 }
 
 fn sorted_entries(
@@ -578,6 +889,11 @@ mod tests {
     #[test]
     #[rustfmt::skip]
     fn p2_scanner() {
+        let public_fixture = include_str!("../../../../fixtures/scanner/scan-snapshot-v1.json");
+        assert!(public_fixture.contains("\"schema_version\": \"1.0.0\""));
+        assert!(public_fixture.contains("\"path\": \"src/lib.rs\""));
+        assert!(public_fixture.contains("\"byte_len\": 72"));
+        assert!(public_fixture.contains("\"metadata_status\": \"warning\""));
         let root = root();
         write(&root, ".okfignore", b"skip/\n");
         write(&root, "docs/readme.md", b"---\ntype: guide\n---\n# Readme\n");
@@ -598,18 +914,53 @@ mod tests {
         assert!(fact(&full.entries["packages/core/infra/security.rs"].metadata, "kind", "core"));
         assert!(boundary(&full.entries["packages/core/infra/security.rs"].metadata));
         write(&root, "src/a.rs", b"pub fn altered() {}\n");
-        let changed = scanner.scan_changed(&full).unwrap();
+        write(&root, "src/z.rs", b"pub fn unseen() {}\n");
+        let changed_paths = BTreeSet::from(["src/a.rs".to_owned()]);
+        let changed = scanner.scan_changed(&full, &changed_paths).unwrap();
         assert_eq!(changed.changed, vec!["src/a.rs"]);
         assert_eq!(changed.reused, vec!["docs/readme.md", "packages/core/infra/security.rs", "src/z.rs"]);
+        assert_eq!(changed.affected[0].path, "src/a.rs");
+        assert_eq!(changed.snapshot.entries["src/z.rs"].source, full.entries["src/z.rs"].source);
+        let observed = scanner.scan_changed(&changed.snapshot, &BTreeSet::from(["src/z.rs".to_owned()])).unwrap();
+        assert_eq!(observed.changed, vec!["src/z.rs"]);
+        write(&root, "src/new.rs", b"pub fn new_file() {}\n");
+        let added = scanner.scan_changed(&observed.snapshot, &BTreeSet::from(["src/new.rs".to_owned()])).unwrap();
+        assert_eq!(added.added, vec!["src/new.rs"]);
         fs::remove_file(root.join("src/z.rs")).unwrap();
-        let removed = scanner.scan_changed(&changed.snapshot).unwrap();
+        let removed_paths = BTreeSet::from(["src/z.rs".to_owned()]);
+        let removed = scanner.scan_changed(&added.snapshot, &removed_paths).unwrap();
         assert_eq!(removed.removed, vec!["src/z.rs"]);
+        assert_eq!(removed.affected[0].path, "src/z.rs");
         assert_eq!(removed.snapshot.entries, scanner.scan().unwrap().entries);
+        assert!(matches!(scanner.scan_changed(&removed.snapshot, &BTreeSet::from(["../escape.rs".to_owned()])), Err(ScanFailure::InvalidChangedPath { .. })));
+        let mut refreshed_config = config;
+        refreshed_config.set_profile("strict").unwrap();
+        let refreshed = RepositoryScanner::new(&root, refreshed_config).unwrap();
+        let profile_changed = refreshed.scan_changed(&removed.snapshot, &BTreeSet::new()).unwrap();
+        assert_eq!(profile_changed.reused, Vec::<String>::new());
+        assert_eq!(profile_changed.snapshot, refreshed.scan().unwrap());
+        let forced_paths = BTreeSet::from(["src/a.rs".to_owned()]);
+        let forced = refreshed
+            .scan_changed(&profile_changed.snapshot, &forced_paths)
+            .unwrap();
+        assert_eq!(forced.changed, vec!["src/a.rs"]);
+        assert_eq!(
+            forced.reused,
+            vec!["docs/readme.md", "packages/core/infra/security.rs", "src/new.rs"]
+        );
+        write(&root, "src/a.rs", &[0xff, 0xfe]);
+        let non_utf = refreshed.scan_changed(&forced.snapshot, &forced_paths).unwrap();
+        assert_eq!(non_utf.snapshot, refreshed.scan().unwrap());
+        write(&root, "src/a.rs", b"pub fn restored() {}\n");
+        let recovered = refreshed.scan_changed(&non_utf.snapshot, &forced_paths).unwrap();
+        assert_eq!(recovered.snapshot, refreshed.scan().unwrap());
         write(&root, "too-large.rs", &vec![b'x'; 1025]);
         assert!(matches!(scanner.scan(), Err(ScanFailure::LimitExceeded { path, .. }) if path == "too-large.rs"));
         fs::remove_file(root.join("too-large.rs")).unwrap();
         if outside_link(&root) {
-            assert!(symlink(&scanner.scan().unwrap()));
+            let linked = refreshed.scan_changed(&recovered.snapshot, &BTreeSet::from(["outside.rs".to_owned()])).unwrap();
+            assert_eq!(linked.snapshot, refreshed.scan().unwrap());
+            assert!(symlink(&linked.snapshot));
             fs::remove_file(root.join("outside.rs")).unwrap();
         }
         let maxed = RepositoryScanner::new(&root, ScanConfig::new(2, 1024, 4096)).unwrap();

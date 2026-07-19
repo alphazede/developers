@@ -5,7 +5,7 @@
 /// The lanes are deliberately independent, but this is not a cryptographic
 /// digest. An equal identity always requires a byte-for-byte reparse before it
 /// can be treated as the same content.
-#[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
+#[derive(Clone, Debug, Default, Eq, Ord, PartialEq, PartialOrd)]
 pub struct ContentIdentity {
     pub byte_len: u64,
     pub lanes: [u64; 3],

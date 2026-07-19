@@ -4,8 +4,8 @@ pub mod model;
 pub mod query;
 
 pub use model::{
-    Confidence, EdgeCertainty, EdgeId, EdgeInput, GraphError, GraphInput, GraphLimits, NodeId,
-    NodeInput, NodeRole, Provenance,
+    Confidence, EdgeCertainty, EdgeId, EdgeInput, EdgeRelationship, GraphError, GraphInput,
+    GraphLimits, NodeFacts, NodeId, NodeInput, NodeRole, Provenance,
 };
 
 use std::collections::HashMap;
@@ -121,8 +121,14 @@ impl KnowledgeGraph {
 
 #[cfg(test)]
 mod tests {
-    use super::query::{NodeQuery, QueryBounds, Reachability, TrailStatus};
+    use super::query::{NodeQuery, QueryBounds, Reachability, ReachabilityReason, TrailStatus};
     use super::*;
+    use crate::metadata::{
+        FactConfidence, FactProvenance, FactState, MetadataFact, MetadataReport,
+    };
+    use crate::scan::{AffectedNode, ContentIdentity, ScanChange, ScanEntry, ScanSnapshot};
+    use std::collections::BTreeMap;
+    use std::sync::Arc;
 
     fn id(value: &str) -> NodeId {
         NodeId::parse(value).unwrap()
@@ -151,6 +157,25 @@ mod tests {
                     NodeRole::Document,
                     source("a"),
                     Confidence::new(100).unwrap(),
+                )
+                .with_facts(
+                    NodeFacts::default()
+                        .with_status("active")
+                        .unwrap()
+                        .with_tag("reference")
+                        .unwrap()
+                        .with_tag("graph")
+                        .unwrap()
+                        .with_freshness("2026-07-18")
+                        .unwrap()
+                        .with_subsystem("graph")
+                        .unwrap()
+                        .with_purpose("topology")
+                        .unwrap()
+                        .with_task("analysis")
+                        .unwrap()
+                        .with_audience("engineers")
+                        .unwrap(),
                 ),
                 NodeInput::new(
                     b.clone(),
@@ -167,7 +192,8 @@ mod tests {
                     source("unknown"),
                     Confidence::new(40).unwrap(),
                     EdgeCertainty::Unknown,
-                ),
+                )
+                .with_relationship(EdgeRelationship::Conflict),
                 EdgeInput::new(
                     edge_id("edge.missing"),
                     a.clone(),
@@ -175,7 +201,8 @@ mod tests {
                     source("candidate"),
                     Confidence::new(15).unwrap(),
                     EdgeCertainty::MissingTarget,
-                ),
+                )
+                .with_relationship(EdgeRelationship::Replacement),
                 EdgeInput::new(
                     edge_id("edge.known"),
                     a,
@@ -183,7 +210,8 @@ mod tests {
                     source("known"),
                     Confidence::new(100).unwrap(),
                     EdgeCertainty::Known,
-                ),
+                )
+                .with_relationship(EdgeRelationship::Dependency),
                 EdgeInput::new(
                     edge_id("edge.dynamic"),
                     b,
@@ -191,7 +219,8 @@ mod tests {
                     source("dynamic"),
                     Confidence::new(55).unwrap(),
                     EdgeCertainty::Dynamic,
-                ),
+                )
+                .with_relationship(EdgeRelationship::Reachability),
             ],
         )
     }
@@ -221,11 +250,17 @@ mod tests {
         KnowledgeGraph::build(
             GraphInput::new(
                 vec![
-                    q_node("node.entry", NodeRole::Entrypoint),
+                    q_node("node.entry", NodeRole::Entrypoint)
+                        .with_facts(NodeFacts::default().with_subsystem("query").unwrap()),
                     q_node("node.support", NodeRole::Symbol),
                     q_node("node.test", NodeRole::Test),
                     q_node("node.generated", NodeRole::Generated),
                     q_node("node.orphan", NodeRole::Archived),
+                    q_node("node.partial", NodeRole::Symbol).with_facts(
+                        NodeFacts::default()
+                            .with_field_value("coverage", "partial")
+                            .unwrap(),
+                    ),
                     q_node("node.dynamic", NodeRole::Symbol),
                     q_node("node.unknown", NodeRole::Symbol),
                     q_node("node.cycle.a", NodeRole::Symbol),
@@ -234,6 +269,10 @@ mod tests {
                     q_node("node.left", NodeRole::Symbol),
                     q_node("node.right", NodeRole::Symbol),
                     q_node("node.target", NodeRole::Symbol),
+                    q_node("node.dynamic.descendant", NodeRole::Symbol),
+                    q_node("node.unknown.descendant", NodeRole::Symbol),
+                    q_node("node.missing.source", NodeRole::Symbol),
+                    q_node("node.missing.descendant", NodeRole::Symbol),
                 ],
                 vec![
                     q_edge(
@@ -305,7 +344,8 @@ mod tests {
                         "node.support",
                         EdgeCertainty::Dynamic,
                         11,
-                    ),
+                    )
+                    .with_relationship(EdgeRelationship::Reachability),
                     q_edge(
                         "edge.unknown",
                         "node.unknown",
@@ -313,9 +353,37 @@ mod tests {
                         EdgeCertainty::Unknown,
                         12,
                     ),
+                    q_edge(
+                        "edge.dynamic-descendant",
+                        "node.dynamic",
+                        "node.dynamic.descendant",
+                        EdgeCertainty::Known,
+                        100,
+                    ),
+                    q_edge(
+                        "edge.unknown-descendant",
+                        "node.unknown",
+                        "node.unknown.descendant",
+                        EdgeCertainty::Known,
+                        100,
+                    ),
+                    q_edge(
+                        "edge.missing-target",
+                        "node.missing.source",
+                        "node.missing.target",
+                        EdgeCertainty::MissingTarget,
+                        10,
+                    ),
+                    q_edge(
+                        "edge.missing-descendant",
+                        "node.missing.source",
+                        "node.missing.descendant",
+                        EdgeCertainty::Known,
+                        100,
+                    ),
                 ],
             ),
-            GraphLimits::new(13, 11).unwrap(),
+            GraphLimits::new(18, 15).unwrap(),
         )
         .unwrap()
     }
@@ -329,6 +397,11 @@ mod tests {
 
     #[test]
     fn p2_graph() {
+        let public_fixture = include_str!("../../../../fixtures/graph/knowledge-graph-v1.json");
+        assert!(public_fixture.contains("\"schema_version\": \"1.0.0\""));
+        assert!(public_fixture.contains("\"id\": \"file:src/lib.rs\""));
+        assert!(public_fixture.contains("\"locator\": \"src/support.rs\""));
+        assert!(public_fixture.contains("\"certainty\": \"unknown\""));
         let limits = GraphLimits::new(3, 4).unwrap();
         let graph = KnowledgeGraph::build(graph_input(), limits).unwrap();
         assert_eq!(
@@ -365,17 +438,94 @@ mod tests {
         assert_eq!(node.role(), NodeRole::Document);
         assert_eq!(node.provenance().locator(), "a");
         assert_eq!(node.confidence().value(), 100);
+        assert_eq!(node.facts().status(), Some("active"));
+        assert_eq!(
+            node.facts().tags(),
+            &["graph".to_owned(), "reference".to_owned()]
+        );
+        assert_eq!(node.facts().freshness(), Some("2026-07-18"));
+        assert_eq!(node.facts().subsystem(), Some("graph"));
+        assert_eq!(node.facts().purpose(), Some("topology"));
+        assert_eq!(node.facts().task(), Some("analysis"));
+        assert_eq!(node.facts().audience(), Some("engineers"));
         let missing = graph.edge(&edge_id("edge.missing")).unwrap();
         assert_eq!(missing.certainty(), EdgeCertainty::MissingTarget);
         assert_eq!(missing.provenance().locator(), "candidate");
         assert_eq!(missing.confidence().value(), 15);
+        assert_eq!(missing.relationship(), EdgeRelationship::Replacement);
         assert_eq!(
             graph.edge(&edge_id("edge.dynamic")).unwrap().certainty(),
             EdgeCertainty::Dynamic
         );
         assert_eq!(
+            graph.edge(&edge_id("edge.dynamic")).unwrap().relationship(),
+            EdgeRelationship::Reachability
+        );
+        assert_eq!(
             graph.edge(&edge_id("edge.unknown")).unwrap().certainty(),
             EdgeCertainty::Unknown
+        );
+        assert_eq!(
+            graph.edge(&edge_id("edge.unknown")).unwrap().relationship(),
+            EdgeRelationship::Conflict
+        );
+        let candidate = MetadataFact {
+            key: "dependency".to_owned(),
+            value: "src/b.rs".to_owned(),
+            provenance: FactProvenance::CommentedYaml,
+            confidence: FactConfidence::Medium,
+            state: FactState::Candidate,
+        };
+        let entry = |facts| {
+            Arc::new(ScanEntry {
+                identity: ContentIdentity::from_bytes(b"source"),
+                source: Arc::from(b"source".as_slice()),
+                metadata: MetadataReport {
+                    facts,
+                    warnings: Vec::new(),
+                    proposals: Vec::new(),
+                },
+            })
+        };
+        let snapshot = ScanSnapshot {
+            entries: BTreeMap::from([
+                ("src/a.rs".to_owned(), entry(vec![candidate])),
+                ("src/b.rs".to_owned(), entry(Vec::new())),
+            ]),
+            ..ScanSnapshot::default()
+        };
+        let scanned = KnowledgeGraph::build(
+            snapshot.graph_input().unwrap(),
+            GraphLimits::new(2, 1).unwrap(),
+        )
+        .unwrap();
+        let scanned_edge = scanned.edge(&scanned.edge_ids()[0]).unwrap();
+        let scanned_a = scanned.node(scanned_edge.source()).unwrap();
+        assert_eq!(scanned_a.provenance().source(), "repository-scanner");
+        assert_eq!(scanned_a.confidence().value(), 50);
+        assert!(!scanned_a.facts().contains_value("dependency", "src/b.rs"));
+        assert_eq!(scanned_edge.relationship(), EdgeRelationship::Dependency);
+        assert_eq!(scanned_edge.certainty(), EdgeCertainty::Known);
+        assert_eq!(scanned_edge.provenance().source(), "commented-yaml");
+        let change = ScanChange {
+            affected: vec![AffectedNode {
+                path: "src/a.rs".to_owned(),
+                previous: Some(ContentIdentity::from_bytes(b"old")),
+                current: Some(ContentIdentity::from_bytes(b"new")),
+            }],
+            ..ScanChange::default()
+        };
+        assert_eq!(
+            change
+                .affected_graph_nodes(&scanned, &scanned)
+                .unwrap()
+                .0
+                .len(),
+            2
+        );
+        assert_eq!(
+            graph.edge(&edge_id("edge.known")).unwrap().relationship(),
+            EdgeRelationship::Dependency
         );
         assert_eq!(
             KnowledgeGraph::build(
@@ -471,20 +621,47 @@ mod tests {
                 actual: 4
             })
         );
+        assert!(matches!(
+            Provenance::new(
+                "s".repeat(Provenance::MAX_SOURCE_BYTES + 1),
+                "bounded-locator"
+            ),
+            Err(GraphError::InvalidProvenance)
+        ));
+        assert!(matches!(
+            Provenance::new(
+                "bounded-source",
+                "l".repeat(Provenance::MAX_LOCATOR_BYTES + 1)
+            ),
+            Err(GraphError::InvalidProvenance)
+        ));
     }
 
     #[test]
     fn p2_queries() {
+        let public_fixture = include_str!("../../../../fixtures/queries/query-result-v1.json");
+        assert!(public_fixture.contains("\"schema_version\": \"1.0.0\""));
+        assert!(public_fixture.contains("\"id\": \"file:src/lib.rs\""));
+        assert!(public_fixture.contains("\"source\": \"rust-import\""));
+        assert!(public_fixture.contains("\"status\": \"partial\""));
+        assert!(public_fixture.contains("\"reason\": \"partial-coverage\""));
+        assert!(public_fixture.contains("\"truncated\": true"));
         let graph = query_graph();
         assert_eq!(graph.find("node.", 2), graph.find("node.", 2));
         assert_eq!(graph.find("node.", 2).items.len(), 2);
         assert!(graph.find("node.", 0).truncated);
+        let entry = graph.find("node.entry", 1);
+        assert_eq!(entry.items[0].facts.subsystem(), Some("query"));
         let NodeQuery::Found(consumers) = graph.consumers(&id("node.support"), 8) else {
             panic!("known consumer target missing");
         };
         assert_eq!(consumers.items.len(), 3);
         assert_eq!(consumers.items[0].node.id, id("node.dynamic"));
         assert_eq!(consumers.items[0].edge.certainty, EdgeCertainty::Dynamic);
+        assert_eq!(
+            consumers.items[0].edge.relationship,
+            EdgeRelationship::Reachability
+        );
         assert_eq!(consumers.items[0].edge.provenance.locator(), "edge.dynamic");
         assert_eq!(consumers.items[0].edge.confidence.value(), 11);
         let NodeQuery::Found(impact) = graph.impact(&id("node.cycle.a"), QueryBounds::new(8, 8))
@@ -515,12 +692,28 @@ mod tests {
             classification(&graph, "node.orphan"),
             Reachability::Unreachable(_)
         ));
+        assert_eq!(
+            classification(&graph, "node.partial"),
+            Reachability::Unknown(ReachabilityReason::PartialCoverage)
+        );
         assert!(matches!(
             classification(&graph, "node.dynamic"),
             Reachability::Unknown(_)
         ));
         assert!(matches!(
             classification(&graph, "node.unknown"),
+            Reachability::Unknown(_)
+        ));
+        assert!(matches!(
+            classification(&graph, "node.dynamic.descendant"),
+            Reachability::Unknown(_)
+        ));
+        assert!(matches!(
+            classification(&graph, "node.unknown.descendant"),
+            Reachability::Unknown(_)
+        ));
+        assert!(matches!(
+            classification(&graph, "node.missing.descendant"),
             Reachability::Unknown(_)
         ));
         let zombies = graph.zombies(QueryBounds::new(8, 8));

@@ -1,8 +1,8 @@
 //! Read-only bounded graph queries. Only `Known` edges establish reachability.
 
 use super::{
-    Confidence, EdgeCertainty, EdgeId, EdgeInput, KnowledgeGraph, NodeId, NodeInput, NodeRole,
-    Provenance,
+    Confidence, EdgeCertainty, EdgeId, EdgeInput, EdgeRelationship, KnowledgeGraph, NodeFacts,
+    NodeId, NodeInput, NodeRole, Provenance,
 };
 use std::collections::{HashMap, HashSet, VecDeque};
 
@@ -36,6 +36,7 @@ pub struct NodeEvidence {
     pub role: NodeRole,
     pub provenance: Provenance,
     pub confidence: Confidence,
+    pub facts: NodeFacts,
 }
 
 /// A graph edge with candidate certainty and scanner evidence retained verbatim.
@@ -47,6 +48,7 @@ pub struct EdgeEvidence {
     pub provenance: Provenance,
     pub confidence: Confidence,
     pub certainty: EdgeCertainty,
+    pub relationship: EdgeRelationship,
 }
 
 /// A node query whose requested node may not exist.
@@ -83,6 +85,7 @@ pub enum ReachabilityReason {
     NoKnownPath,
     Uncertain(EdgeEvidence),
     DepthBound,
+    PartialCoverage,
 }
 
 /// Reachability is established only by `Known` edges.
@@ -218,6 +221,16 @@ impl KnowledgeGraph {
             return NodeQuery::Missing(target.clone());
         };
         let evidence = node_evidence(node);
+        if node.facts().contains_value("coverage", "partial") {
+            return NodeQuery::Found(Bounded {
+                items: vec![Classification {
+                    node: evidence,
+                    outcome: Reachability::Unknown(ReachabilityReason::PartialCoverage),
+                    truncated: false,
+                }],
+                truncated: false,
+            });
+        }
         let immediate = match node.role() {
             NodeRole::Entrypoint => Some(Reachability::Active(ReachabilityReason::Entrypoint)),
             NodeRole::Test => Some(Reachability::TestOnly(ReachabilityReason::TestRole)),
@@ -235,13 +248,21 @@ impl KnowledgeGraph {
             });
         }
 
-        let (depth, bounded) = self.known_distance_to(target, max_depth);
+        let (depth, known_bounded) = self.known_distance_to(target, max_depth);
+        let (uncertain, uncertain_bounded) = if depth.is_none() && !known_bounded {
+            self.uncertain_path_to(target, max_depth)
+        } else {
+            (None, false)
+        };
+        let bounded = known_bounded || uncertain_bounded;
         let outcome = if let Some(depth) = depth {
             Reachability::Supporting(ReachabilityReason::KnownPath { depth })
-        } else if bounded {
+        } else if known_bounded {
             Reachability::Unknown(ReachabilityReason::DepthBound)
-        } else if let Some(edge) = self.uncertain_edge(target) {
+        } else if let Some(edge) = uncertain {
             Reachability::Unknown(ReachabilityReason::Uncertain(edge))
+        } else if uncertain_bounded {
+            Reachability::Unknown(ReachabilityReason::DepthBound)
         } else {
             Reachability::Unreachable(ReachabilityReason::NoKnownPath)
         };
@@ -368,14 +389,50 @@ impl KnowledgeGraph {
         (None, bounded)
     }
 
-    fn uncertain_edge(&self, node: &NodeId) -> Option<EdgeEvidence> {
-        self.edges
-            .iter()
-            .find(|edge| {
-                edge.certainty() != EdgeCertainty::Known
-                    && (edge.source() == node || edge.target() == node)
-            })
-            .map(edge_evidence)
+    /// Finds a bounded forward path tainted by any non-`Known` edge.
+    ///
+    /// Both endpoints of a present uncertain edge are tainted immediately so
+    /// incomplete scanner evidence cannot produce a negative conclusion. The
+    /// originating edge remains attached while later `Known` edges propagate
+    /// that taint to descendants.
+    fn uncertain_path_to(&self, target: &NodeId, max_depth: usize) -> (Option<EdgeEvidence>, bool) {
+        let mut seen = HashSet::new();
+        let mut queue = VecDeque::new();
+        for edge in &self.edges {
+            if edge.certainty() == EdgeCertainty::Known {
+                continue;
+            }
+            let evidence = edge_evidence(edge);
+            let source = edge.source().clone();
+            if seen.insert(source.clone()) {
+                queue.push_back((source, evidence.clone(), 0usize));
+            }
+            let target = edge.target().clone();
+            if self.node(&target).is_some() && seen.insert(target.clone()) {
+                queue.push_back((target, evidence, 0usize));
+            }
+        }
+
+        let mut bounded = false;
+        while let Some((current, evidence, depth)) = queue.pop_front() {
+            if &current == target {
+                return (Some(evidence), bounded);
+            }
+            for edge_id in self.forward_edges(&current) {
+                let edge = self.edge(edge_id).expect("topology owns adjacency edges");
+                if edge.certainty() != EdgeCertainty::Known || seen.contains(edge.target()) {
+                    continue;
+                }
+                if depth == max_depth {
+                    bounded = true;
+                    continue;
+                }
+                let next = edge.target().clone();
+                seen.insert(next.clone());
+                queue.push_back((next, evidence.clone(), depth + 1));
+            }
+        }
+        (None, bounded)
     }
 
     fn rebuild_trail(
@@ -424,6 +481,7 @@ fn node_evidence(node: &NodeInput) -> NodeEvidence {
         role: node.role(),
         provenance: node.provenance().clone(),
         confidence: node.confidence(),
+        facts: node.facts().clone(),
     }
 }
 
@@ -435,5 +493,6 @@ fn edge_evidence(edge: &EdgeInput) -> EdgeEvidence {
         provenance: edge.provenance().clone(),
         confidence: edge.confidence(),
         certainty: edge.certainty(),
+        relationship: edge.relationship(),
     }
 }

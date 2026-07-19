@@ -18,6 +18,248 @@ STABLE = re.compile(r"^P([1-6])-([A-Za-z0-9]+(?:-[A-Za-z0-9]+)*)$")
 SLUG = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 HIDDEN = re.compile(r"\b(?:self[-_ ]?test|probe|cases?|matrix|parameteri[sz]ed)\b", re.I)
 IDENTIFIER = re.compile(r"[A-Za-z_]\w*")
+PHASE_TWO_SCHEMAS = {
+    "P2-METADATA": ("fixtures/source-metadata/metadata-report-v1.json",
+                    "schemas/source-metadata-report.schema.json", ""),
+    "P2-SCANNER": ("fixtures/scanner/scan-snapshot-v1.json",
+                   "schemas/repository-scan-snapshot.schema.json", ""),
+    "P2-GRAPH": ("fixtures/graph/knowledge-graph-v1.json",
+                 "schemas/knowledge-graph.schema.json", ""),
+    "P2-QUERIES": ("fixtures/queries/query-result-v1.json",
+                   "schemas/graph-query-result.schema.json", ""),
+    "P2-VIEW": ("fixtures/views/compiled-view-v1.json",
+                "schemas/knowledge-view.schema.json", ""),
+    "P2-PACKET-SQZ": ("fixtures/packets/context-packet-sqz-v1.json",
+                      "schemas/context-packet-receipt.schema.json", "/packet_receipt"),
+    "P2-PACKET-SQZ#sqz": ("fixtures/packets/context-packet-sqz-v1.json",
+                          "schemas/sqz-receipt.schema.json", "/sqz_receipt"),
+}
+SCHEMA_KEYWORDS = {
+    "$ref", "type", "properties", "required", "additionalProperties", "enum", "const",
+    "minLength", "maxLength", "pattern", "minimum", "maximum", "minItems", "maxItems",
+    "uniqueItems", "items", "oneOf", "allOf",
+}
+SCHEMA_ANNOTATIONS = {"$schema", "$id", "$defs", "title", "description"}
+
+
+def pointer_part(value: object) -> str:
+    return str(value).replace("~", "~0").replace("/", "~1")
+
+
+def json_value(value: object) -> str:
+    return json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+
+
+def json_equal(left: object, right: object) -> bool:
+    if isinstance(left, bool) or isinstance(right, bool):
+        return type(left) is type(right) and left == right
+    if (isinstance(left, (int, float)) and isinstance(right, (int, float))
+            and not isinstance(left, bool) and not isinstance(right, bool)):
+        return left == right
+    return type(left) is type(right) and left == right
+
+
+def resolve_pointer(document: object, pointer: str, label: str, errors: list[str]) -> object | None:
+    if pointer == "":
+        return document
+    if not pointer.startswith("/"):
+        errors.append(f"{label}: unsafe or non-local JSON pointer {pointer!r}")
+        return None
+    current = document
+    for encoded in pointer[1:].split("/"):
+        if "~" in re.sub(r"~[01]", "", encoded):
+            errors.append(f"{label}: invalid JSON pointer escape in {pointer!r}")
+            return None
+        part = encoded.replace("~1", "/").replace("~0", "~")
+        if isinstance(current, dict) and part in current:
+            current = current[part]
+        elif isinstance(current, list) and part.isascii() and part.isdigit() and int(part) < len(current):
+            current = current[int(part)]
+        else:
+            errors.append(f"{label}: JSON pointer {pointer!r} does not resolve")
+            return None
+    return current
+
+
+def audit_schema(schema: object, path: str, errors: list[str]) -> None:
+    if not isinstance(schema, dict):
+        errors.append(f"{path}: schema must be an object")
+        return
+    for key in schema:
+        if key not in SCHEMA_KEYWORDS and key not in SCHEMA_ANNOTATIONS and not key.startswith("x-"):
+            errors.append(f"{path}: unsupported schema keyword {key!r}")
+    if "$ref" in schema and (not isinstance(schema["$ref"], str)
+                              or not schema["$ref"].startswith("#/$defs/")):
+        errors.append(f"{path}/$ref: only local #/$defs references are supported")
+    if "type" in schema and schema["type"] not in {
+            "object", "array", "string", "integer", "number", "boolean", "null"}:
+        errors.append(f"{path}/type: unsupported JSON Schema type")
+    if "required" in schema and (not isinstance(schema["required"], list)
+                                  or not all(isinstance(item, str) for item in schema["required"])):
+        errors.append(f"{path}/required: must be an array of strings")
+    if "pattern" in schema:
+        try:
+            re.compile(schema["pattern"] if isinstance(schema["pattern"], str) else None)
+        except (re.error, TypeError) as error:
+            errors.append(f"{path}/pattern: invalid regular expression: {error}")
+    for key in ("minLength", "maxLength", "minItems", "maxItems"):
+        if key in schema and (type(schema[key]) is not int or schema[key] < 0):
+            errors.append(f"{path}/{key}: must be a non-negative integer")
+    for key in ("minimum", "maximum"):
+        if key in schema and (not isinstance(schema[key], (int, float))
+                              or isinstance(schema[key], bool)):
+            errors.append(f"{path}/{key}: must be a number")
+    if "uniqueItems" in schema and type(schema["uniqueItems"]) is not bool:
+        errors.append(f"{path}/uniqueItems: must be boolean")
+    if "additionalProperties" in schema and not isinstance(schema["additionalProperties"], (bool, dict)):
+        errors.append(f"{path}/additionalProperties: must be boolean or a schema")
+    if "$defs" in schema:
+        if not isinstance(schema["$defs"], dict):
+            errors.append(f"{path}/$defs: must be an object")
+        else:
+            for name, child in schema["$defs"].items():
+                audit_schema(child, f"{path}/$defs/{pointer_part(name)}", errors)
+    if "properties" in schema:
+        if not isinstance(schema["properties"], dict):
+            errors.append(f"{path}/properties: must be an object")
+        else:
+            for name, child in schema["properties"].items():
+                audit_schema(child, f"{path}/properties/{pointer_part(name)}", errors)
+    for key in ("items", "additionalProperties"):
+        if isinstance(schema.get(key), dict):
+            audit_schema(schema[key], f"{path}/{key}", errors)
+    for key in ("oneOf", "allOf"):
+        if key in schema and (not isinstance(schema[key], list) or not schema[key]):
+            errors.append(f"{path}/{key}: must be a non-empty array")
+        elif key in schema:
+            for index, child in enumerate(schema[key]):
+                audit_schema(child, f"{path}/{key}/{index}", errors)
+
+
+def filter_shape(value: object) -> tuple[int, int]:
+    maximum_depth, clauses = 0, 0
+    pending = [(value, 1)]
+    while pending:
+        current, depth = pending.pop()
+        if not isinstance(current, dict):
+            continue
+        maximum_depth = max(maximum_depth, depth)
+        clauses += 1
+        nested = current.get("clauses")
+        if isinstance(nested, list):
+            pending.extend((item, depth + 1) for item in reversed(nested))
+        if "clause" in current:
+            pending.append((current["clause"], depth + 1))
+    return maximum_depth, clauses
+
+
+def instance_type(value: object, expected: str) -> bool:
+    return {
+        "object": isinstance(value, dict),
+        "array": isinstance(value, list),
+        "string": isinstance(value, str),
+        "integer": type(value) is int,
+        "number": isinstance(value, (int, float)) and not isinstance(value, bool),
+        "boolean": type(value) is bool,
+        "null": value is None,
+    }[expected]
+
+
+def validate_instance(instance: object, schema: dict, document: dict,
+                      path: str = "", depth: int = 0) -> list[str]:
+    errors: list[str] = []
+    shown = path or "/"
+    if depth > 256:
+        return [f"{shown}: validation nesting exceeds 256"]
+    if "$ref" in schema:
+        reference = schema["$ref"]
+        target = resolve_pointer(document, reference[1:] if isinstance(reference, str)
+                                 and reference.startswith("#") else str(reference),
+                                 f"{shown}/$ref", errors)
+        if not isinstance(target, dict):
+            if target is not None:
+                errors.append(f"{shown}/$ref: resolved value is not a schema")
+            return errors
+        errors.extend(validate_instance(instance, target, document, path, depth + 1))
+    maximum_depth = schema.get("x-max-depth")
+    maximum_clauses = schema.get("x-max-total-clauses")
+    if maximum_depth is not None or maximum_clauses is not None:
+        actual_depth, actual_clauses = filter_shape(instance)
+        if type(maximum_depth) is not int or maximum_depth < 0:
+            errors.append(f"{shown}: x-max-depth must be a non-negative integer")
+        elif actual_depth > maximum_depth:
+            errors.append(f"{shown}: filter depth {actual_depth} exceeds x-max-depth {maximum_depth}")
+        if type(maximum_clauses) is not int or maximum_clauses < 0:
+            errors.append(f"{shown}: x-max-total-clauses must be a non-negative integer")
+        elif actual_clauses > maximum_clauses:
+            errors.append(f"{shown}: filter clause count {actual_clauses} exceeds x-max-total-clauses {maximum_clauses}")
+        if errors:
+            return errors
+    expected = schema.get("type")
+    if isinstance(expected, str) and not instance_type(instance, expected):
+        return [f"{shown}: expected {expected}, got {type(instance).__name__}"]
+    if "const" in schema and not json_equal(instance, schema["const"]):
+        errors.append(f"{shown}: value {json_value(instance)} does not equal const {json_value(schema['const'])}")
+    if "enum" in schema:
+        enum = schema["enum"]
+        if not isinstance(enum, list) or not any(json_equal(instance, choice) for choice in enum):
+            errors.append(f"{shown}: value {json_value(instance)} is not in enum")
+    if isinstance(instance, dict):
+        properties = schema.get("properties", {})
+        required = schema.get("required", [])
+        if isinstance(required, list):
+            for name in required:
+                if name not in instance:
+                    errors.append(f"{shown}: missing required property {name!r}")
+        if isinstance(properties, dict):
+            for name, value in instance.items():
+                child_path = f"{path}/{pointer_part(name)}"
+                if name in properties and isinstance(properties[name], dict):
+                    errors.extend(validate_instance(value, properties[name], document,
+                                                    child_path, depth + 1))
+                elif schema.get("additionalProperties") is False:
+                    errors.append(f"{child_path}: additional property is not allowed")
+                elif isinstance(schema.get("additionalProperties"), dict):
+                    errors.extend(validate_instance(value, schema["additionalProperties"],
+                                                    document, child_path, depth + 1))
+    if isinstance(instance, str):
+        if isinstance(schema.get("minLength"), int) and len(instance) < schema["minLength"]:
+            errors.append(f"{shown}: string length {len(instance)} is below minLength {schema['minLength']}")
+        if isinstance(schema.get("maxLength"), int) and len(instance) > schema["maxLength"]:
+            errors.append(f"{shown}: string length {len(instance)} exceeds maxLength {schema['maxLength']}")
+        if isinstance(schema.get("pattern"), str) and re.search(schema["pattern"], instance) is None:
+            errors.append(f"{shown}: string does not match pattern {schema['pattern']!r}")
+    if isinstance(instance, (int, float)) and not isinstance(instance, bool):
+        if isinstance(schema.get("minimum"), (int, float)) and instance < schema["minimum"]:
+            errors.append(f"{shown}: value {instance} is below minimum {schema['minimum']}")
+        if isinstance(schema.get("maximum"), (int, float)) and instance > schema["maximum"]:
+            errors.append(f"{shown}: value {instance} exceeds maximum {schema['maximum']}")
+    if isinstance(instance, list):
+        if isinstance(schema.get("minItems"), int) and len(instance) < schema["minItems"]:
+            errors.append(f"{shown}: item count {len(instance)} is below minItems {schema['minItems']}")
+        if isinstance(schema.get("maxItems"), int) and len(instance) > schema["maxItems"]:
+            errors.append(f"{shown}: item count {len(instance)} exceeds maxItems {schema['maxItems']}")
+        if schema.get("uniqueItems") is True:
+            seen: set[str] = set()
+            for index, item in enumerate(instance):
+                canonical = json_value(item)
+                if canonical in seen:
+                    errors.append(f"{path}/{index}: duplicate item violates uniqueItems")
+                seen.add(canonical)
+        if isinstance(schema.get("items"), dict):
+            for index, item in enumerate(instance):
+                errors.extend(validate_instance(item, schema["items"], document,
+                                                f"{path}/{index}", depth + 1))
+    if isinstance(schema.get("allOf"), list):
+        for branch in schema["allOf"]:
+            if isinstance(branch, dict):
+                errors.extend(validate_instance(instance, branch, document, path, depth + 1))
+    if isinstance(schema.get("oneOf"), list):
+        matches = sum(not validate_instance(instance, branch, document, path, depth + 1)
+                      for branch in schema["oneOf"] if isinstance(branch, dict))
+        if matches != 1:
+            errors.append(f"{shown}: oneOf must match exactly one branch; matched {matches}")
+    return errors
 def fail(errors: list[str]) -> int:
     for error in errors:
         print(f"FAIL test budget: {error}")
@@ -173,6 +415,85 @@ def check_fixtures(root: Path, owned: list[str], errors: list[str]) -> None:
     for fixture in sorted(actual):
         if HIDDEN.search(fixture) or HIDDEN.search(text(root / fixture, errors)):
             errors.append(f"suspicious hidden test artifact: {fixture}")
+
+
+def strict_json(path: Path, label: str, errors: list[str]) -> object | None:
+    def object_without_duplicates(pairs: list[tuple[str, object]]) -> dict[str, object]:
+        result: dict[str, object] = {}
+        for key, value in pairs:
+            if key in result:
+                raise ValueError(f"duplicate object key {key!r}")
+            result[key] = value
+        return result
+    try:
+        return json.loads(path.read_text(encoding="utf-8"),
+                          object_pairs_hook=object_without_duplicates)
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError, ValueError) as error:
+        errors.append(f"{label}: invalid JSON: {error}")
+        return None
+
+
+def check_phase_two_schemas(root: Path, journeys: list[dict], errors: list[str]) -> None:
+    phase_two = [item for item in journeys if item.get("phase") == 2]
+    by_id = {item.get("stable_id"): item for item in phase_two
+             if isinstance(item.get("stable_id"), str)}
+    expected_ids = {key.split("#", 1)[0] for key in PHASE_TWO_SCHEMAS}
+    actual_ids = set(by_id)
+    for stable_id in sorted(expected_ids - actual_ids):
+        errors.append(f"Phase 2 schema inventory is missing journey {stable_id}")
+    for stable_id in sorted(actual_ids - expected_ids):
+        errors.append(f"Phase 2 schema inventory has unmapped journey {stable_id}")
+    expected_support: dict[str, list[str]] = {}
+    for mapping_id, (fixture_path, _schema_path, _pointer) in PHASE_TWO_SCHEMAS.items():
+        expected_support.setdefault(mapping_id.split("#", 1)[0], []).append(fixture_path)
+    for stable_id, expected in sorted(expected_support.items()):
+        journey = by_id.get(stable_id)
+        if journey is not None and journey.get("support_fixtures") != sorted(set(expected)):
+            errors.append(f"{stable_id} must own exactly its declared schema fixture: "
+                          f"{', '.join(sorted(set(expected)))}")
+    actual_support = {item for journey in phase_two
+                      for item in journey.get("support_fixtures", [])
+                      if isinstance(item, str)}
+    mapped_support = {fixture for fixture, _schema, _pointer in PHASE_TWO_SCHEMAS.values()}
+    for fixture in sorted(actual_support ^ mapped_support):
+        errors.append(f"Phase 2 fixture/schema mapping is not exact: {fixture}")
+    loaded_fixtures: dict[str, object | None] = {}
+    for mapping_id, (fixture_path, schema_path, instance_pointer) in sorted(PHASE_TWO_SCHEMAS.items()):
+        label = f"{mapping_id} {fixture_path}{instance_pointer}"
+        schema = strict_json(root / schema_path, f"{mapping_id} {schema_path}", errors)
+        if schema is None:
+            continue
+        if not isinstance(schema, dict):
+            errors.append(f"{mapping_id} {schema_path}: schema root must be an object")
+            continue
+        schema_errors: list[str] = []
+        audit_schema(schema, f"{mapping_id} {schema_path}#", schema_errors)
+        errors.extend(schema_errors)
+        if schema_errors:
+            continue
+        if fixture_path not in loaded_fixtures:
+            loaded_fixtures[fixture_path] = strict_json(root / fixture_path, fixture_path, errors)
+        fixture = loaded_fixtures[fixture_path]
+        if fixture is None:
+            continue
+        pointer_errors: list[str] = []
+        instance = resolve_pointer(fixture, instance_pointer, label, pointer_errors)
+        errors.extend(pointer_errors)
+        if pointer_errors:
+            continue
+        version_schema = schema.get("properties", {}).get("schema_version")
+        expected_version = version_schema.get("const") if isinstance(version_schema, dict) else None
+        if not isinstance(expected_version, str):
+            errors.append(f"{mapping_id} {schema_path}: schema_version must have a string const")
+            continue
+        actual_version = instance.get("schema_version") if isinstance(instance, dict) else None
+        if actual_version != expected_version:
+            errors.append(f"{label}/schema_version: expected declared schema version "
+                          f"{expected_version!r}, got {actual_version!r}")
+        for validation_error in validate_instance(instance, schema, schema):
+            errors.append(f"{label}{validation_error}")
+
+
 def main() -> int:
     if len(sys.argv) != 2:
         print("usage: test_budget_check.py PATH/TO/test-budget.json", file=sys.stderr)
@@ -260,6 +581,7 @@ def main() -> int:
         if actual[name] != 1 or rust[name] != 1: errors.append(f"Rust test {name} must be registered and defined exactly once")
     check_shell(root, valid, errors)
     check_fixtures(root, fixtures, errors)
+    check_phase_two_schemas(root, valid, errors)
     if errors: return fail(errors)
     print(f"PASS test budget: Phase 1={phases[1]} Phase 2={phases[2]} manifest={len(journeys)} plan_ceiling=25")
     return 0

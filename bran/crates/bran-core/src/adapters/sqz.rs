@@ -12,6 +12,7 @@ pub const APPROVED_SQZ_SOURCE: &str =
 pub const APPROVED_SQZ_VERSION: &str = "sqz 1.1.1";
 pub const APPROVED_SQZ_SHA256: &str =
     "03c8de9c55f22e3c3e33852972a2a12a8e436d8861736db71c9441804075e722";
+pub const SQZ_RECEIPT_SCHEMA_VERSION: &str = "1.0.0";
 
 /// Exact identity claimed by the configured and returned SQZ implementation.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -179,6 +180,7 @@ pub struct SqzId {
 /// Complete accounting for policy evaluation. Byte-derived token counts are estimates.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct SqzReceipt {
+    pub schema_version: &'static str,
     pub configured_identity: SqzIdentity,
     pub returned_identity: Option<SqzIdentity>,
     pub policy: SqzPolicy,
@@ -373,7 +375,7 @@ where
                 packet,
                 requested_max_output_bytes,
                 effective_max_output_bytes,
-                None,
+                Some(output.identity.clone()),
                 latency,
                 Some((&output, candidate_bytes, None)),
                 FidelityStatus::NotEvaluated,
@@ -603,6 +605,7 @@ where
             DlpStatus::Passed
         };
         SqzReceipt {
+            schema_version: SQZ_RECEIPT_SCHEMA_VERSION,
             configured_identity: self.config.identity.clone(),
             returned_identity,
             policy: self.config.policy,

@@ -1,5 +1,6 @@
 //! Immutable, scanner-neutral graph input and topology records.
 
+use std::collections::BTreeMap;
 use std::fmt;
 
 /// A stable graph identity accepted at the scanner-to-graph boundary.
@@ -53,6 +54,159 @@ pub enum NodeRole {
     Archived,
 }
 
+/// Bounded scanner-supplied semantic facts. Values remain free-form evidence,
+/// not graph-owned classifications or an ontology.
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+pub struct NodeFacts {
+    fields: BTreeMap<String, Vec<String>>,
+    semantic_bytes: usize,
+}
+
+impl NodeFacts {
+    /// Maximum number of distinct semantic keys carried by one node.
+    pub const MAX_FIELDS: usize = 32;
+    /// Maximum UTF-8 byte length of one semantic key.
+    pub const MAX_FIELD_KEY_BYTES: usize = 64;
+    /// Maximum Unicode scalar count of one semantic key.
+    pub const MAX_FIELD_KEY_CHARS: usize = 64;
+    /// Maximum distinct values retained for one semantic key.
+    pub const MAX_VALUES_PER_FIELD: usize = 32;
+    /// Maximum UTF-8 byte length of one semantic value.
+    pub const MAX_VALUE_BYTES: usize = 256;
+    /// Maximum UTF-8 payload bytes: every stored key plus every stored value.
+    pub const MAX_SEMANTIC_BYTES: usize = 8 * 1024;
+
+    /// Adds one value to a semantic key. Keys and values are retained in
+    /// lexical order and duplicate values are ignored, so lookup is stable.
+    pub fn with_field_value(
+        mut self,
+        key: impl Into<String>,
+        value: impl Into<String>,
+    ) -> Result<Self, GraphError> {
+        let key = valid_fact_key(key.into())?;
+        let value = valid_fact_value(&key, value.into())?;
+        let new_field = !self.fields.contains_key(&key);
+        if let Some(values) = self.fields.get(&key) {
+            if values.contains(&value) {
+                return Ok(self);
+            }
+            if values.len() == Self::MAX_VALUES_PER_FIELD {
+                return Err(GraphError::FactValuesPerFieldExceeded {
+                    key,
+                    limit: Self::MAX_VALUES_PER_FIELD,
+                });
+            }
+        } else if self.fields.len() == Self::MAX_FIELDS {
+            return Err(GraphError::FactFieldLimitExceeded {
+                limit: Self::MAX_FIELDS,
+            });
+        }
+
+        let additional_bytes = value.len() + usize::from(new_field) * key.len();
+        let actual = self.semantic_bytes.saturating_add(additional_bytes);
+        if actual > Self::MAX_SEMANTIC_BYTES {
+            return Err(GraphError::SemanticByteLimitExceeded {
+                limit: Self::MAX_SEMANTIC_BYTES,
+                actual,
+            });
+        }
+
+        let values = self.fields.entry(key).or_default();
+        values.push(value);
+        values.sort();
+        self.semantic_bytes = actual;
+        Ok(self)
+    }
+
+    /// Returns the exact values for a semantic key, in stable lexical order.
+    pub fn values(&self, key: &str) -> Option<&[String]> {
+        self.fields.get(key).map(Vec::as_slice)
+    }
+
+    /// Returns whether the exact semantic key has the exact supplied value.
+    pub fn contains_value(&self, key: &str, value: &str) -> bool {
+        self.values(key).is_some_and(|values| {
+            values
+                .binary_search_by(|item| item.as_str().cmp(value))
+                .is_ok()
+        })
+    }
+
+    /// Returns the bounded semantic payload byte count.
+    pub fn semantic_bytes(&self) -> usize {
+        self.semantic_bytes
+    }
+
+    pub fn with_status(self, value: impl Into<String>) -> Result<Self, GraphError> {
+        self.replace_single_value("status", value.into())
+    }
+
+    pub fn with_tag(self, value: impl Into<String>) -> Result<Self, GraphError> {
+        self.with_field_value("tags", value)
+    }
+
+    pub fn with_freshness(self, value: impl Into<String>) -> Result<Self, GraphError> {
+        self.replace_single_value("freshness", value.into())
+    }
+
+    pub fn with_subsystem(self, value: impl Into<String>) -> Result<Self, GraphError> {
+        self.replace_single_value("subsystem", value.into())
+    }
+
+    pub fn with_purpose(self, value: impl Into<String>) -> Result<Self, GraphError> {
+        self.replace_single_value("purpose", value.into())
+    }
+
+    pub fn with_task(self, value: impl Into<String>) -> Result<Self, GraphError> {
+        self.replace_single_value("task", value.into())
+    }
+
+    pub fn with_audience(self, value: impl Into<String>) -> Result<Self, GraphError> {
+        self.replace_single_value("audience", value.into())
+    }
+
+    pub fn status(&self) -> Option<&str> {
+        self.values("status")
+            .and_then(|values| values.first())
+            .map(String::as_str)
+    }
+    pub fn tags(&self) -> &[String] {
+        self.values("tags").unwrap_or(&[])
+    }
+    pub fn freshness(&self) -> Option<&str> {
+        self.values("freshness")
+            .and_then(|values| values.first())
+            .map(String::as_str)
+    }
+    pub fn subsystem(&self) -> Option<&str> {
+        self.values("subsystem")
+            .and_then(|values| values.first())
+            .map(String::as_str)
+    }
+    pub fn purpose(&self) -> Option<&str> {
+        self.values("purpose")
+            .and_then(|values| values.first())
+            .map(String::as_str)
+    }
+    pub fn task(&self) -> Option<&str> {
+        self.values("task")
+            .and_then(|values| values.first())
+            .map(String::as_str)
+    }
+    pub fn audience(&self) -> Option<&str> {
+        self.values("audience")
+            .and_then(|values| values.first())
+            .map(String::as_str)
+    }
+
+    fn replace_single_value(mut self, key: &str, value: String) -> Result<Self, GraphError> {
+        if let Some(values) = self.fields.remove(key) {
+            self.semantic_bytes -= key.len() + values.iter().map(String::len).sum::<usize>();
+        }
+        self.with_field_value(key, value)
+    }
+}
+
 /// Scanner evidence carried through graph construction without interpretation.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Provenance {
@@ -61,10 +215,19 @@ pub struct Provenance {
 }
 
 impl Provenance {
+    /// Maximum UTF-8 bytes accepted for a scanner/provider name.
+    pub const MAX_SOURCE_BYTES: usize = 128;
+    /// Maximum UTF-8 bytes accepted for a source locator.
+    pub const MAX_LOCATOR_BYTES: usize = 1_024;
+
     pub fn new(source: impl Into<String>, locator: impl Into<String>) -> Result<Self, GraphError> {
         let source = source.into();
         let locator = locator.into();
-        if source.trim().is_empty() || locator.trim().is_empty() {
+        if source.trim().is_empty()
+            || locator.trim().is_empty()
+            || source.len() > Self::MAX_SOURCE_BYTES
+            || locator.len() > Self::MAX_LOCATOR_BYTES
+        {
             return Err(GraphError::InvalidProvenance);
         }
         Ok(Self { source, locator })
@@ -106,6 +269,22 @@ pub enum EdgeCertainty {
     MissingTarget,
 }
 
+/// Directed scanner-supplied relationship meaning. `Unspecified` preserves
+/// compatibility for callers that only have topology and certainty evidence.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub enum EdgeRelationship {
+    #[default]
+    Unspecified,
+    Dependency,
+    Implementation,
+    Replacement,
+    Supersedes,
+    Validation,
+    Reachability,
+    Contradiction,
+    Conflict,
+}
+
 /// Immutable scanner-neutral node input retained by the graph.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct NodeInput {
@@ -113,6 +292,7 @@ pub struct NodeInput {
     role: NodeRole,
     provenance: Provenance,
     confidence: Confidence,
+    facts: NodeFacts,
 }
 
 impl NodeInput {
@@ -122,7 +302,13 @@ impl NodeInput {
             role,
             provenance,
             confidence,
+            facts: NodeFacts::default(),
         }
+    }
+
+    pub fn with_facts(mut self, facts: NodeFacts) -> Self {
+        self.facts = facts;
+        self
     }
 
     pub fn id(&self) -> &NodeId {
@@ -137,6 +323,9 @@ impl NodeInput {
     pub fn confidence(&self) -> Confidence {
         self.confidence
     }
+    pub fn facts(&self) -> &NodeFacts {
+        &self.facts
+    }
 }
 
 /// Immutable scanner-neutral edge input retained by the graph.
@@ -148,6 +337,7 @@ pub struct EdgeInput {
     provenance: Provenance,
     confidence: Confidence,
     certainty: EdgeCertainty,
+    relationship: EdgeRelationship,
 }
 
 impl EdgeInput {
@@ -166,7 +356,13 @@ impl EdgeInput {
             provenance,
             confidence,
             certainty,
+            relationship: EdgeRelationship::Unspecified,
         }
+    }
+
+    pub fn with_relationship(mut self, relationship: EdgeRelationship) -> Self {
+        self.relationship = relationship;
+        self
     }
 
     pub fn id(&self) -> &EdgeId {
@@ -186,6 +382,9 @@ impl EdgeInput {
     }
     pub fn certainty(&self) -> EdgeCertainty {
         self.certainty
+    }
+    pub fn relationship(&self) -> EdgeRelationship {
+        self.relationship
     }
 }
 
@@ -241,6 +440,11 @@ pub enum GraphError {
     InvalidEdgeId(String),
     InvalidProvenance,
     InvalidConfidence(u8),
+    InvalidFactKey(String),
+    InvalidFactValue { key: String, value: String },
+    FactFieldLimitExceeded { limit: usize },
+    FactValuesPerFieldExceeded { key: String, limit: usize },
+    SemanticByteLimitExceeded { limit: usize, actual: usize },
     InvalidLimits,
     NodeLimitExceeded { limit: usize, actual: usize },
     EdgeLimitExceeded { limit: usize, actual: usize },
@@ -256,8 +460,33 @@ impl fmt::Display for GraphError {
         match self {
             Self::InvalidNodeId(id) => write!(f, "invalid node identity: {id}"),
             Self::InvalidEdgeId(id) => write!(f, "invalid edge identity: {id}"),
-            Self::InvalidProvenance => write!(f, "provenance source and locator must not be blank"),
+            Self::InvalidProvenance => write!(
+                f,
+                "provenance source and locator must be nonblank and at most {} and {} bytes",
+                Provenance::MAX_SOURCE_BYTES,
+                Provenance::MAX_LOCATOR_BYTES
+            ),
             Self::InvalidConfidence(value) => write!(f, "confidence must be at most 100: {value}"),
+            Self::InvalidFactKey(key) => write!(
+                f,
+                "semantic key must be nonblank and at most {} bytes and {} characters: {key}",
+                NodeFacts::MAX_FIELD_KEY_BYTES,
+                NodeFacts::MAX_FIELD_KEY_CHARS,
+            ),
+            Self::InvalidFactValue { key, value } => write!(
+                f,
+                "{key} semantic value must be nonblank and at most {} bytes: {value}",
+                NodeFacts::MAX_VALUE_BYTES
+            ),
+            Self::FactFieldLimitExceeded { limit } => {
+                write!(f, "semantic field limit exceeded: {limit}")
+            }
+            Self::FactValuesPerFieldExceeded { key, limit } => {
+                write!(f, "semantic value limit exceeded for {key}: {limit}")
+            }
+            Self::SemanticByteLimitExceeded { limit, actual } => {
+                write!(f, "semantic byte limit {limit} exceeded: {actual}")
+            }
             Self::InvalidLimits => write!(f, "node and edge limits must be nonzero"),
             Self::NodeLimitExceeded { limit, actual } => {
                 write!(f, "node limit {limit} exceeded by {actual}")
@@ -288,4 +517,26 @@ fn valid_identity(value: &str) -> bool {
         && value.bytes().all(|byte| {
             byte.is_ascii_alphanumeric() || matches!(byte, b'.' | b'/' | b':' | b'_' | b'-')
         })
+}
+
+fn valid_fact_key(key: String) -> Result<String, GraphError> {
+    if key.trim().is_empty()
+        || key.len() > NodeFacts::MAX_FIELD_KEY_BYTES
+        || key.chars().count() > NodeFacts::MAX_FIELD_KEY_CHARS
+    {
+        Err(GraphError::InvalidFactKey(key))
+    } else {
+        Ok(key)
+    }
+}
+
+fn valid_fact_value(key: &str, value: String) -> Result<String, GraphError> {
+    if value.trim().is_empty() || value.len() > NodeFacts::MAX_VALUE_BYTES {
+        Err(GraphError::InvalidFactValue {
+            key: key.to_owned(),
+            value,
+        })
+    } else {
+        Ok(value)
+    }
 }

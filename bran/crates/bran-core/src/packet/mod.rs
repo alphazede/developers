@@ -4,9 +4,11 @@
 //! It deliberately has no SQZ, provider, filesystem, or persisted-token-policy
 //! dependency; compression and provider telemetry are separate adapter concerns.
 
-use crate::graph::{NodeId, Provenance};
-use crate::view::{CompiledView, ViewItem};
+use crate::graph::{EdgeCertainty, EdgeRelationship, KnowledgeGraph, NodeId, Provenance};
+use crate::view::CompiledView;
 use std::collections::{BTreeMap, BTreeSet};
+
+pub const PACKET_RECEIPT_SCHEMA_VERSION: &str = "1.0.0";
 
 /// The selection class assigned by the caller to evidence for a view node.
 #[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
@@ -124,8 +126,43 @@ impl PacketLimits {
 #[derive(Clone, Debug)]
 pub struct PacketAssemblyRequest<'a> {
     pub view: &'a CompiledView,
+    pub graph: &'a KnowledgeGraph,
     pub evidence: &'a [EvidenceContent],
     pub limits: PacketLimits,
+    pub dependency_limits: DependencyClosureLimits,
+}
+
+/// Validated limits for dependency expansion beyond compiled View seeds.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct DependencyClosureLimits {
+    max_depth: usize,
+    max_nodes: usize,
+}
+
+impl DependencyClosureLimits {
+    pub const HARD_MAX_DEPTH: usize = 64;
+    pub const HARD_MAX_NODES: usize = 4_096;
+
+    pub fn new(max_depth: usize, max_nodes: usize) -> Result<Self, PacketError> {
+        if max_depth > Self::HARD_MAX_DEPTH || max_nodes == 0 || max_nodes > Self::HARD_MAX_NODES {
+            return Err(PacketError::InvalidDependencyClosureLimits {
+                max_depth,
+                max_nodes,
+            });
+        }
+        Ok(Self {
+            max_depth,
+            max_nodes,
+        })
+    }
+
+    pub fn max_depth(self) -> usize {
+        self.max_depth
+    }
+
+    pub fn max_nodes(self) -> usize {
+        self.max_nodes
+    }
 }
 
 /// The bound that rejected a load-bearing evidence item.
@@ -158,8 +195,14 @@ pub struct ContextItem {
 /// Deterministic accounting for one context packet.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct PacketReceipt {
+    pub schema_version: &'static str,
+    pub seed_ids: Vec<NodeId>,
+    pub admitted_dependency_ids: Vec<NodeId>,
     pub selected_ids: Vec<NodeId>,
     pub omitted_ids: Vec<NodeId>,
+    pub dependency_closure_truncated: bool,
+    pub dependency_max_depth: usize,
+    pub dependency_max_nodes: usize,
     pub raw_bytes: usize,
     pub estimated_tokens: usize,
     pub token_estimate_method: TokenEstimateMethod,
@@ -180,9 +223,15 @@ pub struct ContextPacket {
 /// Deterministic packet assembly failures.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum PacketError {
+    InvalidDependencyClosureLimits {
+        max_depth: usize,
+        max_nodes: usize,
+    },
+    ViewSeedNotInGraph(NodeId),
     MissingSelectedEvidence(NodeId),
     DuplicateSelectedEvidence(NodeId),
     EvidenceNotInView(NodeId),
+    UnrelatedEvidence(NodeId),
     RequiredEvidenceMissingPreservationAnchors(NodeId),
     PreservationAnchorNotInEvidence {
         evidence_id: NodeId,
@@ -214,19 +263,41 @@ impl PacketAssembler {
         &self,
         request: &PacketAssemblyRequest<'_>,
     ) -> Result<ContextPacket, PacketError> {
-        let evidence = index_evidence(request)?;
-        let limits = effective_limits(request);
-        let mut candidates = request
-            .view
-            .items()
-            .iter()
-            .map(|item| Candidate {
-                item,
+        let closure = dependency_closure(request)?;
+        let evidence = index_evidence(request, &closure.admitted_ids)?;
+        let limits = effective_limits(request, closure.admitted_ids.len())?;
+        let mut candidates = Vec::with_capacity(
+            request
+                .view
+                .items()
+                .len()
+                .checked_add(closure.admitted_ids.len())
+                .ok_or(PacketError::ArithmeticOverflow {
+                    operation: "packet candidate capacity",
+                })?,
+        );
+        for item in request.view.items() {
+            candidates.push(Candidate {
+                id: item.id.clone(),
+                provenance: item.provenance.clone(),
                 evidence: evidence
                     .get(&item.id)
-                    .expect("selected evidence was validated before sorting"),
-            })
-            .collect::<Vec<_>>();
+                    .expect("seed evidence was validated before sorting"),
+            });
+        }
+        for id in &closure.admitted_ids {
+            let node = request
+                .graph
+                .node(id)
+                .expect("admitted dependency is a present graph node");
+            candidates.push(Candidate {
+                id: id.clone(),
+                provenance: node.provenance().clone(),
+                evidence: evidence
+                    .get(id)
+                    .expect("dependency evidence was validated before sorting"),
+            });
+        }
         candidates.sort_by(candidate_order);
 
         let mut items = Vec::new();
@@ -236,7 +307,7 @@ impl PacketAssembler {
         let mut raw_bytes = 0usize;
 
         for candidate in candidates {
-            let encoded = encode_item(candidate.item, candidate.evidence);
+            let encoded = encode_item(&candidate.id, &candidate.provenance, candidate.evidence);
             let next_bytes =
                 raw_bytes
                     .checked_add(encoded.len())
@@ -260,17 +331,17 @@ impl PacketAssembler {
             if let Some(bound) = rejection {
                 if candidate.evidence.priority == EvidencePriority::Required {
                     return Err(PacketError::RequiredEvidenceDoesNotFit {
-                        id: candidate.item.id.clone(),
+                        id: candidate.id.clone(),
                         bound,
                     });
                 }
-                omitted_ids.push(candidate.item.id.clone());
+                omitted_ids.push(candidate.id.clone());
                 continue;
             }
 
             let item = ContextItem {
-                id: candidate.item.id.clone(),
-                provenance: candidate.item.provenance.clone(),
+                id: candidate.id.clone(),
+                provenance: candidate.provenance.clone(),
                 content: candidate.evidence.content.clone(),
                 priority: candidate.evidence.priority,
                 authority: candidate.evidence.authority,
@@ -289,34 +360,118 @@ impl PacketAssembler {
             items,
             payload,
             receipt: PacketReceipt {
+                schema_version: PACKET_RECEIPT_SCHEMA_VERSION,
+                seed_ids: request
+                    .view
+                    .items()
+                    .iter()
+                    .map(|item| item.id.clone())
+                    .collect(),
+                admitted_dependency_ids: closure.admitted_ids,
                 selected_ids,
                 omitted_ids: omitted_ids.clone(),
+                dependency_closure_truncated: closure.truncated,
+                dependency_max_depth: request.dependency_limits.max_depth(),
+                dependency_max_nodes: request.dependency_limits.max_nodes(),
                 raw_bytes,
                 estimated_tokens,
                 token_estimate_method: TokenEstimateMethod::BytesDividedByFourCeiling,
                 effective_max_items: limits.max_items,
                 effective_max_bytes: limits.max_bytes,
                 runtime_token_ceiling: limits.runtime_token_ceiling,
-                truncated: request.view.truncated() || !omitted_ids.is_empty(),
+                truncated: request.view.truncated() || closure.truncated || !omitted_ids.is_empty(),
             },
         })
     }
 }
 
 struct Candidate<'a> {
-    item: &'a ViewItem,
+    id: NodeId,
+    provenance: Provenance,
     evidence: &'a EvidenceContent,
 }
 
-fn index_evidence<'a>(
-    request: &'a PacketAssemblyRequest<'a>,
-) -> Result<BTreeMap<NodeId, &'a EvidenceContent>, PacketError> {
-    let selected_ids = request
+struct DependencyClosure {
+    admitted_ids: Vec<NodeId>,
+    truncated: bool,
+}
+
+fn dependency_closure(
+    request: &PacketAssemblyRequest<'_>,
+) -> Result<DependencyClosure, PacketError> {
+    let seeds = request
         .view
         .items()
         .iter()
         .map(|item| item.id.clone())
         .collect::<BTreeSet<_>>();
+    for seed in &seeds {
+        if request.graph.node(seed).is_none() {
+            return Err(PacketError::ViewSeedNotInGraph(seed.clone()));
+        }
+    }
+
+    let mut visited = seeds.clone();
+    let mut frontier = seeds.into_iter().map(|id| (id, 0usize)).collect::<Vec<_>>();
+    let mut cursor = 0usize;
+    let mut admitted = BTreeSet::new();
+    let mut truncated = false;
+    while cursor < frontier.len() {
+        let (source, depth) = frontier[cursor].clone();
+        cursor += 1;
+        for edge_id in request.graph.forward_edges(&source) {
+            let edge = request
+                .graph
+                .edge(edge_id)
+                .expect("graph adjacency references a present edge");
+            if edge.certainty() != EdgeCertainty::Known
+                || !positive_context_relationship(edge.relationship())
+                || request.graph.node(edge.target()).is_none()
+                || visited.contains(edge.target())
+            {
+                continue;
+            }
+            if depth == request.dependency_limits.max_depth()
+                || admitted.len() == request.dependency_limits.max_nodes()
+            {
+                truncated = true;
+                continue;
+            }
+            let target = edge.target().clone();
+            visited.insert(target.clone());
+            admitted.insert(target.clone());
+            frontier.push((target, depth + 1));
+        }
+    }
+    Ok(DependencyClosure {
+        admitted_ids: admitted.into_iter().collect(),
+        truncated,
+    })
+}
+
+fn positive_context_relationship(relationship: EdgeRelationship) -> bool {
+    matches!(
+        relationship,
+        EdgeRelationship::Dependency
+            | EdgeRelationship::Implementation
+            | EdgeRelationship::Replacement
+            | EdgeRelationship::Supersedes
+            | EdgeRelationship::Validation
+            | EdgeRelationship::Reachability
+    )
+}
+
+fn index_evidence<'a>(
+    request: &'a PacketAssemblyRequest<'a>,
+    dependency_ids: &[NodeId],
+) -> Result<BTreeMap<NodeId, &'a EvidenceContent>, PacketError> {
+    let mut selected_ids = request
+        .view
+        .items()
+        .iter()
+        .map(|item| item.id.clone())
+        .collect::<BTreeSet<_>>();
+    selected_ids.extend(dependency_ids.iter().cloned());
     let mut evidence = BTreeMap::new();
     let mut duplicates = BTreeSet::new();
     for item in request.evidence {
@@ -327,13 +482,13 @@ fn index_evidence<'a>(
     if let Some(id) = duplicates.into_iter().next() {
         return Err(PacketError::DuplicateSelectedEvidence(id));
     }
-    for item in request.view.items() {
-        if !evidence.contains_key(&item.id) {
-            return Err(PacketError::MissingSelectedEvidence(item.id.clone()));
+    for id in &selected_ids {
+        if !evidence.contains_key(id) {
+            return Err(PacketError::MissingSelectedEvidence(id.clone()));
         }
     }
     if let Some(id) = evidence.keys().find(|id| !selected_ids.contains(*id)) {
-        return Err(PacketError::EvidenceNotInView(id.clone()));
+        return Err(PacketError::UnrelatedEvidence(id.clone()));
     }
     if let Some(item) = evidence.values().find(|item| {
         item.priority == EvidencePriority::Required && item.preservation_anchors.is_empty()
@@ -356,12 +511,23 @@ fn index_evidence<'a>(
     Ok(evidence)
 }
 
-fn effective_limits(request: &PacketAssemblyRequest<'_>) -> PacketLimits {
-    PacketLimits {
-        max_items: request.limits.max_items.min(request.view.spec().max_items),
+fn effective_limits(
+    request: &PacketAssemblyRequest<'_>,
+    admitted_dependencies: usize,
+) -> Result<PacketLimits, PacketError> {
+    let expanded_view_ceiling = request
+        .view
+        .spec()
+        .max_items
+        .checked_add(admitted_dependencies)
+        .ok_or(PacketError::ArithmeticOverflow {
+            operation: "expanded packet item ceiling",
+        })?;
+    Ok(PacketLimits {
+        max_items: request.limits.max_items.min(expanded_view_ceiling),
         max_bytes: request.limits.max_bytes.min(request.view.spec().max_bytes),
         runtime_token_ceiling: request.limits.runtime_token_ceiling,
-    }
+    })
 }
 
 fn candidate_order(left: &Candidate<'_>, right: &Candidate<'_>) -> std::cmp::Ordering {
@@ -370,15 +536,15 @@ fn candidate_order(left: &Candidate<'_>, right: &Candidate<'_>) -> std::cmp::Ord
         .cmp(&right.evidence.priority)
         .then_with(|| right.evidence.authority.cmp(&left.evidence.authority))
         .then_with(|| right.evidence.freshness.cmp(&left.evidence.freshness))
-        .then_with(|| left.item.id.cmp(&right.item.id))
+        .then_with(|| left.id.cmp(&right.id))
 }
 
-fn encode_item(item: &ViewItem, evidence: &EvidenceContent) -> String {
+fn encode_item(id: &NodeId, provenance: &Provenance, evidence: &EvidenceContent) -> String {
     format!(
         "node={}\nsource={}\nlocator={}\ncontent={}\n",
-        item.id.as_str(),
-        item.provenance.source(),
-        item.provenance.locator(),
+        id.as_str(),
+        provenance.source(),
+        provenance.locator(),
         evidence.content
     )
 }
@@ -394,7 +560,10 @@ mod tests {
         DlpStatus, FidelityStatus, SqzAdapter, SqzAdapterConfig, SqzFailureReason, SqzIdentity,
         SqzPolicy, SqzPort, SqzPortError, SqzPortErrorCode, SqzPortOutput, SqzStatus,
     };
-    use crate::graph::{Confidence, GraphInput, GraphLimits, KnowledgeGraph, NodeInput, NodeRole};
+    use crate::graph::{
+        Confidence, EdgeCertainty, EdgeId, EdgeInput, EdgeRelationship, GraphInput, GraphLimits,
+        KnowledgeGraph, NodeInput, NodeRole,
+    };
     use crate::view::{
         Presentation, ViewCompiler, ViewField, ViewFilter, ViewGrouping, ViewSort, ViewSource,
         ViewSpec,
@@ -414,7 +583,7 @@ mod tests {
         PreservationAnchor::new(id, value).unwrap()
     }
 
-    fn compiled_packet_view() -> CompiledView {
+    fn compiled_packet_view() -> (KnowledgeGraph, CompiledView) {
         let graph = KnowledgeGraph::build(
             GraphInput::new(
                 vec![
@@ -466,19 +635,142 @@ mod tests {
             GraphLimits::new(7, 1).unwrap(),
         )
         .unwrap();
-        ViewCompiler::new().compile(
-            &ViewSpec {
-                source: ViewSource::All,
-                filter: ViewFilter::All,
-                sort: ViewSort::NodeId,
-                grouping: ViewGrouping::None,
-                fields: vec![ViewField::NodeId],
-                presentation: Presentation::Json,
-                max_items: 7,
-                max_bytes: 2_000,
-            },
-            &graph,
+        let view = ViewCompiler::new()
+            .compile(
+                &ViewSpec {
+                    source: ViewSource::All,
+                    filter: ViewFilter::All,
+                    sort: ViewSort::NodeId,
+                    grouping: ViewGrouping::None,
+                    fields: vec![ViewField::NodeId],
+                    presentation: Presentation::Json,
+                    max_items: 7,
+                    max_bytes: 2_000,
+                },
+                &graph,
+            )
+            .unwrap();
+        (graph, view)
+    }
+
+    fn dependency_limits() -> DependencyClosureLimits {
+        DependencyClosureLimits::new(4, 16).unwrap()
+    }
+
+    fn edge_id(value: &str) -> EdgeId {
+        EdgeId::parse(value).unwrap()
+    }
+
+    fn dependency_packet_fixture() -> (KnowledgeGraph, CompiledView, Vec<EvidenceContent>) {
+        let seed = node_id("node.closure.seed");
+        let dependency = node_id("node.closure.dependency");
+        let unrelated = node_id("node.closure.unrelated");
+        let graph = KnowledgeGraph::build(
+            GraphInput::new(
+                vec![
+                    NodeInput::new(
+                        seed.clone(),
+                        NodeRole::Document,
+                        source("seed.md"),
+                        Confidence::new(100).unwrap(),
+                    ),
+                    NodeInput::new(
+                        dependency.clone(),
+                        NodeRole::Symbol,
+                        source("dependency.rs:1"),
+                        Confidence::new(100).unwrap(),
+                    ),
+                    NodeInput::new(
+                        unrelated.clone(),
+                        NodeRole::External,
+                        source("unrelated.md"),
+                        Confidence::new(20).unwrap(),
+                    ),
+                ],
+                vec![
+                    EdgeInput::new(
+                        edge_id("edge.closure.dependency"),
+                        seed.clone(),
+                        dependency.clone(),
+                        source("seed-to-dependency"),
+                        Confidence::new(100).unwrap(),
+                        EdgeCertainty::Known,
+                    )
+                    .with_relationship(EdgeRelationship::Dependency),
+                    EdgeInput::new(
+                        edge_id("edge.closure.cycle"),
+                        dependency.clone(),
+                        seed.clone(),
+                        source("dependency-to-seed"),
+                        Confidence::new(100).unwrap(),
+                        EdgeCertainty::Known,
+                    )
+                    .with_relationship(EdgeRelationship::Implementation),
+                    EdgeInput::new(
+                        edge_id("edge.closure.uncertain"),
+                        seed.clone(),
+                        unrelated.clone(),
+                        source("uncertain"),
+                        Confidence::new(40).unwrap(),
+                        EdgeCertainty::Unknown,
+                    )
+                    .with_relationship(EdgeRelationship::Reachability),
+                    EdgeInput::new(
+                        edge_id("edge.closure.conflict"),
+                        seed.clone(),
+                        unrelated.clone(),
+                        source("conflict"),
+                        Confidence::new(90).unwrap(),
+                        EdgeCertainty::Known,
+                    )
+                    .with_relationship(EdgeRelationship::Conflict),
+                ],
+            ),
+            GraphLimits::new(3, 4).unwrap(),
         )
+        .unwrap();
+        let view = ViewCompiler::new()
+            .compile(
+                &ViewSpec {
+                    source: ViewSource::NodeIds(vec![seed.clone()]),
+                    filter: ViewFilter::All,
+                    sort: ViewSort::NodeId,
+                    grouping: ViewGrouping::None,
+                    fields: vec![ViewField::NodeId],
+                    presentation: Presentation::Json,
+                    max_items: 1,
+                    max_bytes: 1_000,
+                },
+                &graph,
+            )
+            .unwrap();
+        let evidence = vec![
+            EvidenceContent::new(
+                seed,
+                "seed contract",
+                EvidencePriority::Required,
+                20,
+                20,
+                vec![anchor("required.seed", "seed contract")],
+            ),
+            EvidenceContent::new(
+                dependency,
+                "dependency contract",
+                EvidencePriority::Required,
+                10,
+                10,
+                vec![anchor("required.dependency", "dependency contract")],
+            ),
+            EvidenceContent::new(
+                unrelated,
+                "unrelated",
+                EvidencePriority::Related,
+                1,
+                1,
+                vec![],
+            ),
+        ];
+        (graph, view, evidence)
     }
 
     fn packet_evidence() -> Vec<EvidenceContent> {
@@ -587,20 +879,37 @@ mod tests {
 
     #[test]
     fn p2_packet_sqz() {
+        let public_fixture =
+            include_str!("../../../../fixtures/packets/context-packet-sqz-v1.json");
+        assert!(public_fixture.contains("\"schema_version\": \"1.0.0\""));
+        assert!(public_fixture.contains("\"admitted_dependency_ids\""));
+        assert!(public_fixture.contains("\"file:src/support.rs\""));
+        assert!(
+            public_fixture.contains("\"token_estimate_method\": \"bytes-divided-by-four-ceiling\"")
+        );
+        assert!(public_fixture.contains("\"actual_input_tokens\": null"));
+        assert!(public_fixture.contains("\"fidelity_status\": \"passed\""));
+        assert!(public_fixture.contains("\"dlp_status\": \"passed\""));
         assert_eq!(
             PreservationAnchor::new("blank.anchor", " \t"),
             Err(PreservationAnchorError::BlankValue)
         );
-        let view = compiled_packet_view();
+        let (graph, view) = compiled_packet_view();
         let evidence = packet_evidence();
         let assembler = PacketAssembler::new();
         let bounded = assembler
             .assemble(&PacketAssemblyRequest {
                 view: &view,
+                graph: &graph,
                 evidence: &evidence,
                 limits: PacketLimits::new(6, 800, Some(200)),
+                dependency_limits: dependency_limits(),
             })
             .unwrap();
+        assert_eq!(
+            bounded.receipt.schema_version,
+            PACKET_RECEIPT_SCHEMA_VERSION
+        );
         assert_eq!(bounded.items[0].id, node_id("node.beta"));
         assert_eq!(bounded.items[1].id, node_id("node.gamma"));
         assert_eq!(bounded.items[2].id, node_id("node.alpha"));
@@ -635,8 +944,10 @@ mod tests {
         let item_limited = assembler
             .assemble(&PacketAssemblyRequest {
                 view: &view,
+                graph: &graph,
                 evidence: &evidence,
                 limits: PacketLimits::new(5, 2_000, None),
+                dependency_limits: dependency_limits(),
             })
             .unwrap();
         assert_eq!(
@@ -647,8 +958,10 @@ mod tests {
         assert_eq!(
             assembler.assemble(&PacketAssemblyRequest {
                 view: &view,
+                graph: &graph,
                 evidence: &evidence,
                 limits: PacketLimits::new(7, 2_000, Some(1)),
+                dependency_limits: dependency_limits(),
             }),
             Err(PacketError::RequiredEvidenceDoesNotFit {
                 id: node_id("node.beta"),
@@ -658,16 +971,20 @@ mod tests {
         let replay = assembler
             .assemble(&PacketAssemblyRequest {
                 view: &view,
+                graph: &graph,
                 evidence: &evidence,
                 limits: PacketLimits::new(6, 800, Some(200)),
+                dependency_limits: dependency_limits(),
             })
             .unwrap();
         assert_eq!(bounded, replay);
         let byte_limited = assembler
             .assemble(&PacketAssemblyRequest {
                 view: &view,
+                graph: &graph,
                 evidence: &evidence,
                 limits: PacketLimits::new(7, 500, None),
+                dependency_limits: dependency_limits(),
             })
             .unwrap();
         assert_eq!(byte_limited.receipt.omitted_ids, vec![node_id("node.zeta")]);
@@ -675,8 +992,10 @@ mod tests {
         let token_limited = assembler
             .assemble(&PacketAssemblyRequest {
                 view: &view,
+                graph: &graph,
                 evidence: &evidence,
                 limits: PacketLimits::new(7, 2_000, Some(120)),
+                dependency_limits: dependency_limits(),
             })
             .unwrap();
         assert_eq!(
@@ -689,8 +1008,10 @@ mod tests {
         assert_eq!(
             assembler.assemble(&PacketAssemblyRequest {
                 view: &view,
+                graph: &graph,
                 evidence: &oversized_required,
                 limits: PacketLimits::new(7, 200, None),
+                dependency_limits: dependency_limits(),
             }),
             Err(PacketError::RequiredEvidenceDoesNotFit {
                 id: node_id("node.beta"),
@@ -700,8 +1021,10 @@ mod tests {
         assert_eq!(
             assembler.assemble(&PacketAssemblyRequest {
                 view: &view,
+                graph: &graph,
                 evidence: &evidence[1..],
                 limits: PacketLimits::new(7, 2_000, None),
+                dependency_limits: dependency_limits(),
             }),
             Err(PacketError::MissingSelectedEvidence(node_id("node.zeta")))
         );
@@ -710,8 +1033,10 @@ mod tests {
         assert_eq!(
             assembler.assemble(&PacketAssemblyRequest {
                 view: &view,
+                graph: &graph,
                 evidence: &duplicate,
                 limits: PacketLimits::new(7, 2_000, None),
+                dependency_limits: dependency_limits(),
             }),
             Err(PacketError::DuplicateSelectedEvidence(node_id("node.zeta")))
         );
@@ -720,8 +1045,10 @@ mod tests {
         assert_eq!(
             assembler.assemble(&PacketAssemblyRequest {
                 view: &view,
+                graph: &graph,
                 evidence: &unanchored_required,
                 limits: PacketLimits::new(7, 2_000, None),
+                dependency_limits: dependency_limits(),
             }),
             Err(PacketError::RequiredEvidenceMissingPreservationAnchors(
                 node_id("node.alpha")
@@ -733,8 +1060,10 @@ mod tests {
         assert_eq!(
             assembler.assemble(&PacketAssemblyRequest {
                 view: &view,
+                graph: &graph,
                 evidence: &absent_anchor_value,
                 limits: PacketLimits::new(7, 2_000, None),
+                dependency_limits: dependency_limits(),
             }),
             Err(PacketError::PreservationAnchorNotInEvidence {
                 evidence_id: node_id("node.alpha"),
@@ -742,11 +1071,84 @@ mod tests {
             })
         );
 
+        let (closure_graph, closure_view, closure_evidence) = dependency_packet_fixture();
+        let dependency_packet = assembler
+            .assemble(&PacketAssemblyRequest {
+                view: &closure_view,
+                graph: &closure_graph,
+                evidence: &closure_evidence[..2],
+                limits: PacketLimits::new(2, 1_000, None),
+                dependency_limits: DependencyClosureLimits::new(4, 2).unwrap(),
+            })
+            .unwrap();
+        assert_eq!(
+            dependency_packet.receipt.seed_ids,
+            vec![node_id("node.closure.seed")]
+        );
+        assert_eq!(
+            dependency_packet.receipt.admitted_dependency_ids,
+            vec![node_id("node.closure.dependency")]
+        );
+        assert_eq!(
+            dependency_packet.receipt.selected_ids,
+            vec![
+                node_id("node.closure.seed"),
+                node_id("node.closure.dependency")
+            ]
+        );
+        assert_eq!(
+            dependency_packet.items[1].provenance,
+            source("dependency.rs:1")
+        );
+        assert!(!dependency_packet.receipt.dependency_closure_truncated);
+        assert_eq!(
+            assembler.assemble(&PacketAssemblyRequest {
+                view: &closure_view,
+                graph: &closure_graph,
+                evidence: &closure_evidence,
+                limits: PacketLimits::new(3, 1_000, None),
+                dependency_limits: DependencyClosureLimits::new(4, 2).unwrap(),
+            }),
+            Err(PacketError::UnrelatedEvidence(node_id(
+                "node.closure.unrelated"
+            )))
+        );
+        assert_eq!(
+            assembler.assemble(&PacketAssemblyRequest {
+                view: &closure_view,
+                graph: &closure_graph,
+                evidence: &closure_evidence[..2],
+                limits: PacketLimits::new(1, 1_000, None),
+                dependency_limits: DependencyClosureLimits::new(4, 2).unwrap(),
+            }),
+            Err(PacketError::RequiredEvidenceDoesNotFit {
+                id: node_id("node.closure.dependency"),
+                bound: PacketBound::Items,
+            })
+        );
+        let depth_truncated = assembler
+            .assemble(&PacketAssemblyRequest {
+                view: &closure_view,
+                graph: &closure_graph,
+                evidence: &closure_evidence[..1],
+                limits: PacketLimits::new(1, 1_000, None),
+                dependency_limits: DependencyClosureLimits::new(0, 1).unwrap(),
+            })
+            .unwrap();
+        assert!(depth_truncated.receipt.dependency_closure_truncated);
+        assert!(depth_truncated.receipt.admitted_dependency_ids.is_empty());
+        assert_eq!(depth_truncated.receipt.dependency_max_depth, 0);
+        assert_eq!(depth_truncated.receipt.dependency_max_nodes, 1);
+
         let preserved = "node=node.beta\nnode=node.gamma\nalpha\nbeta\ndelta\ngamma\n";
         let applied_port = InMemorySqzPort::output(preserved);
         let applied = SqzAdapter::new(applied_port, sqz_config(SqzPolicy::PublicOn, 200))
             .evaluate(bounded.clone(), 150)
             .unwrap();
+        assert_eq!(
+            applied.receipt.schema_version,
+            crate::adapters::sqz::SQZ_RECEIPT_SCHEMA_VERSION
+        );
         assert_eq!(applied.receipt.status, SqzStatus::Applied);
         assert_eq!(applied.receipt.configured_identity, SqzIdentity::approved());
         assert_eq!(
@@ -790,6 +1192,28 @@ mod tests {
             .unwrap()
             .value
             .starts_with("sqz-fnv1a64-"));
+
+        let returned_identity = SqzIdentity::new(
+            "unapproved-cargo-install:sqz-cli=1.1.1",
+            "sqz 1.1.1",
+            "f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5",
+        );
+        let mut identity_mismatch_port = InMemorySqzPort::output(preserved);
+        identity_mismatch_port.response.as_mut().unwrap().identity = returned_identity.clone();
+        let identity_mismatch =
+            SqzAdapter::new(identity_mismatch_port, sqz_config(SqzPolicy::PublicOn, 200))
+                .evaluate(bounded.clone(), 150)
+                .unwrap();
+        assert_eq!(identity_mismatch.receipt.status, SqzStatus::Failed);
+        assert_eq!(
+            identity_mismatch.receipt.failure_reason,
+            Some(SqzFailureReason::ReturnedIdentityMismatch)
+        );
+        assert_eq!(
+            identity_mismatch.receipt.returned_identity,
+            Some(returned_identity)
+        );
+        assert_eq!(identity_mismatch.packet, bounded);
 
         let off_port = InMemorySqzPort::output(preserved);
         let off_calls = off_port.calls.clone();

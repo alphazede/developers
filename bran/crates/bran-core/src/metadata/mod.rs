@@ -5,6 +5,7 @@ use std::collections::{BTreeMap, BTreeSet};
 pub const DEFAULT_MAX_INPUT_BYTES: usize = 256 * 1024;
 type Fields = Vec<(String, String)>;
 type ParsedHeader = Option<(Fields, FactProvenance)>;
+const MAX_GIT_FACT_BYTES: usize = 256;
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct PackageDefaults(BTreeMap<String, String>);
@@ -27,6 +28,8 @@ impl PackageDefaults {
 pub enum FactProvenance {
     MarkdownFrontmatter,
     CommentedYaml,
+    Language,
+    GitState,
     PackageDefault,
     Filename,
     Symbol,
@@ -66,6 +69,18 @@ pub struct MetadataReport {
     pub proposals: Vec<String>,
 }
 
+/// A repository-state fact supplied by the scanner's caller.
+///
+/// Metadata parsing never reads Git state itself. Keeping this seam explicit
+/// lets an integration attach an already-verified state without granting this
+/// read-only parser filesystem or process access.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct GitStateFact {
+    pub key: String,
+    pub value: String,
+    pub confidence: FactConfidence,
+}
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct MetadataParserRegistry {
     max_input_bytes: usize,
@@ -82,8 +97,27 @@ impl MetadataParserRegistry {
         Self { max_input_bytes }
     }
 
+    pub(crate) fn fingerprint(&self) -> String {
+        format!(
+            "source-metadata-parser-v2:max-input-bytes={}",
+            self.max_input_bytes
+        )
+    }
+
     /// Parses only supplied text; it never reads or writes repository files.
     pub fn parse(&self, path: &str, source: &str, defaults: &PackageDefaults) -> MetadataReport {
+        self.parse_with_git_state(path, source, defaults, None)
+    }
+
+    /// Parses supplied text with an optional caller-supplied repository-state
+    /// fact; it never reads Git state or repository files.
+    pub fn parse_with_git_state(
+        &self,
+        path: &str,
+        source: &str,
+        defaults: &PackageDefaults,
+        git_state: Option<&GitStateFact>,
+    ) -> MetadataReport {
         if source.len() > self.max_input_bytes {
             return MetadataReport {
                 warnings: vec![format!(
@@ -96,7 +130,7 @@ impl MetadataParserRegistry {
         }
 
         let mut warnings = BTreeSet::new();
-        let declared = match headers(source) {
+        let declared = match headers(path, source) {
             Ok(value) => value,
             Err(reason) => {
                 warnings.insert(format!("malformed-metadata: {reason}"));
@@ -131,6 +165,29 @@ impl MetadataParserRegistry {
             warnings
                 .insert("metadata-on-touch: proposal only; source remains unchanged".to_owned());
         }
+        if let Some(language) = language(path) {
+            facts.insert(new_fact(
+                "language",
+                language,
+                FactProvenance::Language,
+                FactConfidence::High,
+            ));
+        }
+        if let Some(git_state) = git_state {
+            if valid_key(&git_state.key)
+                && !git_state.value.is_empty()
+                && git_state.key.len() + git_state.value.len() <= MAX_GIT_FACT_BYTES
+            {
+                facts.insert(new_fact(
+                    &git_state.key,
+                    &git_state.value,
+                    FactProvenance::GitState,
+                    git_state.confidence,
+                ));
+            } else {
+                warnings.insert("invalid-git-state-fact: caller value ignored".to_owned());
+            }
+        }
         infer(path, source, &mut facts);
         boundary(path, source, &mut facts);
         resolve(&mut facts, &mut warnings);
@@ -140,36 +197,70 @@ impl MetadataParserRegistry {
             proposals: declared_keys
                 .is_empty()
                 .then(|| proposal(path))
+                .flatten()
                 .into_iter()
                 .collect(),
         }
     }
 }
 
-fn headers(source: &str) -> Result<ParsedHeader, String> {
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum HeaderSyntax {
+    Markdown,
+    SlashComment,
+    CLikeComment,
+    HashComment,
+}
+
+fn headers(path: &str, source: &str) -> Result<ParsedHeader, String> {
+    match syntax_for(path) {
+        Some(HeaderSyntax::Markdown) => markdown_header(source),
+        Some(HeaderSyntax::SlashComment) => line_comment_header(source, "//"),
+        Some(HeaderSyntax::CLikeComment) => {
+            if source.trim_start().starts_with("/*") {
+                block_comment_header(source)
+            } else {
+                line_comment_header(source, "//")
+            }
+        }
+        Some(HeaderSyntax::HashComment) => line_comment_header(source, "#"),
+        None => Ok(None),
+    }
+}
+
+fn markdown_header(source: &str) -> Result<ParsedHeader, String> {
     let mut lines = source.lines();
     let first = lines
         .next()
         .unwrap_or("")
         .trim_start_matches('\u{feff}')
         .trim();
-    if first == "---" {
-        let mut body = String::new();
-        for line in lines {
-            if line.trim() == "---" {
-                return yaml(&body)
-                    .map(|fields| Some((fields, FactProvenance::MarkdownFrontmatter)));
-            }
-            body.push_str(line);
-            body.push('\n');
-        }
-        return Err("frontmatter is missing its closing delimiter".to_owned());
+    if first != "---" {
+        return Ok(None);
     }
+    let mut body = String::new();
+    for line in lines {
+        if line.trim() == "---" {
+            return yaml(&body).map(|fields| Some((fields, FactProvenance::MarkdownFrontmatter)));
+        }
+        body.push_str(line);
+        body.push('\n');
+    }
+    Err("frontmatter is missing its closing delimiter".to_owned())
+}
 
+fn line_comment_header(source: &str, prefix: &str) -> Result<ParsedHeader, String> {
     let mut body = String::new();
     let mut open = false;
     for line in source.lines() {
-        let Some(line) = uncomment(line) else { break };
+        let Some(line) = line.trim_start().strip_prefix(prefix) else {
+            break;
+        };
+        let line = line
+            .trim_start()
+            .strip_prefix(['/', '!'])
+            .unwrap_or(line)
+            .trim_start();
         if line.trim() == "---" {
             if open {
                 return yaml(&body).map(|fields| Some((fields, FactProvenance::CommentedYaml)));
@@ -187,14 +278,81 @@ fn headers(source: &str) -> Result<ParsedHeader, String> {
     }
 }
 
-fn uncomment(line: &str) -> Option<&str> {
-    let line = line.trim_start();
-    for prefix in ["///", "//!", "//", "/*", "#", ";", "--", "*"] {
-        if let Some(value) = line.strip_prefix(prefix) {
-            return Some(value.trim_start());
-        }
+fn block_comment_header(source: &str) -> Result<ParsedHeader, String> {
+    let mut lines = source.lines();
+    let Some(first) = lines.next() else {
+        return Ok(None);
+    };
+    let Some(first) = first.trim_start().strip_prefix("/*") else {
+        return Ok(None);
+    };
+    if first.trim() != "---" {
+        return Ok(None);
     }
-    None
+    let mut body = String::new();
+    while let Some(raw) = lines.next() {
+        let line = raw.trim_start();
+        if line == "*/" {
+            return Err("commented YAML header is missing its closing delimiter".to_owned());
+        }
+        let Some(line) = line.strip_prefix('*') else {
+            return Err("block YAML header line must begin with '*'".to_owned());
+        };
+        let line = line.trim_start();
+        if line == "---" {
+            let Some(close) = lines.next() else {
+                return Err("block YAML header is missing its closing comment".to_owned());
+            };
+            if close.trim() != "*/" {
+                return Err("block YAML header must close before source".to_owned());
+            }
+            return yaml(&body).map(|fields| Some((fields, FactProvenance::CommentedYaml)));
+        }
+        body.push_str(line);
+        body.push('\n');
+    }
+    Err("commented YAML header is missing its closing delimiter".to_owned())
+}
+
+fn syntax_for(path: &str) -> Option<HeaderSyntax> {
+    let extension = path
+        .rsplit_once('.')
+        .map(|(_, extension)| extension.to_ascii_lowercase())?;
+    match extension.as_str() {
+        "md" | "markdown" => Some(HeaderSyntax::Markdown),
+        "rs" | "java" | "js" | "jsx" | "ts" | "tsx" | "go" | "cs" => {
+            Some(HeaderSyntax::SlashComment)
+        }
+        "c" | "cc" | "cpp" | "cxx" | "h" | "hh" | "hpp" => Some(HeaderSyntax::CLikeComment),
+        "py" | "rb" | "sh" | "bash" | "zsh" | "yaml" | "yml" | "toml" | "ini" | "cfg" => {
+            Some(HeaderSyntax::HashComment)
+        }
+        _ => None,
+    }
+}
+
+fn language(path: &str) -> Option<&'static str> {
+    let extension = path
+        .rsplit_once('.')
+        .map(|(_, extension)| extension.to_ascii_lowercase())?;
+    match extension.as_str() {
+        "md" | "markdown" => Some("markdown"),
+        "rs" => Some("rust"),
+        "c" | "h" => Some("c"),
+        "cc" | "cpp" | "cxx" | "hh" | "hpp" => Some("cpp"),
+        "java" => Some("java"),
+        "js" | "jsx" => Some("javascript"),
+        "ts" | "tsx" => Some("typescript"),
+        "go" => Some("go"),
+        "cs" => Some("csharp"),
+        "py" => Some("python"),
+        "rb" => Some("ruby"),
+        "sh" | "bash" | "zsh" => Some("shell"),
+        "yaml" | "yml" => Some("yaml"),
+        "toml" => Some("toml"),
+        "ini" | "cfg" => Some("ini"),
+        _ => None,
+    }
 }
 
 fn yaml(body: &str) -> Result<Fields, String> {
@@ -469,11 +627,21 @@ fn new_fact(
     }
 }
 
-fn proposal(path: &str) -> String {
-    if path.ends_with(".md") || path.ends_with(".markdown") {
-        "---\ntype: TODO\npublic_boundary: TODO\n---".to_owned()
-    } else {
-        "// ---\n// type: TODO\n// public_boundary: TODO\n// ---".to_owned()
+fn proposal(path: &str) -> Option<String> {
+    match syntax_for(path) {
+        Some(HeaderSyntax::Markdown) => {
+            Some("---\ntype: TODO\npublic_boundary: TODO\n---".to_owned())
+        }
+        Some(HeaderSyntax::SlashComment) => {
+            Some("// ---\n// type: TODO\n// public_boundary: TODO\n// ---".to_owned())
+        }
+        Some(HeaderSyntax::CLikeComment) => {
+            Some("/* ---\n * type: TODO\n * public_boundary: TODO\n * ---\n */".to_owned())
+        }
+        Some(HeaderSyntax::HashComment) => {
+            Some("# ---\n# type: TODO\n# public_boundary: TODO\n# ---".to_owned())
+        }
+        None => None,
     }
 }
 
@@ -512,6 +680,12 @@ mod tests {
 
     #[test]
     fn p2_metadata() {
+        let public_fixture =
+            include_str!("../../../../fixtures/source-metadata/metadata-report-v1.json");
+        assert!(public_fixture.contains("\"schema_version\": \"1.0.0\""));
+        assert!(public_fixture.contains("\"source_path\": \"src/lib.rs\""));
+        assert!(public_fixture.contains("\"state\": \"ambiguous\""));
+        assert!(public_fixture.contains("// type: TODO"));
         let defaults = PackageDefaults::new([
             ("owner".to_owned(), "platform".to_owned()),
             ("type".to_owned(), "default".to_owned()),
@@ -589,6 +763,10 @@ mod tests {
             FactConfidence::Medium
         );
         assert!(warning(&markdown, "ambiguous-fact:"));
+        assert_eq!(
+            fact(&markdown, "language", "markdown", FactProvenance::Language).state,
+            FactState::Candidate
+        );
         let commented = registry.parse(
             "src/auth/service.rs",
             "// ---\n// type: service\n// ---\nuse crate::token;\n#[test]\nfn checks_token() {}\n",
@@ -646,8 +824,41 @@ mod tests {
             FactState::Candidate
         );
         assert_eq!(dependencies.proposals.len(), 1);
+        assert!(dependencies.proposals[0].starts_with("# ---"));
+        let block = registry.parse(
+            "src/lock.c",
+            "/* ---\n * type: service\n * ---\n */\nint lock(void);\n",
+            &defaults,
+        );
+        assert_eq!(
+            fact(&block, "type", "service", FactProvenance::CommentedYaml).state,
+            FactState::Candidate
+        );
+        let hash = registry.parse(
+            "tools/check.py",
+            "# ---\n# type: check\n# ---\ndef test_ok(): pass\n",
+            &defaults,
+        );
+        assert_eq!(
+            fact(&hash, "type", "check", FactProvenance::CommentedYaml).state,
+            FactState::Candidate
+        );
+        let git = registry.parse_with_git_state(
+            "src/lib.rs",
+            "pub fn current() {}\n",
+            &defaults,
+            Some(&GitStateFact {
+                key: "git_ref".to_owned(),
+                value: "abc123".to_owned(),
+                confidence: FactConfidence::Medium,
+            }),
+        );
+        assert_eq!(
+            fact(&git, "git_ref", "abc123", FactProvenance::GitState).state,
+            FactState::Candidate
+        );
         assert!(warning(&dependencies, "metadata-on-touch:"));
-        let malformed = registry.parse("src/lib.rs", "---\ntype: [\n---\n", &defaults);
+        let malformed = registry.parse("docs/lib.md", "---\ntype: [\n---\n", &defaults);
         assert!(warning(&malformed, "malformed-metadata:"));
         let oversized = registry.parse("src/large.rs", &"x".repeat(257), &defaults);
         assert!(oversized.facts.is_empty());

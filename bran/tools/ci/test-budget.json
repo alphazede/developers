@@ -110,7 +110,9 @@
       "category": "unit",
       "classification": "new",
       "source": "crates/bran-core/src/metadata/mod.rs",
-      "support_fixtures": []
+      "support_fixtures": [
+        "fixtures/source-metadata/metadata-report-v1.json"
+      ]
     },
     {
       "stable_id": "P2-SCANNER",
@@ -121,7 +123,9 @@
       "category": "unit",
       "classification": "new",
       "source": "crates/bran-core/src/scan/mod.rs",
-      "support_fixtures": []
+      "support_fixtures": [
+        "fixtures/scanner/scan-snapshot-v1.json"
+      ]
     },
     {
       "stable_id": "P2-GRAPH",
@@ -132,7 +136,9 @@
       "category": "unit",
       "classification": "new",
       "source": "crates/bran-core/src/graph/mod.rs",
-      "support_fixtures": []
+      "support_fixtures": [
+        "fixtures/graph/knowledge-graph-v1.json"
+      ]
     },
     {
       "stable_id": "P2-QUERIES",
@@ -143,7 +149,9 @@
       "category": "unit",
       "classification": "new",
       "source": "crates/bran-core/src/graph/mod.rs",
-      "support_fixtures": []
+      "support_fixtures": [
+        "fixtures/queries/query-result-v1.json"
+      ]
     },
     {
       "stable_id": "P2-PACKET-SQZ",
@@ -154,7 +162,9 @@
       "category": "integration",
       "classification": "new",
       "source": "crates/bran-core/src/packet/mod.rs",
-      "support_fixtures": []
+      "support_fixtures": [
+        "fixtures/packets/context-packet-sqz-v1.json"
+      ]
     },
     {
       "stable_id": "P2-VIEW",
@@ -165,7 +175,9 @@
       "category": "unit",
       "classification": "new",
       "source": "crates/bran-core/src/view/mod.rs",
-      "support_fixtures": []
+      "support_fixtures": [
+        "fixtures/views/compiled-view-v1.json"
+      ]
     }
   ]
 }
