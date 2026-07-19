@@ -202,6 +202,28 @@
       "support_fixtures": []
     },
     {
+      "stable_id": "P3-TUI-ONBOARDING-DIAGNOSTICS",
+      "phase": 3,
+      "slice": "3.2",
+      "runner": "rust",
+      "name": "p3_tui_onboarding_diagnostics",
+      "category": "integration",
+      "classification": "new",
+      "source": "crates/bran-tui/src/lib.rs",
+      "support_fixtures": []
+    },
+    {
+      "stable_id": "P3-TUI-SURFACE",
+      "phase": 3,
+      "slice": "3.2",
+      "runner": "rust",
+      "name": "p3_tui_surface",
+      "category": "integration",
+      "classification": "new",
+      "source": "crates/bran-tui/src/lib.rs",
+      "support_fixtures": []
+    },
+    {
       "stable_id": "P3-OBSIDIAN-EXPORT",
       "phase": 3,
       "slice": "3.3",

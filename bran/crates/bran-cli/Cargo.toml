@@ -6,6 +6,7 @@ license = "MIT OR Apache-2.0"
 
 [dependencies]
 bran-core = { path = "../bran-core", version = "0.1.0" }
+bran-tui = { path = "../bran-tui", version = "0.1.0" }
 
 [[bin]]
 name = "bran"

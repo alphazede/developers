@@ -1,5 +1,6 @@
 use std::collections::BTreeMap;
 use std::ffi::OsStr;
+use std::fmt::Write as _;
 use std::io::IsTerminal;
 use std::path::Path;
 use std::process::ExitCode;
@@ -18,6 +19,10 @@ use bran_core::scan::{RepositoryScanner, ScanConfig, ScanSnapshot};
 use bran_core::schema::YamlValue;
 use bran_core::view::{
     Presentation, ViewCompiler, ViewField, ViewFilter, ViewGrouping, ViewSort, ViewSource, ViewSpec,
+};
+use bran_tui::{
+    quick_safe_config, readiness_receipt, render_surface, resolve_advanced, AdvancedRequest,
+    CapabilityProbe, NativeImage, OperatingProfile, Policy, TerminalCapabilities,
 };
 
 const SMOKE_OUTPUT: &str = r#"{"schema_version":"1.0.0","command":"smoke","status":"ok","data":{},"warnings":[],"failures":[],"provenance":{},"metrics":{}}"#;
@@ -341,16 +346,88 @@ impl CliApp {
                 if it.next().is_some() {
                     return CliResult::usage(UNKNOWN_COMMAND_ERROR.to_owned());
                 }
-                // exact "bran tui" reserved as interactive; returns versioned envelope; no TUI impl
+                if !is_terminal {
+                    return CliResult::operation(make_envelope(
+                        "tui",
+                        "error",
+                        "null",
+                        &[],
+                        &["tui_unavailable_non_tty".to_owned()],
+                        "{}",
+                        "{}",
+                    ));
+                }
                 CliResult {
-                    output: make_envelope("tui", "unavailable", "null", &[], &[], "{}", "{}"),
-                    exit_code: TypedExit::Operation.code(),
-                    is_error: true,
-                    is_interactive: is_terminal,
+                    output: make_tui_surface(),
+                    exit_code: TypedExit::Success.code(),
+                    is_error: false,
+                    is_interactive: true,
                 }
             }
             _ => CliResult::usage(UNKNOWN_COMMAND_ERROR.to_owned()),
         }
+    }
+}
+
+fn make_tui_surface() -> String {
+    let settings = quick_safe_config();
+    let resolved = resolve_advanced(
+        AdvancedRequest::new(settings),
+        CapabilityProbe::default(),
+        Policy::default(),
+    );
+    let receipt = readiness_receipt(&resolved, None);
+    let mut surface = render_surface(tui_terminal_capabilities(), false, NativeImage::Unavailable);
+    let profile = receipt
+        .effective_profile
+        .unwrap_or(receipt.effective.profile);
+
+    let _ = writeln!(surface);
+    let _ = writeln!(surface, "Quick mode readiness");
+    let _ = writeln!(surface, "flow: Quick");
+    let _ = writeln!(surface, "profile: {}", profile_name(profile));
+    let _ = writeln!(
+        surface,
+        "safe defaults: bounded current root, read-only tools, explicit approval"
+    );
+    let _ = writeln!(
+        surface,
+        "offline core usable: {}",
+        resolved.offline_core_usable
+    );
+    let _ = writeln!(surface, "retention: {}", receipt.retention);
+    let _ = writeln!(surface, "data flow: {}", receipt.data_flow);
+    let _ = writeln!(
+        surface,
+        "network/auth/mutation/audio: unavailable in this fallback"
+    );
+    let _ = writeln!(surface, "raw key events unavailable in std-only fallback");
+    let _ = writeln!(
+        surface,
+        "autocomplete key handling unavailable in std-only fallback"
+    );
+    let _ = writeln!(surface, "Ctrl+S voice unavailable in std-only fallback");
+    surface
+}
+
+fn tui_terminal_capabilities() -> TerminalCapabilities {
+    let columns = std::env::var("COLUMNS")
+        .ok()
+        .and_then(|value| value.parse::<u16>().ok())
+        .filter(|columns| *columns > 0)
+        .unwrap_or(80);
+    TerminalCapabilities {
+        columns,
+        unicode: true,
+        no_color: true,
+    }
+}
+
+fn profile_name(profile: OperatingProfile) -> &'static str {
+    match profile {
+        OperatingProfile::OfflineCore => "offline-core",
+        OperatingProfile::CoreSqz => "core-sqz",
+        OperatingProfile::ConnectedAgent => "connected-agent",
     }
 }
 
@@ -1490,7 +1567,7 @@ mod tests {
         assert!(rev.output.contains("\"status\":\"ok\""));
 
         // p3_headless_cli extension only (no new test/table): headless identical under t/f;
-        // exact tui interactive/unavailable; usage remains noninteractive.
+        // exact tui interactive success; non-tty tui unavailable; usage remains noninteractive.
         let s1 = super::CliApp::run_for_terminal(vec!["smoke".to_owned()], true);
         let s2 = super::CliApp::run_for_terminal(vec!["smoke".to_owned()], false);
         assert_eq!(s1.output, s2.output);
@@ -1499,10 +1576,23 @@ mod tests {
         assert!(!s1.is_interactive && !s2.is_interactive);
         let tu = super::CliApp::run_for_terminal(vec!["tui".to_owned()], true);
         assert!(
-            tu.output.contains("\"command\":\"tui\"")
-                && tu.output.contains("\"status\":\"unavailable\"")
+            tu.output.contains("BRAN")
+                && tu.output.contains("ALPHAZEDE.com")
+                && tu.output.contains("Quick mode readiness")
+                && tu.output.contains("bounded current root")
+                && tu.output.contains("raw key events unavailable")
+                && tu.output.contains("Ctrl+S voice unavailable")
         );
-        assert!(tu.is_interactive && tu.exit_code != ExitCode::SUCCESS);
+        assert!(tu.is_interactive);
+        assert_eq!(tu.exit_code, ExitCode::SUCCESS);
+        assert!(!tu.is_error);
+        let tui_non_tty = super::CliApp::run_for_terminal(vec!["tui".to_owned()], false);
+        assert!(tui_non_tty.output.contains("\"command\":\"tui\""));
+        assert!(tui_non_tty.output.contains("\"status\":\"error\""));
+        assert!(tui_non_tty.output.contains("tui_unavailable_non_tty"));
+        assert_eq!(tui_non_tty.exit_code, TypedExit::Operation.code());
+        assert!(tui_non_tty.is_error);
+        assert!(!tui_non_tty.is_interactive);
         let tui_extra =
             super::CliApp::run_for_terminal(vec!["tui".to_owned(), "extra".to_owned()], true);
         assert_eq!(tui_extra.exit_code, TypedExit::Usage.code());

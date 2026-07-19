@@ -7,8 +7,13 @@ name = "bran-cli"
 version = "0.1.0"
 dependencies = [
  "bran-core",
+ "bran-tui",
 ]
 
 [[package]]
 name = "bran-core"
+version = "0.1.0"
+
+[[package]]
+name = "bran-tui"
 version = "0.1.0"

@@ -3,7 +3,7 @@
 set -eu
 
 usage() {
-    printf '%s\n' "usage: $0 --test-budget|--export|--fast|--conformance|--security|--performance|--full" >&2
+    printf '%s\n' "usage: $0 --test-budget|--export|--tui|--fast|--conformance|--security|--performance|--full" >&2
     exit 2
 }
 
@@ -15,6 +15,9 @@ case "$1" in
         ;;
     --export)
         gate_mode='export'
+        ;;
+    --tui)
+        gate_mode='tui'
         ;;
     --fast)
         gate_mode='fast'
@@ -76,13 +79,27 @@ run_export() {
     printf '%s\n' 'PASS Slice 3.3 export gate'
 }
 
+run_tui_journeys() {
+    cargo test --manifest-path "$bran_root/Cargo.toml" -p bran-tui p3_tui_surface
+    cargo test --manifest-path "$bran_root/Cargo.toml" -p bran-tui p3_tui_onboarding_diagnostics
+    cargo test --manifest-path "$bran_root/Cargo.toml" -p bran-cli p3_headless_cli
+}
+
+run_tui() {
+    printf '%s\n' 'TUI: running Slice 3.2 TUI surface and onboarding diagnostics gate.'
+    run_budget
+    run_tui_journeys
+    printf '%s\n' 'PASS Slice 3.2 TUI gate'
+}
+
 run_fast() {
-    printf '%s\n' 'FAST: running Phase 1 through Slice 2.3 gates.'
+    printf '%s\n' 'FAST: running Phase 1 through Slice 3.2 gates.'
 
     run_budget
     cargo fmt --manifest-path "$bran_root/Cargo.toml" --all -- --check
     cargo clippy --manifest-path "$bran_root/Cargo.toml" --workspace --all-targets --all-features -- -D warnings
-    cargo test --manifest-path "$bran_root/Cargo.toml" --workspace --all-features -- --skip p1_conformance
+    run_tui_journeys
+    cargo test --manifest-path "$bran_root/Cargo.toml" --workspace --all-features -- --skip p1_conformance --skip p3_tui_surface --skip p3_tui_onboarding_diagnostics --skip p3_headless_cli
 
     # cargo-deny availability failure (clear) then exact check for licenses bans sources (common fast/full gate)
     if ! command -v cargo-deny >/dev/null 2>&1; then
@@ -94,7 +111,7 @@ run_fast() {
     run_release_contract
     run_public_boundary
 
-    printf '%s\n' 'PASS Phase 1 through Slice 2.3 fast gate'
+    printf '%s\n' 'PASS Phase 1 through Slice 3.2 fast gate'
 }
 
 run_security() {
@@ -141,10 +158,14 @@ case "$gate_mode" in
         run_conformance
         run_security
         run_performance
-        printf '%s\n' 'PASS Phase 1 through Slice 2.3 full gate'
+        printf '%s\n' 'PASS Phase 1 through Slice 3.2 full gate'
         ;;
 esac
 
 if [ "$1" = "--export" ]; then
     run_export
+fi
+
+if [ "$1" = "--tui" ]; then
+    run_tui
 fi
