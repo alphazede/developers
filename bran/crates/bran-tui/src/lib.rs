@@ -6,8 +6,8 @@ pub mod render;
 pub mod settings;
 
 pub use diagnostics::{DiagnosticRecord, DiagnosticStore, Severity};
-pub use domain::{autocomplete, NativeImage, TerminalCapabilities, TuiApp, TuiEvent};
-pub use render::{render_surface, RAVEN_NARROW, RAVEN_PLAIN, RAVEN_WIDE};
+pub use domain::{autocomplete, NativeImage, TerminalCapabilities, TuiAction, TuiApp, TuiEvent};
+pub use render::{render_app, render_surface, RAVEN_NARROW, RAVEN_PLAIN, RAVEN_WIDE};
 pub use settings::{
     apply_settings, apply_settings_using, cancel_or_decide_later, local_practice_query,
     onboarding_complete, quick_safe_config, readiness_receipt, repair_proposal, resolve_advanced,
@@ -152,6 +152,11 @@ mod tests {
         let mut app = TuiApp::default();
         app.handle(TuiEvent::CtrlS);
         assert_eq!(app.status, "Voice shortcut unavailable");
+
+        app.handle(TuiEvent::Resize { columns: 40 });
+        let live = render_app(&app, TerminalCapabilities::wide().no_color());
+        assert!(live.contains(RAVEN_NARROW));
+        assert!(live.ends_with("ALPHAZEDE.com\n"));
 
         let mut normal = TestPort { restored: 0 };
         {
@@ -451,5 +456,71 @@ mod tests {
         let rotated_export = diagnostics.export_text();
         assert!(rotated_export.contains("code=error-one"));
         assert!(rotated_export.contains("code=error-two"));
+
+        let enter = |app: &mut TuiApp, input: &str| {
+            app.input = input.to_owned();
+            app.handle(TuiEvent::Enter);
+        };
+        let mut app = TuiApp::default();
+        enter(&mut app, "");
+        enter(&mut app, "quick");
+        enter(&mut app, "offline");
+        enter(&mut app, "");
+        enter(&mut app, "next");
+        enter(&mut app, "next");
+        enter(&mut app, "local practice");
+        assert_eq!(app.step, OnboardingStep::Apply);
+        enter(&mut app, "not apply");
+        assert_eq!(app.status, "choose a current-step option");
+        enter(&mut app, "apply");
+        assert_eq!(app.take_action(), Some(TuiAction::Apply));
+        assert_eq!(app.step, OnboardingStep::Apply);
+        app.handle(TuiEvent::ApplyFinished { persisted: false });
+        assert_eq!(app.step, OnboardingStep::Diagnose);
+        enter(&mut app, "repair");
+        assert_eq!(app.step, OnboardingStep::Complete);
+        enter(&mut app, "view");
+        assert_eq!(app.take_action(), Some(TuiAction::Query("view".to_owned())));
+        app.handle(TuiEvent::Escape);
+        assert_eq!(app.step, OnboardingStep::ProjectCheck);
+
+        enter(&mut app, "");
+        enter(&mut app, "advanced");
+        enter(&mut app, "core-sqz");
+        enter(&mut app, "-sqz +voice +history +chat");
+        assert!(
+            !app.draft.sqz
+                && app.draft.voice
+                && app.draft.structured_history
+                && app.draft.saved_chat
+        );
+        assert_eq!(app.draft.profile, OperatingProfile::OfflineCore);
+        let configured = app.draft.clone();
+        enter(&mut app, "+voice typo");
+        assert_eq!(app.draft, configured);
+        assert_eq!(app.status, "choose a current-step option");
+        enter(&mut app, "");
+        enter(&mut app, "next");
+        assert!(app.resolved.as_ref().is_some_and(|r| !r.requested.sqz
+            && !r.effective.sqz
+            && r.requested.profile == OperatingProfile::OfflineCore
+            && r.effective.profile == OperatingProfile::OfflineCore
+            && !r.effective.voice));
+        app.handle(TuiEvent::CtrlS);
+        assert_eq!(app.status, "Voice shortcut unavailable");
+        app.capability.voice_available = true;
+        app.step = OnboardingStep::CapabilityCheck;
+        enter(&mut app, "");
+        assert!(app.resolved.as_ref().is_some_and(|r| r.effective.voice));
+        assert!(
+            render_app(&app, TerminalCapabilities::wide().no_color()).contains("Ctrl+S (ready)")
+        );
+        app.handle(TuiEvent::CtrlS);
+        assert_eq!(app.status, "Voice shortcut ready");
+        enter(&mut app, "next");
+        enter(&mut app, "local practice");
+        enter(&mut app, "apply");
+        app.handle(TuiEvent::ApplyFinished { persisted: true });
+        assert_eq!(app.step, OnboardingStep::Complete);
     }
 }
