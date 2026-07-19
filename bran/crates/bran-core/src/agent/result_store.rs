@@ -101,6 +101,7 @@ pub enum ResultStoreError {
     NotFound,
     ContentIdCollision,
     ArithmeticOverflow,
+    BatchCapacityExceeded,
 }
 
 /// Aggregate state only; it never includes stored content.
@@ -121,7 +122,7 @@ pub struct PutResult {
 ///
 /// Storage and the `(created_tick, insertion_order, id)` index are `BTreeMap`s:
 /// lookup/removal are `O(log n)` and each eviction is `O(log n)`.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct MemoryResultStore {
     limits: ResultStoreLimits,
     entries: BTreeMap<ResultId, Entry>,
@@ -130,7 +131,7 @@ pub struct MemoryResultStore {
     next_order: u64,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 struct Entry {
     bytes: Vec<u8>,
     created_tick: u64,
@@ -235,6 +236,25 @@ impl MemoryResultStore {
             id,
             receipt: self.receipt(),
         })
+    }
+
+    /// Smallest atomic batch API: stage on clone, commit only on success.
+    /// Fails batch (no publish) if any returned id was evicted by later batch members.
+    pub fn put_batch(
+        &mut self,
+        payloads: impl IntoIterator<Item = impl AsRef<[u8]>>,
+        now_tick: u64,
+    ) -> Result<Vec<ResultId>, ResultStoreError> {
+        let mut trial = self.clone();
+        let mut ids = vec![];
+        for payload in payloads {
+            ids.push(trial.put(payload, now_tick)?.id);
+        }
+        if ids.iter().any(|id| !trial.entries.contains_key(id)) {
+            return Err(ResultStoreError::BatchCapacityExceeded);
+        }
+        *self = trial;
+        Ok(ids)
     }
 
     pub fn get(&mut self, id: &ResultId, now_tick: u64) -> Result<Vec<u8>, ResultStoreError> {

@@ -624,9 +624,7 @@ fn provider_effective(
 }
 
 fn denied_tool(request: &ToolPolicy, profile: &ToolPolicy) -> bool {
-    ["read", "search", "write", "edit", "shell", "network"]
-        .into_iter()
-        .any(|tool| request.allows(tool) && !profile.allows(tool))
+    request.allowed().any(|tool| !profile.allows(tool))
 }
 
 fn mutation_requested(policy: &ToolPolicy) -> bool {
@@ -761,17 +759,18 @@ fn store_output(
     artifacts: &[super::runtime::LosslessArtifact],
     now_tick: u64,
 ) -> Option<StoredResultRef> {
-    let result_id = store
-        .put(encode_result(answer, citations), now_tick)
-        .ok()?
-        .id;
-    let mut artifact_ids = Vec::with_capacity(artifacts.len());
+    let result_encoded = encode_result(answer, citations);
+    let mut batch: Vec<&[u8]> = vec![result_encoded.as_slice()];
     for artifact in artifacts {
-        let stored = store.put(artifact.bytes(), now_tick).ok()?.id;
-        if stored != *artifact.id() {
+        batch.push(artifact.bytes());
+    }
+    let stored_ids = store.put_batch(batch, now_tick).ok()?;
+    let result_id = stored_ids[0].clone();
+    let artifact_ids: Vec<_> = stored_ids.into_iter().skip(1).collect();
+    for (stored_id, artifact) in artifact_ids.iter().zip(artifacts.iter()) {
+        if *stored_id != *artifact.id() {
             return None;
         }
-        artifact_ids.push(stored);
     }
     StoredResultRef::new(result_id, artifact_ids).ok()
 }
@@ -1371,34 +1370,40 @@ mod tests {
             assert!(rec.stored_result_ref().is_none());
         }
 
-        // --- denied tool: request allows search, profile luna does not
+        // --- denied tool: custom valid name outside the six proves request.allowed subset of profile.allowed
         {
             let auth = FakeAuthStore::always_ok();
             let prov = FakeProviderPort::success(success_out.clone());
             let sqz = FakeAgentSqzPort::passthrough();
             let mut store = MemoryResultStore::new(8, 10000, 2000, 10000).unwrap();
             let ports = RuntimePorts::new(&auth, &prov, &sqz, &mut store);
-            let req = make_request("luna", "search x", make_trusted_opts());
-            let rec = rt
+            let mut opts = make_trusted_opts();
+            opts.tool_policy = ToolPolicy::new(
+                ["read", "search", "custom_tool"],
+                ["edit", "shell", "network"],
+            )
+            .unwrap();
+            let request = make_request("sol", "custom x", opts);
+            let receipt = rt
                 .invoke(
-                    &req,
+                    &request,
                     AgentRuntimeAuthority::new(false, true, false),
                     &registry,
                     || ports,
                     1007,
                 )
                 .unwrap();
-            assert_eq!(auth.calls.get(), 0);
-            assert_eq!(prov.calls.get(), 0);
-            assert_eq!(sqz.calls.get(), 0);
-            match rec.outcome() {
+            match receipt.outcome() {
                 InvocationOutcome::Incomplete { failure, .. } => {
                     assert_eq!(*failure, AgentFailure::DeniedTool);
                 }
                 _ => panic!("expected denied tool"),
             }
-            assert!(rec.inline_result().is_none());
-            assert!(rec.stored_result_ref().is_none());
+            assert_eq!(auth.calls.get(), 0);
+            assert_eq!(prov.calls.get(), 0);
+            assert_eq!(sqz.calls.get(), 0);
+            assert!(receipt.inline_result().is_none());
+            assert!(receipt.stored_result_ref().is_none());
         }
 
         // --- host policy denies requested mutation before ports exist
@@ -1743,6 +1748,70 @@ mod tests {
                 &Attestation::Attested(ReasoningLevel::High)
             );
             assert!(!rec.no_session());
+        }
+
+        // multi-artifact constrained-capacity: exact readback of every returned ID
+        {
+            let first_artifact = LosslessArtifact::new(
+                ArtifactKind::Json,
+                "application/json",
+                b"{\"1\":true}".to_vec(),
+            )
+            .unwrap();
+            let second_artifact = LosslessArtifact::new(
+                ArtifactKind::Json,
+                "application/json",
+                b"{\"2\":true}".to_vec(),
+            )
+            .unwrap();
+            let output = ProviderOutput::with_effective_execution(
+                "ans",
+                vec!["c"],
+                Some("r1"),
+                ProviderExecutionEvidence::new(
+                    Some("sol"),
+                    Some("fixture-provider"),
+                    Some("fixture-sol"),
+                    Some("high"),
+                )
+                .unwrap(),
+                ProviderTokenUsage {
+                    actual_input_tokens: None,
+                    actual_output_tokens: None,
+                },
+                vec![first_artifact.clone(), second_artifact.clone()],
+            )
+            .unwrap();
+            let provider_port = FakeProviderPort::success(output.clone());
+            let auth_store = FakeAuthStore::always_ok();
+            let sqz_port = FakeAgentSqzPort::passthrough();
+            let mut store = MemoryResultStore::new(3, 1000, 500, 10000).unwrap();
+            let ports = RuntimePorts::new(&auth_store, &provider_port, &sqz_port, &mut store);
+            let request = make_request("sol", "ma", make_trusted_opts());
+            let receipt = rt
+                .invoke(
+                    &request,
+                    AgentRuntimeAuthority::new(false, true, false),
+                    &registry,
+                    || ports,
+                    8000,
+                )
+                .unwrap();
+            let stored_ref = receipt.stored_result_ref().unwrap();
+            assert_eq!(stored_ref.artifact_ids().len(), 2);
+            let expected_result = super::encode_result("ans", &["c".to_string()]);
+            let result_id = stored_ref.result_id().clone();
+            let first_artifact_id = stored_ref.artifact_ids()[0].clone();
+            let second_artifact_id = stored_ref.artifact_ids()[1].clone();
+            assert_eq!(store.get(&result_id, 8000).unwrap(), expected_result);
+            assert_eq!(
+                store.get(&first_artifact_id, 8000).unwrap(),
+                b"{\"1\":true}"
+            );
+            assert_eq!(
+                store.get(&second_artifact_id, 8000).unwrap(),
+                b"{\"2\":true}"
+            );
         }
 
         // --- output SQZ governs inline content and result storage
