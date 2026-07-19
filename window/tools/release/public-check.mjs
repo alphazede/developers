@@ -6,6 +6,7 @@ const forbiddenPath = /^(?:\.next|\.local|\.playwright-cli|node_modules|coverage
 export const packedFileAllowlist = [
   "LICENSE",
   "README.md",
+  "e2e/egress-guard.ts",
   "e2e/judge.spec.ts",
   "e2e/privacy.spec.ts",
   "e2e/rhythm.spec.ts",
@@ -137,6 +138,7 @@ const assignment = /(?:"([^"\r\n]+)"|'([^'\r\n]+)'|`([^`\r\n]+)`|([A-Za-z_$][A-Z
 const placeholders = new Set(["string", "number", "boolean", "unknown", "undefined", "null", "never", "void"]);
 const approvedUrls = new Map([
   ["LICENSE", new Set(["http://www.apache.org/licenses/", "http://www.apache.org/licenses/LICENSE-2.0"])],
+  ["e2e/judge.spec.ts", new Set(["https://browser-egress.invalid/http-proof"])],
   ["src/app/layout.tsx", new Set(["http://www.w3.org/2000/svg"])],
   ["src/adapters/google/index.ts", new Set(["https://www.googleapis.com/auth/gmail.addons.current.message.readonly"])],
   ["src/server/connectors/live-runtime.ts", new Set(["https://www.googleapis.com/calendar/v3/calendars/primary/events", "https://oauth2.googleapis.com/revoke", "https://api.github.com", "https://api.linear.app/graphql"])],

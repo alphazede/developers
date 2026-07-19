@@ -141,7 +141,8 @@ describe("release boundary", () => {
   it("keeps the packed runtime file contract exact", async () => {
     const { inspectPackContract, packManifest, packedFileAllowlist } = await import(publicCheckPath.href);
     expect(packedFileAllowlist).toEqual([...packedFileAllowlist].sort());
-    expect(packedFileAllowlist).toHaveLength(128);
+    expect(packedFileAllowlist).toHaveLength(129);
+    expect(packedFileAllowlist).toContain("e2e/egress-guard.ts");
     expect(packedFileAllowlist.some((path: string) => path.startsWith(".local/"))).toBe(false);
     expect(packedFileAllowlist).not.toContain("DESIGN.md");
     expect(packManifest(new URL("../..", import.meta.url).pathname)).toEqual(packedFileAllowlist);
@@ -151,10 +152,14 @@ describe("release boundary", () => {
     expect(inspectPackContract([...packedFileAllowlist, "src/neutral.ts"])).toContain("unexpected packed contract file: src/neutral.ts");
   });
 
-  it("keeps owner-only local state out of git and package ignores", async () => {
+  it("keeps owner-only local state out of git and the package files contract", async () => {
     const root = new URL("../..", import.meta.url);
     expect((await readFile(new URL(".gitignore", root), "utf8")).split(/\r?\n/)).toContain(".local/");
-    expect((await readFile(new URL(".npmignore", root), "utf8")).split(/\r?\n/)).toContain(".local/");
+    const manifest = JSON.parse(await readFile(packagePath, "utf8")) as { files: string[] };
+    expect(manifest.files).not.toContain(".");
+    expect(manifest.files.some((path) => path === ".local" || path.startsWith(".local/"))).toBe(false);
+    const { packManifest } = await import(publicCheckPath.href);
+    expect(packManifest(root.pathname).some((path: string) => path.startsWith(".local/"))).toBe(false);
   });
 
   for (const [name, source, expectedReceipt] of [
