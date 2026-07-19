@@ -257,6 +257,17 @@
       "classification": "new",
       "source": "crates/bran-core/src/agent/coordinator.rs",
       "support_fixtures": []
+    },
+    {
+      "stable_id": "P4-SEALED-RELEASE",
+      "phase": 4,
+      "slice": "4.2",
+      "runner": "python",
+      "name": "test_p4_sealed_release",
+      "category": "contract",
+      "classification": "new",
+      "source": "tools/ci/release_seal.py",
+      "support_fixtures": []
     }
   ]
 }
