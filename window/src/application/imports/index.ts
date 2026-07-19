@@ -19,7 +19,8 @@ export type IcsImportState = Readonly<{
 const HASH = /^[a-f0-9]{64}$/;
 const text = (value: unknown, max = 512): value is string => typeof value === "string" && value.length > 0 && Buffer.byteLength(value) <= max;
 const safe = (value: unknown): value is number => typeof value === "number" && Number.isSafeInteger(value) && value >= 0;
-const exact = (value: object, keys: readonly string[]) => Object.keys(value).sort().join() === [...keys].sort().join();
+const exact = (value: unknown, keys: readonly string[]) => !!value && typeof value === "object" && !Array.isArray(value)
+  && Object.keys(value).sort().join() === [...keys].sort().join();
 const canonicalInstant = (value: unknown): value is string => {
   if (typeof value !== "string" || !value.endsWith("Z")) return false;
   try { return Temporal.Instant.from(value).toString() === value; } catch { return false; }
@@ -38,10 +39,12 @@ const validState = (state: IcsImportState) => {
     || !Array.isArray(state.commitments) || state.commitments.length > 2_000 || !state.receipts || typeof state.receipts !== "object" || Array.isArray(state.receipts)
     || Object.keys(state.receipts).length > 2_000) return false;
   try { state.commitments.forEach((item) => normalizedCommitmentV1Schema.parse(item)); } catch { return false; }
-  return Object.entries(state.receipts).every(([key, stored]) => text(key) && stored && exact(stored, ["fingerprint", "receipt"])
+  const receipts = Object.entries(state.receipts);
+  if (!receipts.every(([key, stored]) => text(key) && stored && exact(stored, ["fingerprint", "receipt"])
     && HASH.test(stored.fingerprint) && exact(stored.receipt, ["schemaVersion", "commandId", "idempotencyKey", "previewHash", "revision", "importedCount"])
     && stored.receipt.schemaVersion === 1 && text(stored.receipt.commandId) && stored.receipt.idempotencyKey === key
-    && HASH.test(stored.receipt.previewHash) && safe(stored.receipt.revision) && safe(stored.receipt.importedCount));
+    && HASH.test(stored.receipt.previewHash) && safe(stored.receipt.revision) && safe(stored.receipt.importedCount))) return false;
+  return new Set(receipts.map(([, stored]) => stored.receipt.commandId)).size === receipts.length;
 };
 
 const validPreview = (preview: IcsPreview) => {
@@ -73,10 +76,11 @@ export const approvePreview = (state: IcsImportState, preview: IcsPreview, comma
     || command.schemaVersion !== 1 || !text(command.commandId) || !text(command.idempotencyKey) || !safe(command.expectedRevision)
     || !HASH.test(command.previewHash) || command.previewHash !== preview.previewHash || command.approved !== true) return fail();
   const fingerprint = createHash("sha256").update(JSON.stringify(command)).digest("hex");
-  const prior = state.receipts[command.idempotencyKey];
-  if (prior) {
-    if (prior.fingerprint !== fingerprint) return fail();
-    return freeze({ nextState: state, receipt: prior.receipt });
+  const priorByKey = state.receipts[command.idempotencyKey];
+  const priorByCommand = Object.values(state.receipts).find((stored) => stored.receipt.commandId === command.commandId);
+  if (priorByKey || priorByCommand) {
+    if (!priorByKey || !priorByCommand || priorByKey.fingerprint !== fingerprint || priorByCommand.fingerprint !== fingerprint) return fail();
+    return freeze({ nextState: state, receipt: priorByKey.receipt });
   }
   if (command.expectedRevision !== state.revision) return fail();
   const existing = new Set(state.commitments.map((item) => item.id));
