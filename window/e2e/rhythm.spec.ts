@@ -1,5 +1,5 @@
 import AxeBuilder from "@axe-core/playwright";
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./egress-guard";
 
 const captureErrors = (page: import("@playwright/test").Page) => {
   const errors: string[] = [];
@@ -62,18 +62,18 @@ test("previews all evidence controls with keyboard focus and truthful live feedb
   expect(errors).toEqual([]);
 });
 
-test("keeps the complete semantic fallback when JavaScript enhancement is disabled", async ({ browser }) => {
-  const context = await browser.newContext({ javaScriptEnabled: false });
-  const page = await context.newPage();
-  const errors = captureErrors(page);
-  await page.goto("/");
-  await expect(page.getByRole("heading", { name: "Rhythm fingerprint" })).toBeVisible();
-  const disclosure = page.getByText(/Exact capacity evidence and complete table/);
-  await disclosure.click();
-  await expect(page.getByRole("table", { name: "Rhythm evidence table" })).toBeVisible();
-  await expect(page.getByText(/Loading optional rhythm chart/)).toBeVisible();
-  expect(errors).toEqual([]);
-  await context.close();
+test.describe("JavaScript-disabled fallback", () => {
+  test.use({ javaScriptEnabled: false });
+  test("keeps the complete semantic fallback when JavaScript enhancement is disabled", async ({ page }) => {
+    const errors = captureErrors(page);
+    await page.goto("/");
+    await expect(page.getByRole("heading", { name: "Rhythm fingerprint" })).toBeVisible();
+    const disclosure = page.getByText(/Exact capacity evidence and complete table/);
+    await disclosure.click();
+    await expect(page.getByRole("table", { name: "Rhythm evidence table" })).toBeVisible();
+    await expect(page.getByText(/Loading optional rhythm chart/)).toBeVisible();
+    expect(errors).toEqual([]);
+  });
 });
 
 test.describe("reduced motion and narrow zoom", () => {

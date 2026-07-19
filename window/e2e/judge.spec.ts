@@ -2,13 +2,13 @@ import AxeBuilder from "@axe-core/playwright";
 import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./egress-guard";
 
 const percentile95 = (samples: number[]) => [...samples].sort((left, right) => left - right)[Math.ceil(samples.length * 0.95) - 1]!;
 const sha256 = (value: string) => createHash("sha256").update(value).digest("hex");
 
-test("@judge completes the fixed synthetic story accessibly without egress or source mutation", async ({ page, request }) => {
-  const storyStarted = performance.now(), errors: string[] = [], denied: string[] = [];
+test("@judge completes the fixed synthetic story accessibly without egress or source mutation", async ({ page, request, egressGuard }) => {
+  const storyStarted = performance.now(), errors: string[] = [];
   const fixtureRoot = join(process.cwd(), "fixtures/jordan-lee");
   const manifestText = await readFile(join(fixtureRoot, "manifest.json"), "utf8");
   const manifest = JSON.parse(manifestText) as { files: Record<string, { sha256: string }> };
@@ -20,13 +20,6 @@ test("@judge completes the fixed synthetic story accessibly without egress or so
 
   page.on("console", (message) => { if (message.type() === "error") errors.push(message.text()); });
   page.on("pageerror", (error) => errors.push(error.message));
-  await page.route("**/*", async (route) => {
-    const url = new URL(route.request().url());
-    const base = new URL(process.env.JUDGE_BASE_URL ?? "http://127.0.0.1:3100");
-    if (!["http:", "https:"].includes(url.protocol) || url.origin === base.origin) return route.continue();
-    denied.push(`${url.protocol}//${url.host}`); await route.abort("blockedbyclient");
-  });
-
   const interactionStarted = performance.now();
   await page.goto("/");
   await expect(page.getByRole("main", { name: "Today" })).toBeVisible();
@@ -113,7 +106,30 @@ test("@judge completes the fixed synthetic story accessibly without egress or so
   const heapBytes = await page.evaluate(() => (performance as Performance & { memory?: { usedJSHeapSize: number } }).memory?.usedJSHeapSize ?? null);
   if (heapBytes !== null) expect(heapBytes).toBeLessThan(256 * 1024 * 1024);
   for (const [name, before] of fixtureBefore) expect(await readFile(join(fixtureRoot, name), "utf8")).toBe(before);
-  expect(denied).toEqual([]); expect(errors).toEqual([]);
+  expect(egressGuard.deniedAttempts).toEqual([]); expect(errors).toEqual([]);
   const storyMs = performance.now() - storyStarted; expect(storyMs).toBeLessThan(180_000);
-  console.info("judge-browser-receipt", JSON.stringify({ storyMs: Math.round(storyMs), initialInteractionMs: Number(initialInteractionMs.toFixed(1)), apiP95: Number(apiP95.toFixed(1)), recommendationP95: recommendationP95 === null ? null : Number(recommendationP95.toFixed(1)), placementP95: Number(placementP95.toFixed(1)), heapMiB: heapBytes === null ? null : Number((heapBytes / 1024 / 1024).toFixed(1)), fixtureHash: sha256(manifestText), projectionHash: sha256(firstProjection), deniedEgress: denied.length }));
+  console.info("judge-browser-receipt", JSON.stringify({ storyMs: Math.round(storyMs), initialInteractionMs: Number(initialInteractionMs.toFixed(1)), apiP95: Number(apiP95.toFixed(1)), recommendationP95: recommendationP95 === null ? null : Number(recommendationP95.toFixed(1)), placementP95: Number(placementP95.toFixed(1)), heapMiB: heapBytes === null ? null : Number((heapBytes / 1024 / 1024).toFixed(1)), fixtureHash: sha256(manifestText), projectionHash: sha256(firstProjection), deniedEgress: egressGuard.deniedAttempts.length }));
+});
+
+test("@judge rejects forbidden browser HTTP and WebSocket attempts", async ({ page, egressGuard }) => {
+  const expected = [
+    "HTTP GET https://browser-egress.invalid/http-proof",
+    "WEBSOCKET wss://browser-egress.invalid/socket-proof",
+  ];
+  egressGuard.expectDenials(...expected);
+  const result = await page.evaluate(async () => {
+    const httpRejected = await fetch("https://browser-egress.invalid/http-proof").then(() => false, () => true);
+    const websocketRejected = await new Promise<boolean>((resolve) => {
+      let settled = false;
+      const finish = (value: boolean) => { if (!settled) { settled = true; resolve(value); } };
+      const socket = new WebSocket("wss://browser-egress.invalid/socket-proof");
+      socket.addEventListener("open", () => finish(false));
+      socket.addEventListener("error", () => finish(true));
+      socket.addEventListener("close", () => finish(true));
+      setTimeout(() => finish(false), 1_000);
+    });
+    return { httpRejected, websocketRejected };
+  });
+  expect(result).toEqual({ httpRejected: true, websocketRejected: true });
+  expect(egressGuard.deniedAttempts).toEqual(expected);
 });

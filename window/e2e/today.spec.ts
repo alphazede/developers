@@ -1,5 +1,5 @@
 import AxeBuilder from "@axe-core/playwright";
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./egress-guard";
 
 test("renders the deterministic Today surface and supports safe native placement", async ({ page }) => {
   const errors: string[] = [];

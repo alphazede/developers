@@ -1,5 +1,5 @@
 import AxeBuilder from "@axe-core/playwright";
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./egress-guard";
 
 test("shows truthful source and privacy controls with confirm-before-change", async ({ page }) => {
   const errors: string[] = [];

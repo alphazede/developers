@@ -8,7 +8,11 @@ export default defineConfig({
     baseURL: "http://127.0.0.1:3100",
     browserName: "chromium",
     headless: true,
-    launchOptions: { executablePath: "/usr/bin/google-chrome" },
+    serviceWorkers: "block",
+    launchOptions: {
+      executablePath: "/usr/bin/google-chrome",
+      args: ["--disable-background-networking", "--disable-component-update", "--disable-default-apps", "--disable-sync", "--no-first-run"],
+    },
     trace: "retain-on-failure",
   },
   webServer: {

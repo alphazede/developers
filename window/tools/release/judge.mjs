@@ -38,12 +38,13 @@ const stop = (child) => new Promise((resolveStop) => {
 
 await access(chromium, constants.X_OK);
 const receiptDirectory = await mkdtemp(join(tmpdir(), "capacity-judge-"));
-const receipt = join(receiptDirectory, "denied-egress");
+const serverReceipt = join(receiptDirectory, "server-denied-egress");
+const browserReceipt = join(receiptDirectory, "browser-denied-egress");
 const environment = Object.fromEntries(inheritedNames.flatMap((name) => process.env[name] === undefined ? [] : [[name, process.env[name]]]));
 Object.assign(environment, {
   APP_RUNTIME_MODE: "synthetic",
   APP_SMOKE_PORT: String(port),
-  APP_NETWORK_RECEIPT: receipt,
+  APP_NETWORK_RECEIPT: serverReceipt,
   NEXT_TELEMETRY_DISABLED: "1",
   NODE_OPTIONS: `--require=${guard}`,
 });
@@ -64,7 +65,12 @@ try {
     await new Promise((resolveWait) => setTimeout(resolveWait, 100));
   }
 
-  const browserEnvironment = { ...environment, JUDGE_BASE_URL: `http://127.0.0.1:${port}`, JUDGE_CHROMIUM_EXECUTABLE: chromium };
+  const browserEnvironment = {
+    ...environment,
+    JUDGE_BASE_URL: `http://127.0.0.1:${port}`,
+    JUDGE_BROWSER_NETWORK_RECEIPT: browserReceipt,
+    JUDGE_CHROMIUM_EXECUTABLE: chromium,
+  };
   delete browserEnvironment.NODE_OPTIONS;
   delete browserEnvironment.APP_NETWORK_RECEIPT;
   await run(process.execPath, [playwright, "test", "--config", config], browserEnvironment);
@@ -72,10 +78,15 @@ try {
   const status = await readFile(`/proc/${server.pid}/status`, "utf8");
   const rssKiB = Number(status.match(/^VmRSS:\s+(\d+)\s+kB$/m)?.[1]);
   if (!Number.isFinite(rssKiB) || rssKiB >= 512 * 1_024) throw new Error(`judge server RSS exceeded limit: ${rssKiB} KiB`);
-  let denied = "";
-  try { denied = await readFile(receipt, "utf8"); } catch (error) { if (error.code !== "ENOENT") throw error; }
-  if (denied.trim()) throw new Error(`judge denied egress: ${denied.trim().split(/\r?\n/).join(", ")}`);
-  console.log(`judge receipt: loopback=127.0.0.1:${port} denied-egress=0 server-rss-mib=${(rssKiB / 1_024).toFixed(1)} elapsed-ms=${Math.round(performance.now() - started)}`);
+  const readDenied = async (path) => {
+    try { return (await readFile(path, "utf8")).trim().split(/\r?\n/).filter(Boolean); }
+    catch (error) { if (error.code === "ENOENT") return []; throw error; }
+  };
+  const serverDenied = await readDenied(serverReceipt);
+  const browserDenied = await readDenied(browserReceipt);
+  if (serverDenied.length > 0) throw new Error(`judge server denied egress: ${serverDenied.join(", ")}`);
+  if (browserDenied.length === 0) throw new Error("judge browser egress guard produced no denial proof");
+  console.log(`judge receipt: loopback=127.0.0.1:${port} server-denied-egress=${serverDenied.length} browser-denied-egress=${browserDenied.length} server-rss-mib=${(rssKiB / 1_024).toFixed(1)} elapsed-ms=${Math.round(performance.now() - started)}`);
 } finally {
   if (server) await stop(server);
   await rm(receiptDirectory, { recursive: true, force: true });
