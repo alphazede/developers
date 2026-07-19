@@ -1,3 +1,4 @@
+.local/
 .next/
 node_modules/
 coverage/

@@ -21,10 +21,17 @@ describe("release boundary", () => {
     expect(loadRuntimeMode({ APP_RUNTIME_MODE: "live" })).toBe("live");
   });
 
-  it("rejects forbidden packed paths and content while allowing focus windows", async () => {
+  it("rejects forbidden packed paths, public content, and credential values", async () => {
     const root = await mkdtemp(join(tmpdir(), "packed-"));
     try {
-      const leaks = ["AlphaZede", "WNDW", "Everest", "WINDOW_RUNTIME_MODE", "/home/example", "private plan", "token=credential", "internal preview"];
+      const leaks = [
+        "AlphaZede", "WNDW", "Everest", "WINDOW_RUNTIME_MODE", "/home/example", "private plan", "internal preview",
+        "token=credential", "secret = 'non-empty'", '"api_key": "key-value"', "password=hunter2",
+        'GITHUB_TOKEN="ghp_1234567890"', "APP_DATA_KEY='data-key-value'", "client_secret=`client-secret-value`",
+        "access-token=bareAccess123", '"data-key": "quoted-data-key"', "clientSecret='client-value'",
+        'googleClientSecret="google-client-value"', "linearAccessToken='linear-access-value'", "someServiceApiKey=`service-api-value`",
+        "googleRefreshToken=bareRefresh123", "oauthAccessToken=bareOauth123", 'backupServicePassword="backup-password"', "storageServiceDataKey=bareDataKey123",
+      ];
       await Promise.all([
         writeFile(join(root, "safe.txt"), "daily focus windows"),
         ...leaks.map((content, index) => writeFile(join(root, `leak-${index}.txt`), content)),
@@ -35,13 +42,82 @@ describe("release boundary", () => {
     } finally { await rm(root, { recursive: true, force: true }); }
   });
 
+  it("allows credential type declarations, identifiers, empty values, and error codes", async () => {
+    const root = await mkdtemp(join(tmpdir(), "packed-safe-"));
+    try {
+      const safe = [
+        "type Envelope = { token: string; apiKey?: string; password: string; GITHUB_TOKEN: string; APP_DATA_KEY?: Buffer; client_secret: CustomSecret; accessToken: TokenValue; dataKey: Buffer }",
+        "const equalSecret = constantTimeEqual",
+        'const codes = ["invalid-token", "missing-client_secret", "bad-access-token"]',
+        'const token = ""; const GITHUB_TOKEN = ""; const APP_DATA_KEY = \'\'; const client_secret = ``',
+        "const accessToken = undefined; const dataKey = null",
+        "type CamelCredentials = { googleClientSecret: string; linearAccessToken: AccessToken; someServiceApiKey?: string; googleRefreshToken: TokenValue; oauthAccessToken: string; backupServicePassword: string; storageServiceDataKey: Buffer }",
+        'const googleClientSecret = ""; const linearAccessToken = \'\'; const someServiceApiKey = ``',
+        'const someServiceEndpoint = "public"; const customerApiKeyStatus = "missing"; const credentialHelper = "safe"',
+      ];
+      await Promise.all(safe.map((content, index) => writeFile(join(root, `safe-${index}.txt`), content)));
+      const { inspectPackedFiles } = await import(publicCheckPath.href);
+      expect(await inspectPackedFiles(root, safe.map((_, index) => `safe-${index}.txt`))).toEqual([]);
+    } finally { await rm(root, { recursive: true, force: true }); }
+  });
+
+  it("classifies credential keys across case styles, acronyms, and value forms", async () => {
+    const root = await mkdtemp(join(tmpdir(), "packed-credential-table-"));
+    const cases = [
+      ["upper snake", 'GITHUB_TOKEN="ghp_1234567890"'],
+      ["upper multiword snake", "APP_DATA_KEY='data-key-value'"],
+      ["lower snake template", "client_secret=`client-secret-value`"],
+      ["kebab bare", "access-token=bareAccess123"],
+      ["short camel password", 'dbPassword="db-password-value"'],
+      ["short camel token", "serviceToken='service-token-value'"],
+      ["camel API key", "myApiKey=`my-api-value`"],
+      ["camel acronym token", "githubOAuthAccessToken=bareOauth123"],
+      ["multiword camel secret", 'googleClientSecret="google-client-value"'],
+      ["multiword camel access", "linearAccessToken='linear-access-value'"],
+      ["multiword camel API", "someServiceApiKey=`service-api-value`"],
+      ["multiword camel refresh", "googleRefreshToken=bareRefresh123"],
+      ["OAuth camel access", "oauthAccessToken=bareOauth456"],
+    ] as const;
+    try {
+      await Promise.all(cases.map(([, content], index) => writeFile(join(root, `case-${index}.txt`), content)));
+      const { inspectPackedFiles } = await import(publicCheckPath.href);
+      const failures = await inspectPackedFiles(root, cases.map((_, index) => `case-${index}.txt`));
+      expect(failures).toEqual(cases.map((_, index) => `forbidden packed content: case-${index}.txt`));
+    } finally { await rm(root, { recursive: true, force: true }); }
+  });
+
+  it("keeps declarations, function identifiers, errors, placeholders, and unrelated camel case safe", async () => {
+    const root = await mkdtemp(join(tmpdir(), "packed-credential-negatives-"));
+    const cases = [
+      "type Values = { token: string; tokenEnvelope: SomeCredentialType; serviceToken: SomeCredentialType; myApiKey?: string; githubOAuthAccessToken: AccessToken }",
+      "const equalSecret = constantTimeEqual; const compareClientSecret = constantTimeEqual",
+      'const codes = ["invalid-token", "missing-client_secret", "bad-access-token"]',
+      'const token = ""; const dbPassword = \'\'; const myApiKey = ``',
+      'const someServiceEndpoint = "public"; const customerApiKeyStatus = "missing"; const credentialHelper = "safe"',
+    ] as const;
+    try {
+      await Promise.all(cases.map((content, index) => writeFile(join(root, `case-${index}.txt`), content)));
+      const { inspectPackedFiles } = await import(publicCheckPath.href);
+      expect(await inspectPackedFiles(root, cases.map((_, index) => `case-${index}.txt`))).toEqual([]);
+    } finally { await rm(root, { recursive: true, force: true }); }
+  });
+
   it("keeps the packed runtime file contract exact", async () => {
-    const { inspectPackContract, packedFileAllowlist } = await import(publicCheckPath.href);
+    const { inspectPackContract, packManifest, packedFileAllowlist } = await import(publicCheckPath.href);
     expect(packedFileAllowlist).toEqual([...packedFileAllowlist].sort());
+    expect(packedFileAllowlist).toHaveLength(23);
+    expect(packedFileAllowlist.some((path: string) => path.startsWith(".local/"))).toBe(false);
+    expect(packManifest(new URL("../..", import.meta.url).pathname)).toEqual(packedFileAllowlist);
     expect(inspectPackContract(packedFileAllowlist)).toEqual([]);
     expect(inspectPackContract(packedFileAllowlist.filter((path: string) => path !== "src/app/page.tsx"))).toContain("missing packed contract file: src/app/page.tsx");
     expect(inspectPackContract([...packedFileAllowlist, "fixtures/neutral.json"])).toContain("unexpected packed contract file: fixtures/neutral.json");
     expect(inspectPackContract([...packedFileAllowlist, "src/neutral.ts"])).toContain("unexpected packed contract file: src/neutral.ts");
+  });
+
+  it("keeps owner-only local state out of git and package ignores", async () => {
+    const root = new URL("../..", import.meta.url);
+    expect((await readFile(new URL(".gitignore", root), "utf8")).split(/\r?\n/)).toContain(".local/");
+    expect((await readFile(new URL(".npmignore", root), "utf8")).split(/\r?\n/)).toContain(".local/");
   });
 
   for (const [name, source, expectedReceipt] of [
