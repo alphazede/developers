@@ -893,6 +893,10 @@ mod tests {
         assert!(public_fixture.contains("\"actual_input_tokens\": null"));
         assert!(public_fixture.contains("\"fidelity_status\": \"passed\""));
         assert!(public_fixture.contains("\"dlp_status\": \"passed\""));
+        assert!(public_fixture.contains("\"algorithm\": \"sha256\""));
+        assert!(public_fixture.contains(
+            "\"value\": \"0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef\""
+        ));
         assert_eq!(
             PreservationAnchor::new("blank.anchor", " \t"),
             Err(PreservationAnchorError::BlankValue)

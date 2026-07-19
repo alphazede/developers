@@ -1696,6 +1696,18 @@ mod tests {
                 output_sqz.sqz_id.as_ref().unwrap().value,
                 ResultId::sha256(success_answer.as_bytes()).value()
             );
+            let receipt_json = rec.to_json();
+            assert!(receipt_json.contains("\"monotonic_call_latency_ns\":0"));
+            assert!(receipt_json.contains("\"policy\":\"public-on\""));
+            assert!(receipt_json.contains("\"status\":\"applied\""));
+            assert!(receipt_json.contains("\"fidelity_status\":\"passed\""));
+            assert!(receipt_json.contains("\"dlp_status\":\"passed\""));
+            let input_sha256 = input_sqz.sqz_id.as_ref().unwrap().value.as_str();
+            assert_eq!(input_sha256.len(), 64);
+            assert!(input_sha256
+                .bytes()
+                .all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase()));
+            assert!(receipt_json.contains(&format!("\"value\":\"{}\"", input_sha256)));
             let inline = rec.inline_result().expect("must have inline");
             assert_eq!(inline.answer(), "The answer is 42 with citations.");
             assert_eq!(

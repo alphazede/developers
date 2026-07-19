@@ -60,8 +60,8 @@
     "requested_max_output_bytes": 200,
     "effective_max_output_bytes": 200,
     "sqz_id": {
-      "algorithm": "fnv1a64-noncryptographic",
-      "value": "sqz-fnv1a64-0123456789abcdef"
+      "algorithm": "sha256",
+      "value": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
     }
   }
 }

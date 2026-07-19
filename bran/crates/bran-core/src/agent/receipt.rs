@@ -176,8 +176,8 @@ impl InlineResult {
         if citations.len() > 128 {
             return Err(ReceiptError { _p: () });
         }
-        for c in &citations {
-            if c.trim().is_empty() || c.len() > 1024 {
+        for citation in &citations {
+            if citation.trim().is_empty() || citation.len() > 1024 {
                 return Err(ReceiptError { _p: () });
             }
         }
@@ -254,8 +254,16 @@ impl DelegationReceipt {
         if parts.provenance.len() > 128 {
             return Err(ReceiptError { _p: () });
         }
-        for p in &parts.provenance {
-            if !is_valid_identity(p) {
+        for entry in &parts.provenance {
+            if !is_valid_identity(entry) {
+                return Err(ReceiptError { _p: () });
+            }
+        }
+        for sqz_receipt in [parts.sqz.input.as_ref(), parts.sqz.output.as_ref()]
+            .into_iter()
+            .flatten()
+        {
+            if sqz_receipt.monotonic_call_latency.as_nanos() > u64::MAX as u128 {
                 return Err(ReceiptError { _p: () });
             }
         }
@@ -397,7 +405,7 @@ fn string(json: &mut String, value: &str) {
             '\n' => json.push_str("\\n"),
             '\u{0c}' => json.push_str("\\f"),
             '\r' => json.push_str("\\r"),
-            ch if ch <= '\u{1f}' => {
+            ch if ch <= '\u{1f}' || ch == '\u{7f}' => {
                 use std::fmt::Write as _;
                 write!(json, "\\u{:04x}", ch as u32).expect("writing to String cannot fail");
             }
@@ -653,16 +661,16 @@ fn sqz(json: &mut String, receipt: &SqzReceipt) {
         None => json.push_str("null"),
     }
     json.push(',');
-    key(json, "monotonic_call_latency");
-    json.push('{');
-    field_u64(json, "secs", receipt.monotonic_call_latency.as_secs());
+    key(json, "monotonic_call_latency_ns");
+    let monotonic_call_latency_ns = u64::try_from(receipt.monotonic_call_latency.as_nanos())
+        .expect(
+            "monotonic_call_latency_ns fits in u64 because DelegationReceipt::new validates it",
+        );
+    {
+        use std::fmt::Write as _;
+        write!(json, "{monotonic_call_latency_ns}").expect("writing to String cannot fail");
+    }
     json.push(',');
-    field_u64(
-        json,
-        "nanos",
-        u64::from(receipt.monotonic_call_latency.subsec_nanos()),
-    );
-    json.push_str("},");
     field_usize(json, "raw_bytes", receipt.raw_bytes);
     json.push(',');
     field_option_usize(
@@ -746,29 +754,31 @@ fn sqz(json: &mut String, receipt: &SqzReceipt) {
 fn sqz_failure_reason(json: &mut String, reason: &crate::adapters::SqzFailureReason) {
     use crate::adapters::{SqzFailureReason, SqzPortErrorCode};
 
-    let (kind, code) = match reason {
-        SqzFailureReason::ConfiguredIdentityMismatch => ("configured_identity_mismatch", None),
-        SqzFailureReason::ReturnedIdentityMismatch => ("returned_identity_mismatch", None),
-        SqzFailureReason::PortUnavailable(code) => ("port_unavailable", Some(*code)),
-        SqzFailureReason::FidelityAnchorsUnavailable => ("fidelity_anchors_unavailable", None),
-        SqzFailureReason::MissingFidelityAnchors => ("missing_fidelity_anchors", None),
+    let (kind, port_error_code_opt) = match reason {
+        SqzFailureReason::ConfiguredIdentityMismatch => ("configured-identity-mismatch", None),
+        SqzFailureReason::ReturnedIdentityMismatch => ("returned-identity-mismatch", None),
+        SqzFailureReason::PortUnavailable(code) => ("port-unavailable", Some(*code)),
+        SqzFailureReason::FidelityAnchorsUnavailable => ("fidelity-anchors-unavailable", None),
+        SqzFailureReason::MissingFidelityAnchors => ("missing-fidelity-anchors", None),
         SqzFailureReason::FidelityAnchorMissingFromInput => {
-            ("fidelity_anchor_missing_from_input", None)
+            ("fidelity-anchor-missing-from-input", None)
         }
-        SqzFailureReason::ConflictingFidelityAnchorIds => ("conflicting_fidelity_anchor_ids", None),
-        SqzFailureReason::DlpFindings => ("dlp_findings", None),
-        SqzFailureReason::OutputExceedsBound => ("output_exceeds_bound", None),
+        SqzFailureReason::ConflictingFidelityAnchorIds => ("conflicting-fidelity-anchor-ids", None),
+        SqzFailureReason::DlpFindings => ("dlp-findings", None),
+        SqzFailureReason::OutputExceedsBound => ("output-exceeds-bound", None),
     };
     json.push('{');
     field_str(json, "kind", kind);
-    json.push(',');
-    key(json, "port_error_code");
-    match code {
-        Some(SqzPortErrorCode::Unavailable) => string(json, "unavailable"),
-        Some(SqzPortErrorCode::Timeout) => string(json, "timeout"),
-        Some(SqzPortErrorCode::ExecutionFailed) => string(json, "execution_failed"),
-        Some(SqzPortErrorCode::InvalidOutput) => string(json, "invalid_output"),
-        None => json.push_str("null"),
+    if let Some(port_error_code) = port_error_code_opt {
+        json.push(',');
+        key(json, "port_error_code");
+        let port_error_code_name = match port_error_code {
+            SqzPortErrorCode::Unavailable => "unavailable",
+            SqzPortErrorCode::Timeout => "timeout",
+            SqzPortErrorCode::ExecutionFailed => "execution-failed",
+            SqzPortErrorCode::InvalidOutput => "invalid-output",
+        };
+        string(json, port_error_code_name);
     }
     json.push('}');
 }
@@ -785,9 +795,9 @@ fn sqz_identity(json: &mut String, identity: &crate::adapters::SqzIdentity) {
 
 fn sqz_policy(policy: crate::adapters::SqzPolicy) -> &'static str {
     match policy {
-        crate::adapters::SqzPolicy::PublicOff => "public_off",
-        crate::adapters::SqzPolicy::PublicOn => "public_on",
-        crate::adapters::SqzPolicy::InternalLocked => "internal_locked",
+        crate::adapters::SqzPolicy::PublicOff => "public-off",
+        crate::adapters::SqzPolicy::PublicOn => "public-on",
+        crate::adapters::SqzPolicy::InternalLocked => "internal-locked",
     }
 }
 
@@ -795,15 +805,15 @@ fn sqz_status(status: SqzStatus) -> &'static str {
     match status {
         SqzStatus::Off => "off",
         SqzStatus::Applied => "applied",
-        SqzStatus::NotBeneficial => "not_beneficial",
+        SqzStatus::NotBeneficial => "not-beneficial",
         SqzStatus::Failed => "failed",
     }
 }
 
 fn fidelity_status(status: FidelityStatus) -> &'static str {
     match status {
-        FidelityStatus::NotEvaluated => "not_evaluated",
-        FidelityStatus::RequiredButUnavailable => "required_but_unavailable",
+        FidelityStatus::NotEvaluated => "not-evaluated",
+        FidelityStatus::RequiredButUnavailable => "required-but-unavailable",
         FidelityStatus::Passed => "passed",
         FidelityStatus::Missing => "missing",
     }
@@ -811,8 +821,8 @@ fn fidelity_status(status: FidelityStatus) -> &'static str {
 
 fn dlp_status(status: DlpStatus) -> &'static str {
     match status {
-        DlpStatus::NotEvaluated => "not_evaluated",
-        DlpStatus::InputPassed => "input_passed",
+        DlpStatus::NotEvaluated => "not-evaluated",
+        DlpStatus::InputPassed => "input-passed",
         DlpStatus::Passed => "passed",
         DlpStatus::Findings => "findings",
     }

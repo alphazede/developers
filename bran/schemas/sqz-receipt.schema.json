@@ -56,8 +56,8 @@
       "additionalProperties": false,
       "required": ["algorithm", "value"],
       "properties": {
-        "algorithm": { "const": "fnv1a64-noncryptographic" },
-        "value": { "type": "string", "pattern": "^sqz-fnv1a64-[0-9a-f]{16}$" }
+        "algorithm": { "const": "sha256" },
+        "value": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
       }
     }
   }
