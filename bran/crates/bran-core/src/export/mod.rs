@@ -120,11 +120,7 @@ pub fn export_to_obsidian(
     let mut path_set: BTreeMap<String, ()> = BTreeMap::new();
     let mut node_paths: BTreeMap<NodeId, String> = BTreeMap::new();
     for node in nodes {
-        if has_public_boundary_canary(node.id.as_str()) {
-            return Err(ExportError::DlpViolation(
-                "synthetic canary in node identity".to_owned(),
-            ));
-        }
+        validate_emitted_string(node.id.as_str())?;
         if node_paths.contains_key(&node.id) {
             return Err(ExportError::InvalidIdentity(format!(
                 "duplicate node id: {}",
@@ -173,19 +169,10 @@ pub fn export_to_obsidian(
     }
 
     for edge in edges {
-        if [
-            edge.id.as_str(),
-            edge.source.as_str(),
-            edge.target.as_str(),
-            edge.link_target.as_str(),
-        ]
-        .iter()
-        .any(|value| has_public_boundary_canary(value))
-        {
-            return Err(ExportError::DlpViolation(
-                "synthetic canary in edge identity or link target".to_owned(),
-            ));
-        }
+        validate_emitted_string(edge.id.as_str())?;
+        validate_emitted_string(edge.source.as_str())?;
+        validate_emitted_string(edge.target.as_str())?;
+        validate_emitted_string(edge.link_target.as_str())?;
         if !node_paths.contains_key(&edge.source) {
             return Err(ExportError::InvalidIdentity(format!(
                 "edge source missing in nodes: {}",
@@ -334,31 +321,12 @@ fn check_public_boundary_and_dlp(
     fm: &BTreeMap<String, String>,
     body: &str,
 ) -> Result<(), ExportError> {
-    // Canaries anywhere -> DlpViolation (distinct from boundary).
-    if has_public_boundary_canary(path) || has_public_boundary_canary(body) {
-        return Err(ExportError::DlpViolation("synthetic canary".to_owned()));
-    }
+    // Shared emitted-string validator covers canary + important_boundary for path/body/fm.
+    validate_emitted_string(path)?;
+    validate_emitted_string(body)?;
     for (k, v) in fm {
-        if has_public_boundary_canary(k) || has_public_boundary_canary(v) {
-            return Err(ExportError::DlpViolation(
-                "synthetic canary in frontmatter".to_owned(),
-            ));
-        }
-    }
-
-    // important_boundary always boundary violation.
-    let has_important = |s: &str| s.contains("important_boundary");
-    if has_important(path) || has_important(body) {
-        return Err(ExportError::PublicBoundaryViolation(
-            "important_boundary".to_owned(),
-        ));
-    }
-    for (k, v) in fm {
-        if k == "important_boundary" || has_important(v) {
-            return Err(ExportError::PublicBoundaryViolation(format!(
-                "frontmatter key or value: {k}"
-            )));
-        }
+        validate_emitted_string(k)?;
+        validate_emitted_string(v)?;
     }
 
     // public_boundary only allowed value is exactly "public"; non-public rejected.
@@ -376,6 +344,20 @@ fn has_public_boundary_canary(value: &str) -> bool {
     PUBLIC_BOUNDARY_CANARY_FIXTURE
         .lines()
         .any(|line| !line.is_empty() && value.contains(line))
+}
+
+/// Shared emitted-string validator for important_boundary + DLP (canary) policy.
+/// Applied to every node/edge identity, source, target, link, path, body, fm key+value.
+fn validate_emitted_string(value: &str) -> Result<(), ExportError> {
+    if has_public_boundary_canary(value) {
+        return Err(ExportError::DlpViolation("synthetic canary".to_owned()));
+    }
+    if value.contains("important_boundary") {
+        return Err(ExportError::PublicBoundaryViolation(
+            "important_boundary".to_owned(),
+        ));
+    }
+    Ok(())
 }
 
 fn build_node_markdown(node: &ExportNode, edges: &[ExportEdge]) -> String {
@@ -460,27 +442,41 @@ fn build_graph_markdown(nodes: &[ExportNode], edges: &[ExportEdge]) -> String {
 
 /// Result of independent reparse over an exported bundle.
 /// Identities and link targets must round-trip exactly for truth.
+/// Retains exact edge id/source/target/link records and node frontmatter.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Reparsed {
     pub node_ids: Vec<NodeId>,
     pub edge_ids: Vec<EdgeId>,
     pub link_targets: Vec<String>,
+    /// Exact edge records (id, source, target, link_target) for round-trip.
+    pub edge_records: Vec<(EdgeId, NodeId, NodeId, String)>,
+    /// Full node frontmatter recovered for frontmatter truth verification.
+    pub node_frontmatter: BTreeMap<NodeId, BTreeMap<String, String>>,
 }
 
 /// Reparse a produced bundle back to node/edge identities and declared link targets.
 /// Recovers exclusively from bran_node_id + bran_edge_* records (no graph nav wikilinks).
-/// Validates all four fields in edge records (ids + target syntax).
+/// Validates all four fields in edge records (ids + target syntax) and rejects
+/// edges whose endpoints do not exist. Applies emitted-string policy checks.
 pub fn reparse_obsidian(bundle: &ObsidianBundle) -> Result<Reparsed, ExportError> {
     let mut node_set: BTreeMap<NodeId, ()> = BTreeMap::new();
-    let mut edge_set: BTreeMap<EdgeId, ()> = BTreeMap::new();
+    let mut node_fms: BTreeMap<NodeId, BTreeMap<String, String>> = BTreeMap::new();
+    let mut edge_map: BTreeMap<EdgeId, (NodeId, NodeId, String)> = BTreeMap::new();
     let mut link_set: BTreeMap<String, ()> = BTreeMap::new();
 
     for content in bundle.docs().values() {
         let fm = parse_frontmatter_block(content);
         if let Some(id_str) = fm.get("bran_node_id") {
+            validate_emitted_string(id_str)?;
             match NodeId::parse(id_str.clone()) {
                 Ok(nid) => {
-                    node_set.insert(nid, ());
+                    node_set.insert(nid.clone(), ());
+                    // Validate all frontmatter strings for policy on reparse too.
+                    for (k, v) in &fm {
+                        validate_emitted_string(k)?;
+                        validate_emitted_string(v)?;
+                    }
+                    node_fms.insert(nid, fm.clone());
                 }
                 Err(_) => {
                     return Err(ExportError::InvalidIdentity(id_str.clone()));
@@ -494,24 +490,58 @@ pub fn reparse_obsidian(bundle: &ObsidianBundle) -> Result<Reparsed, ExportError
                     if parts.len() != 4 {
                         return Err(ExportError::InvalidIdentity(v.clone()));
                     }
+                    // Shared validator + exact record parse for all four fields.
+                    validate_emitted_string(parts[0])?;
+                    validate_emitted_string(parts[1])?;
+                    validate_emitted_string(parts[2])?;
+                    validate_emitted_string(parts[3])?;
                     let eid = EdgeId::parse(parts[0].to_owned())
                         .map_err(|_| ExportError::InvalidIdentity(parts[0].to_owned()))?;
-                    let _src = NodeId::parse(parts[1].to_owned())
+                    let src = NodeId::parse(parts[1].to_owned())
                         .map_err(|_| ExportError::InvalidIdentity(parts[1].to_owned()))?;
-                    let _tgt = NodeId::parse(parts[2].to_owned())
+                    let tgt = NodeId::parse(parts[2].to_owned())
                         .map_err(|_| ExportError::InvalidIdentity(parts[2].to_owned()))?;
                     validate_obsidian_target(parts[3])?;
-                    edge_set.insert(eid, ());
+                    if edge_map.contains_key(&eid) {
+                        return Err(ExportError::InvalidIdentity(format!(
+                            "duplicate edge id in records: {}",
+                            eid.as_str()
+                        )));
+                    }
+                    edge_map.insert(eid, (src, tgt, parts[3].to_string()));
                     link_set.insert(parts[3].to_string(), ());
                 }
             }
         }
     }
 
+    // Reparse validation rejects edges whose endpoints do not exist.
+    for (eid, (src, tgt, _)) in edge_map.iter() {
+        if !node_set.contains_key(src) {
+            return Err(ExportError::InvalidIdentity(format!(
+                "edge {} source missing: {}",
+                eid.as_str(),
+                src.as_str()
+            )));
+        }
+        if !node_set.contains_key(tgt) {
+            return Err(ExportError::InvalidIdentity(format!(
+                "edge {} target missing: {}",
+                eid.as_str(),
+                tgt.as_str()
+            )));
+        }
+    }
+
     Ok(Reparsed {
         node_ids: node_set.into_keys().collect(),
-        edge_ids: edge_set.into_keys().collect(),
+        edge_ids: edge_map.keys().cloned().collect(),
         link_targets: link_set.into_keys().collect(),
+        edge_records: edge_map
+            .iter()
+            .map(|(eid, (src, tgt, lnk))| (eid.clone(), src.clone(), tgt.clone(), lnk.clone()))
+            .collect(),
+        node_frontmatter: node_fms,
     })
 }
 
@@ -609,6 +639,44 @@ mod tests {
         assert_eq!(reparsed.node_ids, vec![alpha.clone(), beta.clone()]);
         assert_eq!(reparsed.edge_ids, vec![e1.clone()]);
         assert_eq!(reparsed.link_targets, vec!["concepts/beta".to_string()]);
+        // Strengthen: exact edge id/source/target/link records + node frontmatter truth.
+        assert_eq!(reparsed.edge_records.len(), 1);
+        assert_eq!(reparsed.edge_records[0].0, e1);
+        assert_eq!(reparsed.edge_records[0].1, alpha);
+        assert_eq!(reparsed.edge_records[0].2, beta);
+        assert_eq!(reparsed.edge_records[0].3, "concepts/beta".to_string());
+        let fm_a = reparsed.node_frontmatter.get(&alpha).expect("alpha fm");
+        assert_eq!(
+            fm_a.get("public_boundary").map(String::as_str),
+            Some("public")
+        );
+        assert_eq!(
+            fm_a.get("unknown_preserved").map(String::as_str),
+            Some("true")
+        );
+        assert_eq!(
+            fm_a.get("bran_node_id").map(String::as_str),
+            Some("file:src/alpha.rs")
+        );
+
+        // reparse must reject edges with endpoints that do not exist (from records)
+        let mut bad_docs: BTreeMap<String, String> = b1.docs().clone();
+        if let Some(g) = bad_docs.get_mut("bran-graph.md") {
+            let good_rec = format!(
+                "{}|{}|{}|{}",
+                e1.as_str(),
+                alpha.as_str(),
+                beta.as_str(),
+                "concepts/beta"
+            );
+            let bad_rec = format!("{}|{}|file:does-not-exist|dne", e1.as_str(), alpha.as_str());
+            *g = g.replace(&good_rec, &bad_rec);
+        }
+        let bad_b = ObsidianBundle { docs: bad_docs };
+        assert!(matches!(
+            reparse_obsidian(&bad_b),
+            Err(ExportError::InvalidIdentity(_))
+        ));
 
         // one rep root rejection
         let bad_root = ExportNode {
