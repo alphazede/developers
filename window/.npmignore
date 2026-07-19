@@ -1,0 +1,12 @@
+.next/
+node_modules/
+coverage/
+tests/
+tools/
+*.tgz
+*.tsbuildinfo
+eslint.config.mjs
+next-env.d.ts
+pnpm-lock.yaml
+tsconfig.json
+vitest.config.ts

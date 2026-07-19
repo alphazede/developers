@@ -1,0 +1,324 @@
+[
+  {
+    "schemaVersion": 1,
+    "id": "c3000000-0000-4000-8000-000000000001",
+    "observedAt": "2026-07-09T19:00:00Z",
+    "localTime": "14:00",
+    "value": 0.35,
+    "reliability": 0.9,
+    "signal": "meeting-after",
+    "provenance": {
+      "schemaVersion": 1,
+      "source": "google-calendar",
+      "sourceEntityId": "meeting-after-demanding-sync-01",
+      "consentRevision": 1,
+      "freshness": {
+        "schemaVersion": 1,
+        "fetchedAt": "2026-07-23T15:00:00Z",
+        "sourceUpdatedAt": "2026-07-09T19:00:00Z",
+        "expiresAt": null,
+        "state": "fixture"
+      },
+      "importedAt": "2026-07-23T15:00:00Z"
+    }
+  },
+  {
+    "schemaVersion": 1,
+    "id": "c3000000-0000-4000-8000-000000000002",
+    "observedAt": "2026-07-10T19:00:00Z",
+    "localTime": "14:00",
+    "value": 0.68,
+    "reliability": 0.95,
+    "signal": "readiness",
+    "provenance": {
+      "schemaVersion": 1,
+      "source": "oura",
+      "sourceEntityId": "readiness-2026-07-10",
+      "consentRevision": 1,
+      "freshness": {
+        "schemaVersion": 1,
+        "fetchedAt": "2026-07-23T15:00:00Z",
+        "sourceUpdatedAt": "2026-07-10T19:00:00Z",
+        "expiresAt": null,
+        "state": "fixture"
+      },
+      "importedAt": "2026-07-23T15:00:00Z"
+    }
+  },
+  {
+    "schemaVersion": 1,
+    "id": "c3000000-0000-4000-8000-000000000003",
+    "observedAt": "2026-07-11T19:00:00Z",
+    "localTime": "14:00",
+    "value": 0.62,
+    "reliability": 0.9,
+    "signal": "activity",
+    "provenance": {
+      "schemaVersion": 1,
+      "source": "strava",
+      "sourceEntityId": "activity-2026-07-11",
+      "consentRevision": 1,
+      "freshness": {
+        "schemaVersion": 1,
+        "fetchedAt": "2026-07-23T15:00:00Z",
+        "sourceUpdatedAt": "2026-07-11T19:00:00Z",
+        "expiresAt": null,
+        "state": "fixture"
+      },
+      "importedAt": "2026-07-23T15:00:00Z"
+    }
+  },
+  {
+    "schemaVersion": 1,
+    "id": "c3000000-0000-4000-8000-000000000004",
+    "observedAt": "2026-07-12T19:00:00Z",
+    "localTime": "14:00",
+    "value": 0.63,
+    "reliability": 0.8,
+    "signal": "self-report",
+    "provenance": {
+      "schemaVersion": 1,
+      "source": "local",
+      "sourceEntityId": "self-report-2026-07-12",
+      "consentRevision": 1,
+      "freshness": {
+        "schemaVersion": 1,
+        "fetchedAt": "2026-07-23T15:00:00Z",
+        "sourceUpdatedAt": "2026-07-12T19:00:00Z",
+        "expiresAt": null,
+        "state": "fixture"
+      },
+      "importedAt": "2026-07-23T15:00:00Z"
+    }
+  },
+  {
+    "schemaVersion": 1,
+    "id": "c3000000-0000-4000-8000-000000000005",
+    "observedAt": "2026-07-13T19:00:00Z",
+    "localTime": "14:00",
+    "value": 1,
+    "reliability": 0.9,
+    "signal": "task-outcome",
+    "provenance": {
+      "schemaVersion": 1,
+      "source": "github",
+      "sourceEntityId": "change-request-outcome-05",
+      "consentRevision": 1,
+      "freshness": {
+        "schemaVersion": 1,
+        "fetchedAt": "2026-07-23T15:00:00Z",
+        "sourceUpdatedAt": "2026-07-13T19:00:00Z",
+        "expiresAt": null,
+        "state": "fixture"
+      },
+      "importedAt": "2026-07-23T15:00:00Z"
+    }
+  },
+  {
+    "schemaVersion": 1,
+    "id": "c3000000-0000-4000-8000-000000000006",
+    "observedAt": "2026-07-14T19:00:00Z",
+    "localTime": "14:00",
+    "value": 0.3,
+    "reliability": 0.9,
+    "signal": "meeting-after",
+    "provenance": {
+      "schemaVersion": 1,
+      "source": "google-calendar",
+      "sourceEntityId": "meeting-after-demanding-sync-02",
+      "consentRevision": 1,
+      "freshness": {
+        "schemaVersion": 1,
+        "fetchedAt": "2026-07-23T15:00:00Z",
+        "sourceUpdatedAt": "2026-07-14T19:00:00Z",
+        "expiresAt": null,
+        "state": "fixture"
+      },
+      "importedAt": "2026-07-23T15:00:00Z"
+    }
+  },
+  {
+    "schemaVersion": 1,
+    "id": "c3000000-0000-4000-8000-000000000007",
+    "observedAt": "2026-07-15T19:00:00Z",
+    "localTime": "14:00",
+    "value": 0.52,
+    "reliability": 0.95,
+    "signal": "readiness",
+    "provenance": {
+      "schemaVersion": 1,
+      "source": "oura",
+      "sourceEntityId": "readiness-2026-07-15",
+      "consentRevision": 1,
+      "freshness": {
+        "schemaVersion": 1,
+        "fetchedAt": "2026-07-23T15:00:00Z",
+        "sourceUpdatedAt": "2026-07-15T19:00:00Z",
+        "expiresAt": null,
+        "state": "fixture"
+      },
+      "importedAt": "2026-07-23T15:00:00Z"
+    }
+  },
+  {
+    "schemaVersion": 1,
+    "id": "c3000000-0000-4000-8000-000000000008",
+    "observedAt": "2026-07-16T19:00:00Z",
+    "localTime": "14:00",
+    "value": 0.48,
+    "reliability": 0.9,
+    "signal": "activity",
+    "provenance": {
+      "schemaVersion": 1,
+      "source": "strava",
+      "sourceEntityId": "activity-2026-07-16",
+      "consentRevision": 1,
+      "freshness": {
+        "schemaVersion": 1,
+        "fetchedAt": "2026-07-23T15:00:00Z",
+        "sourceUpdatedAt": "2026-07-16T19:00:00Z",
+        "expiresAt": null,
+        "state": "fixture"
+      },
+      "importedAt": "2026-07-23T15:00:00Z"
+    }
+  },
+  {
+    "schemaVersion": 1,
+    "id": "c3000000-0000-4000-8000-000000000009",
+    "observedAt": "2026-07-17T19:00:00Z",
+    "localTime": "14:00",
+    "value": 0.47,
+    "reliability": 0.8,
+    "signal": "self-report",
+    "provenance": {
+      "schemaVersion": 1,
+      "source": "fixture",
+      "sourceEntityId": "self-report-2026-07-17",
+      "consentRevision": 1,
+      "freshness": {
+        "schemaVersion": 1,
+        "fetchedAt": "2026-07-23T15:00:00Z",
+        "sourceUpdatedAt": "2026-07-17T19:00:00Z",
+        "expiresAt": null,
+        "state": "fixture"
+      },
+      "importedAt": "2026-07-23T15:00:00Z"
+    }
+  },
+  {
+    "schemaVersion": 1,
+    "id": "c3000000-0000-4000-8000-000000000010",
+    "observedAt": "2026-07-18T19:00:00Z",
+    "localTime": "14:00",
+    "value": 0.8,
+    "reliability": 0.9,
+    "signal": "task-outcome",
+    "provenance": {
+      "schemaVersion": 1,
+      "source": "linear",
+      "sourceEntityId": "work-item-outcome-10",
+      "consentRevision": 1,
+      "freshness": {
+        "schemaVersion": 1,
+        "fetchedAt": "2026-07-23T15:00:00Z",
+        "sourceUpdatedAt": "2026-07-18T19:00:00Z",
+        "expiresAt": null,
+        "state": "fixture"
+      },
+      "importedAt": "2026-07-23T15:00:00Z"
+    }
+  },
+  {
+    "schemaVersion": 1,
+    "id": "c3000000-0000-4000-8000-000000000011",
+    "observedAt": "2026-07-19T19:00:00Z",
+    "localTime": "14:00",
+    "value": 0.4,
+    "reliability": 0.95,
+    "signal": "readiness",
+    "provenance": {
+      "schemaVersion": 1,
+      "source": "oura",
+      "sourceEntityId": "readiness-2026-07-19",
+      "consentRevision": 1,
+      "freshness": {
+        "schemaVersion": 1,
+        "fetchedAt": "2026-07-23T15:00:00Z",
+        "sourceUpdatedAt": "2026-07-19T19:00:00Z",
+        "expiresAt": null,
+        "state": "fixture"
+      },
+      "importedAt": "2026-07-23T15:00:00Z"
+    }
+  },
+  {
+    "schemaVersion": 1,
+    "id": "c3000000-0000-4000-8000-000000000012",
+    "observedAt": "2026-07-20T19:00:00Z",
+    "localTime": "14:00",
+    "value": 0.25,
+    "reliability": 0.9,
+    "signal": "meeting-after",
+    "provenance": {
+      "schemaVersion": 1,
+      "source": "google-calendar",
+      "sourceEntityId": "meeting-after-demanding-sync-03",
+      "consentRevision": 1,
+      "freshness": {
+        "schemaVersion": 1,
+        "fetchedAt": "2026-07-23T15:00:00Z",
+        "sourceUpdatedAt": "2026-07-20T19:00:00Z",
+        "expiresAt": null,
+        "state": "fixture"
+      },
+      "importedAt": "2026-07-23T15:00:00Z"
+    }
+  },
+  {
+    "schemaVersion": 1,
+    "id": "c3000000-0000-4000-8000-000000000013",
+    "observedAt": "2026-07-21T19:00:00Z",
+    "localTime": "14:00",
+    "value": 0.35,
+    "reliability": 0.9,
+    "signal": "activity",
+    "provenance": {
+      "schemaVersion": 1,
+      "source": "strava",
+      "sourceEntityId": "activity-2026-07-21",
+      "consentRevision": 1,
+      "freshness": {
+        "schemaVersion": 1,
+        "fetchedAt": "2026-07-23T15:00:00Z",
+        "sourceUpdatedAt": "2026-07-21T19:00:00Z",
+        "expiresAt": null,
+        "state": "fixture"
+      },
+      "importedAt": "2026-07-23T15:00:00Z"
+    }
+  },
+  {
+    "schemaVersion": 1,
+    "id": "c3000000-0000-4000-8000-000000000014",
+    "observedAt": "2026-07-22T19:00:00Z",
+    "localTime": "14:00",
+    "value": 0.38,
+    "reliability": 0.8,
+    "signal": "self-report",
+    "provenance": {
+      "schemaVersion": 1,
+      "source": "local",
+      "sourceEntityId": "self-report-2026-07-22",
+      "consentRevision": 1,
+      "freshness": {
+        "schemaVersion": 1,
+        "fetchedAt": "2026-07-23T15:00:00Z",
+        "sourceUpdatedAt": "2026-07-22T19:00:00Z",
+        "expiresAt": null,
+        "state": "fixture"
+      },
+      "importedAt": "2026-07-23T15:00:00Z"
+    }
+  }
+]

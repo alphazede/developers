@@ -1,0 +1,63 @@
+{
+  "schemaVersion": 1,
+  "fixture": "jordan-lee",
+  "goalAlignmentInputs": [
+    {
+      "taskId": "a1000000-0000-4000-8000-000000000001",
+      "goalRef": "goal-neutral-progress",
+      "weight": 0.6
+    }
+  ],
+  "expectedOutcomes": [
+    {
+      "id": "e5000000-0000-4000-8000-000000000001",
+      "kind": "stronger-morning-deep-work",
+      "taskId": "a1000000-0000-4000-8000-000000000013",
+      "commitmentId": null,
+      "startAt": "2026-07-23T15:00:00Z",
+      "endAt": "2026-07-23T15:30:00Z",
+      "expectedAction": "propose",
+      "rationale": "Morning history has the strongest remaining capacity."
+    },
+    {
+      "id": "e5000000-0000-4000-8000-000000000002",
+      "kind": "lower-capacity-administration",
+      "taskId": null,
+      "commitmentId": "b2000000-0000-4000-8000-000000000015",
+      "startAt": "2026-07-23T21:00:00Z",
+      "endAt": "2026-07-23T21:30:00Z",
+      "expectedAction": "propose",
+      "rationale": "Lower-capacity time is reserved for administration."
+    },
+    {
+      "id": "e5000000-0000-4000-8000-000000000003",
+      "kind": "recovery-buffer",
+      "taskId": null,
+      "commitmentId": null,
+      "startAt": "2026-07-23T20:00:00Z",
+      "endAt": "2026-07-23T20:30:00Z",
+      "expectedAction": "reserve",
+      "rationale": "Reduced readiness and meeting-after history support recovery."
+    },
+    {
+      "id": "e5000000-0000-4000-8000-000000000004",
+      "kind": "protected-commitment",
+      "taskId": null,
+      "commitmentId": "b2000000-0000-4000-8000-000000000018",
+      "startAt": "2026-07-23T21:30:00Z",
+      "endAt": "2026-07-23T22:30:00Z",
+      "expectedAction": "preserve",
+      "rationale": "Protected workout remains unavailable."
+    },
+    {
+      "id": "e5000000-0000-4000-8000-000000000005",
+      "kind": "immutable-imported-task-placement",
+      "taskId": "a1000000-0000-4000-8000-000000000011",
+      "commitmentId": null,
+      "startAt": "2026-07-23T20:30:00Z",
+      "endAt": "2026-07-23T21:00:00Z",
+      "expectedAction": "local-proposal-only",
+      "rationale": "Imported work stays immutable while local placement is proposed."
+    }
+  ]
+}

@@ -1,0 +1,422 @@
+[
+  {
+    "schemaVersion": 1,
+    "id": "a1000000-0000-4000-8000-000000000001",
+    "source": "local",
+    "sourceEntityId": "local-task-01",
+    "title": "Draft learning goal",
+    "state": "completed",
+    "durationMinutes": 60,
+    "deadlineAt": null,
+    "priority": 30,
+    "projectRef": "goal-neutral-progress",
+    "labels": [
+      "goal-alignment"
+    ],
+    "immutable": false,
+    "provenance": {
+      "schemaVersion": 1,
+      "source": "local",
+      "sourceEntityId": "local-task-01",
+      "consentRevision": 1,
+      "freshness": {
+        "schemaVersion": 1,
+        "fetchedAt": "2026-07-23T15:00:00Z",
+        "sourceUpdatedAt": "2026-07-09T17:00:00Z",
+        "expiresAt": null,
+        "state": "fixture"
+      },
+      "importedAt": "2026-07-23T15:00:00Z"
+    }
+  },
+  {
+    "schemaVersion": 1,
+    "id": "a1000000-0000-4000-8000-000000000002",
+    "source": "fixture",
+    "sourceEntityId": "fixture-task-02",
+    "title": "Prepare focus notes",
+    "state": "completed",
+    "durationMinutes": 30,
+    "deadlineAt": null,
+    "priority": 31,
+    "projectRef": null,
+    "labels": [
+      "practice"
+    ],
+    "immutable": false,
+    "provenance": {
+      "schemaVersion": 1,
+      "source": "fixture",
+      "sourceEntityId": "fixture-task-02",
+      "consentRevision": 1,
+      "freshness": {
+        "schemaVersion": 1,
+        "fetchedAt": "2026-07-23T15:00:00Z",
+        "sourceUpdatedAt": "2026-07-10T17:00:00Z",
+        "expiresAt": null,
+        "state": "fixture"
+      },
+      "importedAt": "2026-07-23T15:00:00Z"
+    }
+  },
+  {
+    "schemaVersion": 1,
+    "id": "a1000000-0000-4000-8000-000000000003",
+    "source": "github",
+    "sourceEntityId": "change-request-03",
+    "title": "Review imported change request",
+    "state": "completed",
+    "durationMinutes": 45,
+    "deadlineAt": null,
+    "priority": 32,
+    "projectRef": null,
+    "labels": [
+      "imported"
+    ],
+    "immutable": true,
+    "provenance": {
+      "schemaVersion": 1,
+      "source": "github",
+      "sourceEntityId": "change-request-03",
+      "consentRevision": 1,
+      "freshness": {
+        "schemaVersion": 1,
+        "fetchedAt": "2026-07-23T15:00:00Z",
+        "sourceUpdatedAt": "2026-07-11T17:00:00Z",
+        "expiresAt": null,
+        "state": "fixture"
+      },
+      "importedAt": "2026-07-23T15:00:00Z"
+    }
+  },
+  {
+    "schemaVersion": 1,
+    "id": "a1000000-0000-4000-8000-000000000004",
+    "source": "linear",
+    "sourceEntityId": "work-item-04",
+    "title": "Plan imported milestone",
+    "state": "completed",
+    "durationMinutes": 60,
+    "deadlineAt": null,
+    "priority": 33,
+    "projectRef": null,
+    "labels": [
+      "imported"
+    ],
+    "immutable": true,
+    "provenance": {
+      "schemaVersion": 1,
+      "source": "linear",
+      "sourceEntityId": "work-item-04",
+      "consentRevision": 1,
+      "freshness": {
+        "schemaVersion": 1,
+        "fetchedAt": "2026-07-23T15:00:00Z",
+        "sourceUpdatedAt": "2026-07-12T17:00:00Z",
+        "expiresAt": null,
+        "state": "fixture"
+      },
+      "importedAt": "2026-07-23T15:00:00Z"
+    }
+  },
+  {
+    "schemaVersion": 1,
+    "id": "a1000000-0000-4000-8000-000000000005",
+    "source": "local",
+    "sourceEntityId": "local-task-05",
+    "title": "Write decision summary",
+    "state": "completed",
+    "durationMinutes": 60,
+    "deadlineAt": null,
+    "priority": 34,
+    "projectRef": null,
+    "labels": [
+      "practice"
+    ],
+    "immutable": false,
+    "provenance": {
+      "schemaVersion": 1,
+      "source": "local",
+      "sourceEntityId": "local-task-05",
+      "consentRevision": 1,
+      "freshness": {
+        "schemaVersion": 1,
+        "fetchedAt": "2026-07-23T15:00:00Z",
+        "sourceUpdatedAt": "2026-07-13T17:00:00Z",
+        "expiresAt": null,
+        "state": "fixture"
+      },
+      "importedAt": "2026-07-23T15:00:00Z"
+    }
+  },
+  {
+    "schemaVersion": 1,
+    "id": "a1000000-0000-4000-8000-000000000006",
+    "source": "fixture",
+    "sourceEntityId": "fixture-task-06",
+    "title": "Organize reference notes",
+    "state": "completed",
+    "durationMinutes": 30,
+    "deadlineAt": null,
+    "priority": 35,
+    "projectRef": null,
+    "labels": [
+      "practice"
+    ],
+    "immutable": false,
+    "provenance": {
+      "schemaVersion": 1,
+      "source": "fixture",
+      "sourceEntityId": "fixture-task-06",
+      "consentRevision": 1,
+      "freshness": {
+        "schemaVersion": 1,
+        "fetchedAt": "2026-07-23T15:00:00Z",
+        "sourceUpdatedAt": "2026-07-14T17:00:00Z",
+        "expiresAt": null,
+        "state": "fixture"
+      },
+      "importedAt": "2026-07-23T15:00:00Z"
+    }
+  },
+  {
+    "schemaVersion": 1,
+    "id": "a1000000-0000-4000-8000-000000000007",
+    "source": "github",
+    "sourceEntityId": "change-request-07",
+    "title": "Assess imported patch",
+    "state": "completed",
+    "durationMinutes": 45,
+    "deadlineAt": null,
+    "priority": 36,
+    "projectRef": null,
+    "labels": [
+      "imported"
+    ],
+    "immutable": true,
+    "provenance": {
+      "schemaVersion": 1,
+      "source": "github",
+      "sourceEntityId": "change-request-07",
+      "consentRevision": 1,
+      "freshness": {
+        "schemaVersion": 1,
+        "fetchedAt": "2026-07-23T15:00:00Z",
+        "sourceUpdatedAt": "2026-07-15T17:00:00Z",
+        "expiresAt": null,
+        "state": "fixture"
+      },
+      "importedAt": "2026-07-23T15:00:00Z"
+    }
+  },
+  {
+    "schemaVersion": 1,
+    "id": "a1000000-0000-4000-8000-000000000008",
+    "source": "linear",
+    "sourceEntityId": "work-item-08",
+    "title": "Clarify imported milestone",
+    "state": "completed",
+    "durationMinutes": 60,
+    "deadlineAt": null,
+    "priority": 37,
+    "projectRef": null,
+    "labels": [
+      "imported"
+    ],
+    "immutable": true,
+    "provenance": {
+      "schemaVersion": 1,
+      "source": "linear",
+      "sourceEntityId": "work-item-08",
+      "consentRevision": 1,
+      "freshness": {
+        "schemaVersion": 1,
+        "fetchedAt": "2026-07-23T15:00:00Z",
+        "sourceUpdatedAt": "2026-07-16T17:00:00Z",
+        "expiresAt": null,
+        "state": "fixture"
+      },
+      "importedAt": "2026-07-23T15:00:00Z"
+    }
+  },
+  {
+    "schemaVersion": 1,
+    "id": "a1000000-0000-4000-8000-000000000009",
+    "source": "local",
+    "sourceEntityId": "local-task-09",
+    "title": "Outline practice brief",
+    "state": "completed",
+    "durationMinutes": 60,
+    "deadlineAt": null,
+    "priority": 38,
+    "projectRef": null,
+    "labels": [
+      "practice"
+    ],
+    "immutable": false,
+    "provenance": {
+      "schemaVersion": 1,
+      "source": "local",
+      "sourceEntityId": "local-task-09",
+      "consentRevision": 1,
+      "freshness": {
+        "schemaVersion": 1,
+        "fetchedAt": "2026-07-23T15:00:00Z",
+        "sourceUpdatedAt": "2026-07-17T17:00:00Z",
+        "expiresAt": null,
+        "state": "fixture"
+      },
+      "importedAt": "2026-07-23T15:00:00Z"
+    }
+  },
+  {
+    "schemaVersion": 1,
+    "id": "a1000000-0000-4000-8000-000000000010",
+    "source": "fixture",
+    "sourceEntityId": "fixture-task-10",
+    "title": "Prepare administration list",
+    "state": "completed",
+    "durationMinutes": 30,
+    "deadlineAt": null,
+    "priority": 39,
+    "projectRef": null,
+    "labels": [
+      "practice"
+    ],
+    "immutable": false,
+    "provenance": {
+      "schemaVersion": 1,
+      "source": "fixture",
+      "sourceEntityId": "fixture-task-10",
+      "consentRevision": 1,
+      "freshness": {
+        "schemaVersion": 1,
+        "fetchedAt": "2026-07-23T15:00:00Z",
+        "sourceUpdatedAt": "2026-07-18T17:00:00Z",
+        "expiresAt": null,
+        "state": "fixture"
+      },
+      "importedAt": "2026-07-23T15:00:00Z"
+    }
+  },
+  {
+    "schemaVersion": 1,
+    "id": "a1000000-0000-4000-8000-000000000011",
+    "source": "github",
+    "sourceEntityId": "change-request-11",
+    "title": "Review imported follow-up",
+    "state": "open",
+    "durationMinutes": 30,
+    "deadlineAt": "2026-07-23T20:00:00Z",
+    "priority": 40,
+    "projectRef": null,
+    "labels": [
+      "imported"
+    ],
+    "immutable": true,
+    "provenance": {
+      "schemaVersion": 1,
+      "source": "github",
+      "sourceEntityId": "change-request-11",
+      "consentRevision": 1,
+      "freshness": {
+        "schemaVersion": 1,
+        "fetchedAt": "2026-07-23T15:00:00Z",
+        "sourceUpdatedAt": "2026-07-19T17:00:00Z",
+        "expiresAt": null,
+        "state": "fixture"
+      },
+      "importedAt": "2026-07-23T15:00:00Z"
+    }
+  },
+  {
+    "schemaVersion": 1,
+    "id": "a1000000-0000-4000-8000-000000000012",
+    "source": "linear",
+    "sourceEntityId": "work-item-12",
+    "title": "Estimate imported work item",
+    "state": "open",
+    "durationMinutes": 60,
+    "deadlineAt": "2026-07-24T18:00:00Z",
+    "priority": 41,
+    "projectRef": null,
+    "labels": [
+      "imported"
+    ],
+    "immutable": true,
+    "provenance": {
+      "schemaVersion": 1,
+      "source": "linear",
+      "sourceEntityId": "work-item-12",
+      "consentRevision": 1,
+      "freshness": {
+        "schemaVersion": 1,
+        "fetchedAt": "2026-07-23T15:00:00Z",
+        "sourceUpdatedAt": "2026-07-20T17:00:00Z",
+        "expiresAt": null,
+        "state": "fixture"
+      },
+      "importedAt": "2026-07-23T15:00:00Z"
+    }
+  },
+  {
+    "schemaVersion": 1,
+    "id": "a1000000-0000-4000-8000-000000000013",
+    "source": "local",
+    "sourceEntityId": "local-task-13",
+    "title": "Draft deep-work learning strategy",
+    "state": "open",
+    "durationMinutes": 30,
+    "deadlineAt": null,
+    "priority": 42,
+    "projectRef": "goal-neutral-progress",
+    "labels": [
+      "goal-alignment"
+    ],
+    "immutable": false,
+    "provenance": {
+      "schemaVersion": 1,
+      "source": "local",
+      "sourceEntityId": "local-task-13",
+      "consentRevision": 1,
+      "freshness": {
+        "schemaVersion": 1,
+        "fetchedAt": "2026-07-23T15:00:00Z",
+        "sourceUpdatedAt": "2026-07-21T17:00:00Z",
+        "expiresAt": null,
+        "state": "fixture"
+      },
+      "importedAt": "2026-07-23T15:00:00Z"
+    }
+  },
+  {
+    "schemaVersion": 1,
+    "id": "a1000000-0000-4000-8000-000000000014",
+    "source": "fixture",
+    "sourceEntityId": "fixture-task-14",
+    "title": "Prepare next-day brief",
+    "state": "open",
+    "durationMinutes": 30,
+    "deadlineAt": null,
+    "priority": 43,
+    "projectRef": null,
+    "labels": [
+      "practice"
+    ],
+    "immutable": false,
+    "provenance": {
+      "schemaVersion": 1,
+      "source": "fixture",
+      "sourceEntityId": "fixture-task-14",
+      "consentRevision": 1,
+      "freshness": {
+        "schemaVersion": 1,
+        "fetchedAt": "2026-07-23T15:00:00Z",
+        "sourceUpdatedAt": "2026-07-22T17:00:00Z",
+        "expiresAt": null,
+        "state": "fixture"
+      },
+      "importedAt": "2026-07-23T15:00:00Z"
+    }
+  }
+]
