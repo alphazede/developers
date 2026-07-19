@@ -701,6 +701,24 @@ fn do_packet(root: String, query_text: String) -> QueryPacketResult {
     let edge_count = graph_input.edges().len().max(1);
     let limits =
         GraphLimits::new(node_count, edge_count).map_err(|e| format!("limits_error: {:?}", e))?;
+    let mut evidence = vec![];
+    for graph_node in graph_input.nodes() {
+        let node_id = graph_node.id().clone();
+        let locator = graph_node.provenance().locator().to_string();
+        let content = snapshot
+            .entries
+            .get(&locator)
+            .map(|scan_entry| String::from_utf8_lossy(&scan_entry.source).into_owned())
+            .unwrap_or_default();
+        evidence.push(EvidenceContent::new(
+            node_id,
+            content,
+            EvidencePriority::Recommended,
+            100,
+            1,
+            vec![],
+        ));
+    }
     let graph =
         KnowledgeGraph::build(graph_input, limits).map_err(|e| format!("graph_error: {:?}", e))?;
 
@@ -723,24 +741,9 @@ fn do_packet(root: String, query_text: String) -> QueryPacketResult {
         .compile(&spec, &graph)
         .map_err(|e| format!("view_error: {:?}", e))?;
 
-    let mut evidence = vec![];
     let mut selected_locators: Vec<String> = vec![];
     for it in compiled.items() {
-        let loc = it.provenance.locator().to_string();
-        selected_locators.push(loc.clone());
-        let content = snapshot
-            .entries
-            .get(&loc)
-            .map(|e| String::from_utf8_lossy(&e.source).into_owned())
-            .unwrap_or_default();
-        evidence.push(EvidenceContent::new(
-            it.id.clone(),
-            content,
-            EvidencePriority::Recommended,
-            100,
-            1,
-            vec![],
-        ));
+        selected_locators.push(it.provenance.locator().to_string());
     }
 
     let mut selected_source_bytes: usize = 0;
@@ -766,12 +769,26 @@ fn do_packet(root: String, query_text: String) -> QueryPacketResult {
         .assemble(&req)
         .map_err(|e| format!("packet_error: {:?}", e))?;
 
-    let locs_json = selected_locators
+    let selected_locators_json = selected_locators
         .iter()
         .map(|l| format!("\"{}\"", json_escape(l)))
         .collect::<Vec<_>>()
         .join(",");
-    let sel_ids_json = pkt
+    let seed_ids_json = pkt
+        .receipt
+        .seed_ids
+        .iter()
+        .map(|id| format!("\"{}\"", json_escape(id.as_str())))
+        .collect::<Vec<_>>()
+        .join(",");
+    let admitted_dependency_ids_json = pkt
+        .receipt
+        .admitted_dependency_ids
+        .iter()
+        .map(|id| format!("\"{}\"", json_escape(id.as_str())))
+        .collect::<Vec<_>>()
+        .join(",");
+    let selected_ids_json = pkt
         .receipt
         .selected_ids
         .iter()
@@ -789,11 +806,13 @@ fn do_packet(root: String, query_text: String) -> QueryPacketResult {
         .collect();
 
     let data = format!(
-        "{{\"root\":\"{}\",\"query\":\"{}\",\"selected_locators\":[{}],\"selected_ids\":[{}],\"candidate_source_bytes\":{},\"selected_source_bytes\":{},\"context_bytes_avoided\":{},\"raw_bytes\":{},\"estimated_tokens\":{},\"token_estimate_method\":\"bytes-divided-by-four-ceiling\",\"actual_model_input_tokens\":\"unavailable\",\"truncated\":{}}}",
+        "{{\"root\":\"{}\",\"query\":\"{}\",\"selected_locators\":[{}],\"seed_ids\":[{}],\"admitted_dependency_ids\":[{}],\"selected_ids\":[{}],\"candidate_source_bytes\":{},\"selected_source_bytes\":{},\"context_bytes_avoided\":{},\"raw_bytes\":{},\"estimated_tokens\":{},\"token_estimate_method\":\"bytes-divided-by-four-ceiling\",\"actual_model_input_tokens\":\"unavailable\",\"truncated\":{}}}",
         json_escape(&root),
         json_escape(&query_text),
-        locs_json,
-        sel_ids_json,
+        selected_locators_json,
+        seed_ids_json,
+        admitted_dependency_ids_json,
+        selected_ids_json,
         candidate_bytes,
         selected_source_bytes,
         context_bytes_avoided,
@@ -801,12 +820,12 @@ fn do_packet(root: String, query_text: String) -> QueryPacketResult {
         est,
         tr
     );
-    let provenance = if locs_json.is_empty() {
+    let provenance = if selected_locators_json.is_empty() {
         "{\"sources\":[\"repository-scanner\",\"bran-core\"]}".to_owned()
     } else {
         format!(
             "{{\"sources\":[\"repository-scanner\",\"bran-core\"],\"selected_locators\":[{}]}}",
-            locs_json
+            selected_locators_json
         )
     };
     let metrics = format!(
@@ -1277,19 +1296,71 @@ fn do_maintain_apply(
             "{}",
             "{}",
         )),
-        RepairTerminal::DigestMismatch { expected, actual } => CliResult::usage(make_envelope(
-            "maintain.apply",
-            "error",
-            "null",
-            &[],
-            &[format!(
-                "digest_mismatch:expected={},actual={}",
-                json_escape(&expected),
-                json_escape(&actual)
-            )],
-            "{}",
-            "{}",
-        )),
+        RepairTerminal::DigestMismatch { expected, actual } => {
+            let canonical_source = |source: &str| {
+                if source == "missing" {
+                    return true;
+                }
+                let Some((byte_len, lanes)) = source
+                    .strip_prefix("present:")
+                    .and_then(|source| source.split_once(':'))
+                else {
+                    return false;
+                };
+                byte_len
+                    .parse::<usize>()
+                    .is_ok_and(|parsed_len| parsed_len.to_string() == byte_len)
+                    && lanes.split('-').count() == 3
+                    && lanes.split('-').all(|lane| {
+                        lane.len() == 16
+                            && lane
+                                .bytes()
+                                .all(|byte| byte.is_ascii_digit() || matches!(byte, b'a'..=b'f'))
+                    })
+            };
+            let actual_digest_parts = actual.rsplit_once("|s:");
+            let expected_digest_parts = expected.rsplit_once("|s:");
+            let stale_source = match (actual_digest_parts, expected_digest_parts) {
+                (Some((actual_plan, actual_source)), Some((expected_plan, expected_source))) => {
+                    actual_plan
+                        .strip_prefix("p:")
+                        .is_some_and(|plan| !plan.is_empty())
+                        && expected_plan
+                            .strip_prefix("p:")
+                            .is_some_and(|plan| !plan.is_empty())
+                        && canonical_source(actual_source)
+                        && canonical_source(expected_source)
+                        && actual_plan == expected_plan
+                        && actual_source != expected_source
+                }
+                _ => false,
+            };
+            if stale_source {
+                CliResult::operation(make_envelope(
+                    "maintain.apply",
+                    "error",
+                    "null",
+                    &[],
+                    &["stale_source".to_owned()],
+                    "{}",
+                    "{}",
+                ))
+            } else {
+                CliResult::usage(make_envelope(
+                    "maintain.apply",
+                    "error",
+                    "null",
+                    &[],
+                    &[format!(
+                        "digest_mismatch:expected={},actual={}",
+                        json_escape(&expected),
+                        json_escape(&actual)
+                    )],
+                    "{}",
+                    "{}",
+                ))
+            }
+        }
         RepairTerminal::StaleSource => CliResult::operation(make_envelope(
             "maintain.apply",
             "error",
@@ -1819,6 +1890,31 @@ mod tests {
         let rep = "p3-replacement-bytes-exact\n".to_owned();
         let proot = root.to_string_lossy().into_owned();
 
+        let seed_document = "---\ntype: concept\ntitle: Seed\nokf_status: active\ntags: p3\ntags: packet\ntimestamp: 2026-07-19T00:00:00Z\nresource: test://seed\npublic_boundary: safe\ndependency: dep.md\n---\nseed [dependency](dep.md)\n# Citations\nref\n";
+        let dependency_document = "---\ntype: concept\ntitle: Dep\nokf_status: active\ntags: p3\ntags: packet\ntimestamp: 2026-07-19T00:00:00Z\nresource: test://dep\npublic_boundary: safe\n---\ndep [reference](x)\n# Citations\nref\n";
+        std::fs::write(root.join("seed.md"), seed_document.as_bytes()).unwrap();
+        std::fs::write(root.join("dep.md"), dependency_document.as_bytes()).unwrap();
+        let packet_result =
+            CliApp::run(vec!["packet".to_owned(), proot.clone(), "seed".to_owned()]);
+        assert_eq!(packet_result.exit_code, ExitCode::SUCCESS);
+        assert!(!packet_result.is_error);
+        assert!(
+            packet_result.output.contains("\"command\":\"packet\"")
+                && packet_result.output.contains("\"status\":\"ok\"")
+        );
+        assert!(packet_result
+            .output
+            .contains("\"selected_locators\":[\"seed.md\"]"));
+        assert!(packet_result
+            .output
+            .contains("\"seed_ids\":[\"n:7:a346da01e22eda4be56ecdeffc2f0bb4ce2004c4de8549ed\"]"));
+        assert!(packet_result
+            .output
+            .contains("\"admitted_dependency_ids\":[\"n:6:64eee9fc1a415ae7ee3cea2af4c15b15206bc0d26c8ca9fb\"]"));
+        assert!(packet_result
+            .output
+            .contains("\"selected_ids\":[\"n:6:64eee9fc1a415ae7ee3cea2af4c15b15206bc0d26c8ca9fb\",\"n:7:a346da01e22eda4be56ecdeffc2f0bb4ce2004c4de8549ed\"]"));
+
         // proposal zero mutation
         let pres = CliApp::run(vec![
             "maintain".to_owned(),
@@ -1863,6 +1959,75 @@ mod tests {
         .unwrap();
         let valid_doc = "---\ntype: concept\ntitle: P3 Headless\nokf_status: active\ntags: p3\ntags: headless\ntimestamp: 2026-07-19T00:00:00Z\nresource: test://p3\npublic_boundary: safe\n---\nBody [link](x).\n# Citations\nref\n";
         std::fs::write(root.join("p3.md"), valid_doc.as_bytes()).unwrap();
+
+        let stale_target = "stale.txt".to_owned();
+        std::fs::write(root.join(&stale_target), b"initial-source-at-propose\n").unwrap();
+        let stale_proposal = CliApp::run(vec![
+            "maintain".to_owned(),
+            "propose".to_owned(),
+            proot.clone(),
+            stale_target.clone(),
+            "repl-for-stale\n".to_owned(),
+        ]);
+        assert!(stale_proposal.output.contains("\"status\":\"ok\""));
+        let digest_key = "\"digest\":\"";
+        let stale_digest_start = stale_proposal
+            .output
+            .find(digest_key)
+            .expect("stale propose digest")
+            + digest_key.len();
+        let stale_digest = stale_proposal.output[stale_digest_start..]
+            .split('"')
+            .next()
+            .expect("digest terminator")
+            .to_owned();
+        std::fs::write(root.join(&stale_target), b"changed-source-after-propose\n").unwrap();
+        let stale_apply = CliApp::run(vec![
+            "maintain".to_owned(),
+            "apply".to_owned(),
+            proot.clone(),
+            stale_target.clone(),
+            "repl-for-stale\n".to_owned(),
+            stale_digest.clone(),
+            "bran-cli-fixture-v1".to_owned(),
+        ]);
+        assert!(stale_apply.output.contains("stale_source"));
+        assert!(!stale_apply.output.contains("digest_mismatch"));
+        assert_eq!(stale_apply.exit_code, TypedExit::Operation.code());
+        assert!(stale_apply.is_error);
+        assert_eq!(
+            std::fs::read(root.join(&stale_target)).unwrap(),
+            b"changed-source-after-propose\n"
+        );
+
+        let malformed_digest = format!("{}|s:", stale_digest.rsplit_once("|s:").unwrap().0);
+        let malformed_apply = CliApp::run(vec![
+            "maintain".to_owned(),
+            "apply".to_owned(),
+            proot.clone(),
+            stale_target,
+            "repl-for-stale\n".to_owned(),
+            malformed_digest,
+            "bran-cli-fixture-v1".to_owned(),
+        ]);
+        assert!(malformed_apply.output.contains("digest_mismatch"));
+        assert!(!malformed_apply.output.contains("stale_source"));
+        assert_eq!(malformed_apply.exit_code, TypedExit::Usage.code());
+
+        let malformed_nonempty_digest =
+            format!("{}|s:junk", stale_digest.rsplit_once("|s:").unwrap().0);
+        let malformed_nonempty_apply = CliApp::run(vec![
+            "maintain".to_owned(),
+            "apply".to_owned(),
+            proot.clone(),
+            "stale.txt".to_owned(),
+            "repl-for-stale\n".to_owned(),
+            malformed_nonempty_digest,
+            "bran-cli-fixture-v1".to_owned(),
+        ]);
+        assert!(malformed_nonempty_apply.output.contains("digest_mismatch"));
+        assert!(!malformed_nonempty_apply.output.contains("stale_source"));
+        assert_eq!(malformed_nonempty_apply.exit_code, TypedExit::Usage.code());
 
         // bad digest refusal (code 2, no mutation)
         let badd = CliApp::run(vec![
