@@ -15,22 +15,27 @@ pnpm dev
 
 ## First-run connector activation
 
-Live connectors are local-only and disabled by default. Before starting the server, set `CONNECTORS_ENABLED=1`, `APP_ORIGIN=http://127.0.0.1:3000`, distinct server-only `APP_SESSION_SECRET` and `APP_CSRF_SECRET` values, and absolute `CONNECTOR_STATE_PATH` and `APP_DATA_KEY_PATH` paths. Keep those values out of source, shell history, fixtures, logs, and browser code. Set `COMMAND_ID`, `IDEMPOTENCY_KEY`, and `PROFILE_ID` to fresh bounded values; the command and profile identifiers must be UUIDs.
+Live connectors are local-only and disabled by default. Before starting the server, set `CONNECTORS_ENABLED=1`, `APP_ORIGIN=http://127.0.0.1:3000`, distinct `APP_SESSION_SECRET` and `APP_CSRF_SECRET` values, and absolute `CONNECTOR_STATE_PATH` and `APP_DATA_KEY_PATH` paths. Despite their legacy names, the session and CSRF values are local bearer tokens presented by the client, not server-only secrets. Treat them as credentials and keep them out of source, shell history, fixtures, logs, and browser code. Set `COMMAND_ID`, `IDEMPOTENCY_KEY`, and `PROFILE_ID` to fresh bounded values; the command and profile identifiers must be UUIDs.
 
 Initialize the absent local store exactly once through its authenticated route:
 
 ```sh
-curl --fail-with-body --request POST \
-  --url http://127.0.0.1:3000/api/v1/connectors/bootstrap \
-  --header "Cookie: sid=${APP_SESSION_SECRET}" \
-  --header "Origin: ${APP_ORIGIN}" \
-  --header "X-CSRF-Token: ${APP_CSRF_SECRET}" \
-  --header "X-Expected-Revision: 0" \
-  --header "X-Command-Id: ${COMMAND_ID}" \
-  --header "Idempotency-Key: ${IDEMPOTENCY_KEY}" \
-  --header "X-Bootstrap-Confirm: initialize-absent-store" \
-  --header "Content-Type: application/json" \
-  --data "{\"profileId\":\"${PROFILE_ID}\",\"timeZone\":\"America/Chicago\"}"
+# Keep xtrace disabled: the shell expands this stdin-only curl configuration.
+set +x
+curl --config - <<CURL
+fail-with-body
+request = "POST"
+url = "http://127.0.0.1:3000/api/v1/connectors/bootstrap"
+header = "Cookie: sid=${APP_SESSION_SECRET}"
+header = "Origin: ${APP_ORIGIN}"
+header = "X-CSRF-Token: ${APP_CSRF_SECRET}"
+header = "X-Expected-Revision: 0"
+header = "X-Command-Id: ${COMMAND_ID}"
+header = "Idempotency-Key: ${IDEMPOTENCY_KEY}"
+header = "X-Bootstrap-Confirm: initialize-absent-store"
+header = "Content-Type: application/json"
+data = "{\"profileId\":\"${PROFILE_ID}\",\"timeZone\":\"America/Chicago\"}"
+CURL
 ```
 
 Success is `201` with schema version 1, revision 0, and `initialized: true`. Disabled configuration returns `503`; authentication fails with `401` before filesystem or provider work; malformed or oversized input returns `400` or `413`. An existing, corrupt, or unsafe store returns `409 BOOTSTRAP_REFUSED` and is never replaced. Bootstrap creates no provider connection and grants no capability: each provider still activates only through its reviewed OAuth or app route and consent boundary.
