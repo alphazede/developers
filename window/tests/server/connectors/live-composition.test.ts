@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { createEffectState } from "../../../src/application/effects";
+import { createEffectState, EffectRunner, FakeGoogleCalendarPort } from "../../../src/application/effects";
 import type { LocalStateV1, NormalizedTaskV1, ProposalV1 } from "../../../src/contracts/v1";
 import { encryptToken } from "../../../src/server/security/crypto";
 import { createLiveConnectorRuntime, liveConnectorConfiguration, resetLiveConnectorRuntimeForTests } from "../../../src/server/connectors/live-runtime";
@@ -38,6 +38,23 @@ describe("atomic live connector store",()=>{
     await expect(runtime.store.revokeConnectorSource({...command(1),source:"google-calendar",consentRevision:5,at:"2026-07-23T16:00:00Z"})).rejects.toThrow("STALE_CONSENT_REVISION");expect(await runtime.store.loadConnectorToken("google-calendar")).not.toBeNull();
     await expect(runtime.store.commitConnectorToken({...command(1,"same-key"),source:"linear",envelope:token,consentRevision:1,capabilities:["task.connect","task.read","task.sync","task.revoke"],connectedAt:NOW})).rejects.toThrow("IDEMPOTENCY_MISMATCH");
     const effectId=randomUUID();await expect(runtime.store.commitConnectorEffect({...command(1),state:createEffectState({effectId,proposalId:PROPOSAL,marker:`capacity-effect:${effectId}`,provider:"google-calendar"})})).rejects.toThrow("GOOGLE_CALENDAR_WRITE_NOT_AUTHORIZED");expect((await runtime.store.load()).revision).toBe(1);
+  });
+
+  it("binds an approved proposal to one effect and permits only append-only state transitions",async()=>{const root=await directory(),runtime=createLiveConnectorRuntime(env(root),async()=>response({}))!;await runtime.store.initialize(initial());const connect=command(0,"connect");await runtime.store.commitConnectorToken({...connect,source:"google-calendar",envelope:await envelope(runtime,{accessToken:"token"}),consentRevision:1,capabilities:["calendar.event.write"],connectedAt:NOW});
+    const effectId=randomUUID(),intent={effectId,proposalId:PROPOSAL,marker:`capacity-effect:${effectId}`,provider:"google-calendar" as const},pending=createEffectState(intent),succeeded=(await new EffectRunner(new FakeGoogleCalendarPort([{outcome:"succeeded",marker:intent.marker,providerEntityId:"event-1"}])).execute(intent,pending)).state;
+    await expect(runtime.store.commitConnectorEffect({...connect,state:pending})).rejects.toThrow("INVALID_EFFECT_STATE");
+    await expect(runtime.store.commitConnectorEffect({...command(1,"fabricated"),state:succeeded})).rejects.toThrow("INVALID_EFFECT_PROPOSAL");expect((await runtime.store.load()).revision).toBe(1);
+    await runtime.store.commitConnectorEffect({...command(1,"effect-create"),state:pending});
+    const alternateId=randomUUID();await expect(runtime.store.commitConnectorEffect({...command(2,"alternate"),state:createEffectState({effectId:alternateId,proposalId:PROPOSAL,marker:`capacity-effect:${alternateId}`,provider:"google-calendar"})})).rejects.toThrow("INVALID_EFFECT_PROPOSAL");
+    await runtime.store.commitConnectorEffect({...command(2,"effect-success"),state:succeeded});
+    const divergent=(await new EffectRunner(new FakeGoogleCalendarPort([{outcome:"timeout"}])).execute(intent,pending)).state;
+    await expect(runtime.store.commitConnectorEffect({...command(3,"rewrite"),state:divergent})).rejects.toThrow("INVALID_EFFECT_STATE");expect(await runtime.store.loadConnectorEffect(effectId)).toEqual(succeeded);expect((await runtime.store.load()).revision).toBe(3);
+  });
+
+  it("clears all derived proposals and effects when any connector is revoked",async()=>{const root=await directory(),runtime=createLiveConnectorRuntime(env(root),async()=>response({}))!;await runtime.store.initialize(initial());const token=await envelope(runtime,{accessToken:"token"});
+    await runtime.store.commitConnectorToken({...command(0,"google-connect"),source:"google-calendar",envelope:token,consentRevision:1,capabilities:["calendar.event.write"],connectedAt:NOW});const effectId=randomUUID();await runtime.store.commitConnectorEffect({...command(1,"effect"),state:createEffectState({effectId,proposalId:PROPOSAL,marker:`capacity-effect:${effectId}`,provider:"google-calendar"})});
+    await runtime.store.commitConnectorToken({...command(2,"linear-connect"),source:"linear",envelope:token,consentRevision:1,capabilities:["task.read"],connectedAt:NOW});const receipt=await runtime.store.revokeConnectorSource({...command(3,"linear-revoke"),source:"linear",consentRevision:2,at:"2026-07-23T16:00:00Z"});
+    expect(receipt.removed).toMatchObject({tasks:0,commitments:0,proposals:1,effects:1});const current=await runtime.store.load();expect(current.tasks).toEqual([task]);expect(current.proposals).toEqual([]);expect(await runtime.store.loadConnectorEffect(effectId)).toBeNull();expect(await runtime.store.loadConnectorToken("google-calendar")).not.toBeNull();
   });
 });
 

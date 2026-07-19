@@ -133,9 +133,14 @@ describe("LocalStore", () => {
     const committedBytes = await readFile(file);
     expect(await commit(store, "command")).toMatchObject({ ok: true, duplicate: true });
     expect(await commit(store, "command", receiptState("command"), "different")).toEqual({ ok: false, code: "IDEMPOTENCY_MISMATCH" });
+    const reverseCollision = state(2, {
+      command: { revision: 1, resultId: RESULT_ID },
+      another: { revision: 2, resultId: randomUUID() },
+    });
+    expect(await store.commit({ expectedRevision: 1, commandId: "another", idempotencyKey: "key", nextState: reverseCollision })).toEqual({ ok: false, code: "IDEMPOTENCY_MISMATCH" });
     expect(await commit(store, "command", receiptState("command"), "")).toEqual({ ok: false, code: "INVALID_COMMAND" });
     expect(await readFile(file)).toEqual(committedBytes);
-    expect(await store.commit({ expectedRevision: 1, commandId: "another", idempotencyKey: "key", nextState: state(2) })).toEqual({ ok: false, code: "INVALID_RECEIPT" });
+    expect(await store.commit({ expectedRevision: 1, commandId: "another", idempotencyKey: "key", nextState: state(2) })).toEqual({ ok: false, code: "IDEMPOTENCY_MISMATCH" });
 
     for (const [commandId, idempotencyKey] of [
       ["", "key"], [" ", "key"], ["x".repeat(129), "key"], ["new", ""], ["new", " "], ["new", "x".repeat(129)],
