@@ -1,0 +1,94 @@
+import { describe, expect, it } from "vitest";
+import { BUILTIN_ROUTES, SyntheticRunner, createAgentAdapter } from "../src/adapters/adapters.js";
+import { parseAgentProfile, resolveRun } from "../src/profile/profile.js";
+
+function role(overrides: Record<string, unknown> = {}) {
+  const parsed = parseAgentProfile({ schemaVersion: 1, agentRef: "a", profileRef: "p", credentialAccountRef: "account-ref", roles: ["navigator", "explorer", "crewmate", "surveyor"], toolAllow: ["read"], toolDeny: [], authority: { read: true, write: false, network: false, workspace: true, externalAction: false }, enabledSkills: [], context: "off", systemPromptRef: "prompt", limits: { timeoutMs: 20, maxTurns: 2, maxTools: 2, maxRetries: 1, maxConcurrency: 1, maxDelegation: 1, tokenBudget: 5 }, session: { persistence: "off", resume: "never", fork: "never" }, structuredEvents: true, isolation: "auto", selection: { provider: "pi", model: "zai/glm-5.2", reasoning: "low" }, ...overrides });
+  if (!parsed.ok) throw new Error(parsed.code);
+  const run = resolveRun(parsed.value, {}, "adapter-test"); if (run.status !== "ready") throw new Error(run.code);
+  return run.value.roles[0];
+}
+function adapter(runner = new SyntheticRunner(), overrides: Record<string, unknown> = {}) {
+  const value = createAgentAdapter(role(overrides).selection, runner); if (!value) throw new Error("missing adapter"); return value;
+}
+const repositoryPath = "/tmp/bearing-repository";
+
+describe("provider-neutral adapters", () => {
+  it("has the exact static routes and inspects without process initialization", () => {
+    expect(BUILTIN_ROUTES.map(({ id, provider, model, executable }) => [id, provider, model, executable])).toEqual([["codex", "codex", "*", "codex"], ["grok-safe", "grok", "grok-build", "grok-safe"], ["pi-zai-glm-5.2", "pi", "zai/glm-5.2", "pi"], ["pi-deepseek-deepseek-v4-pro", "pi", "deepseek/deepseek-v4-pro", "pi"]]);
+    const runner = new SyntheticRunner(); expect(adapter(runner).inspect().available).toBe(true); expect(runner.calls).toEqual([]);
+    expect(createAgentAdapter({ provider: "codex", model: "gpt-5.6-sol", reasoning: "medium" }, runner)).toBeDefined();
+    expect(createAgentAdapter({ provider: "unknown", model: "nope", reasoning: "medium" }, runner)).toBeUndefined();
+  });
+
+  it("uses argv only, policy limits, and redacted structured receipts", async () => {
+    const runner = new SyntheticRunner(undefined, [{ exitCode: 0, events: [{ type: "done", data: { apiToken: "nope", nested: { secret: "nope" }, okay: true } }], usage: { tokens: 2 } }], { isolated: true, evidence: "test" });
+    const receipt = await adapter(runner).execute({ runId: "r", repositoryPath, role: role(), task: { prompt: "do work" } });
+    expect(runner.calls[0]).toMatchObject({ executable: "pi", args: ["--mode", "json", "--print", "--model", "zai/glm-5.2", "--thinking", "low", "--tools", "read", "--exclude-tools", "", "--no-session", "--offline"], stdin: "do work", cwd: repositoryPath });
+    expect(receipt).toMatchObject({ status: "completed", isolation: "attested", events: [{ data: { apiToken: "[redacted]", nested: { secret: "[redacted]" }, okay: true } }] });
+    expect(JSON.stringify(receipt)).not.toMatch(/nope|credential|prompt/i);
+  });
+
+  it("pins non-interactive Codex approval policy through current config argv", async () => {
+    const runner = new SyntheticRunner();
+    const codex = createAgentAdapter({ provider: "codex", model: "gpt-5.6-sol", reasoning: "medium" }, runner);
+    if (!codex) throw new Error("missing adapter");
+    await codex.execute({ runId: "codex-policy", repositoryPath, role: role({ selection: { provider: "codex", model: "gpt-5.6-sol", reasoning: "medium" } }), task: { prompt: "x" } });
+    expect(runner.calls[0]?.args).toContain('approval_policy="never"');
+    expect(runner.calls[0]?.args).not.toContain("-a");
+  });
+
+  it("uses the configured Codex model for wildcard selection and pins concrete models", async () => {
+    const wildcardRunner = new SyntheticRunner();
+    const wildcard = createAgentAdapter({ provider: "codex", model: "*", reasoning: "medium" }, wildcardRunner);
+    if (!wildcard) throw new Error("missing wildcard adapter");
+    await wildcard.execute({ runId: "codex-wildcard", repositoryPath, role: role({ selection: { provider: "codex", model: "*", reasoning: "medium" } }), task: { prompt: "x" } });
+    expect(wildcardRunner.calls[0]?.args).toEqual(["exec", "--json", "-c", 'model_reasoning_effort="medium"', "-c", 'approval_policy="never"', "-C", repositoryPath, "-s", "read-only", "--ephemeral", "-"]);
+
+    const concreteRunner = new SyntheticRunner();
+    const concrete = createAgentAdapter({ provider: "codex", model: "gpt-5.6-sol", reasoning: "high" }, concreteRunner);
+    if (!concrete) throw new Error("missing concrete adapter");
+    await concrete.execute({ runId: "codex-concrete", repositoryPath, role: role({ selection: { provider: "codex", model: "gpt-5.6-sol", reasoning: "high" } }), task: { prompt: "x" } });
+    expect(concreteRunner.calls[0]?.args).toEqual(["exec", "--json", "-m", "gpt-5.6-sol", "-c", 'model_reasoning_effort="high"', "-c", 'approval_policy="never"', "-C", repositoryPath, "-s", "read-only", "--ephemeral", "-"]);
+  });
+
+  it("truthfully resolves isolation modes", async () => {
+    expect((await adapter().execute({ runId: "a", repositoryPath, role: role({ isolation: "required" }), task: { prompt: "x" } }))).toMatchObject({ status: "blocked", failure: "isolation_required" });
+    expect((await adapter().execute({ runId: "b", repositoryPath, role: role(), task: { prompt: "x" } })).warningCodes).toContain("local_execution_unattested");
+    expect((await adapter().execute({ runId: "c", repositoryPath, role: role({ isolation: "off" }), task: { prompt: "x" } })).isolation).toBe("off");
+  });
+
+  it("requires explicit enabled compatible fallback and retains requested identity", async () => {
+    const unavailable = new SyntheticRunner(new Set<string>());
+    expect(await adapter(unavailable).execute({ runId: "x", repositoryPath, role: role(), task: { prompt: "x" }, fallbackRoute: "pi-deepseek-deepseek-v4-pro" })).toMatchObject({ status: "blocked", failure: "unavailable", requestedRoute: "pi-zai-glm-5.2", effectiveRoute: "pi-zai-glm-5.2" });
+    const withFallback = role({ fallbackEnabled: true });
+    const runner = Object.assign(new SyntheticRunner(new Set(["pi"])), { verify: async (route: { model: string }) => route.model !== "zai/glm-5.2" });
+    const receipt = await adapter(runner).execute({ runId: "y", repositoryPath, role: withFallback, task: { prompt: "x" }, fallbackRoute: "pi-deepseek-deepseek-v4-pro" });
+    expect(receipt).toMatchObject({ status: "completed", requestedRoute: "pi-zai-glm-5.2", effectiveRoute: "pi-deepseek-deepseek-v4-pro" });
+    expect(runner.calls[0]?.args).toContain("deepseek/deepseek-v4-pro");
+    const failedVerification = Object.assign(new SyntheticRunner(), { verify: async () => false });
+    expect(await adapter(failedVerification).execute({ runId: "verify", repositoryPath, role: role(), task: { prompt: "x" } })).toMatchObject({ status: "completed" });
+    expect(await adapter(new SyntheticRunner()).verify()).toMatchObject({ ok: false, failure: "verification_failed" });
+  });
+
+  it("bounds failures, cancellation, and retries without retrying unknown effects", async () => {
+    for (const [result, failure] of [[{ timedOut: true }, "timeout"], [{ exitCode: 0, events: "bad", usage: { tokens: 1 } }, "malformed_output"], [{ exitCode: 0, events: [], usage: { tokens: 6 } }, "token_budget"], [{ exitCode: 4, error: { apiKey: "not-in-receipt" } }, "nonzero_exit"], [{ unknownSideEffect: true, retryable: true }, "unknown_side_effect"]] as const) {
+      const runner = new SyntheticRunner(undefined, [result]); const a = adapter(runner); const receipt = await a.execute({ runId: failure, repositoryPath, role: role(), task: { prompt: "x" } });
+      expect(receipt.failure).toBe(failure); expect(receipt.attempts).toBe(failure === "unknown_side_effect" ? 1 : 1);
+      expect(JSON.stringify(receipt)).not.toContain("not-in-receipt");
+    }
+    const runner = new SyntheticRunner(); const a = adapter(runner); await a.cancel("cancel"); await a.cancel("cancel");
+    expect((await a.execute({ runId: "cancel", repositoryPath, role: role(), task: { prompt: "x" } })).status).toBe("cancelled"); expect(runner.cancelled).toEqual(["cancel"]);
+    const retry = new SyntheticRunner(undefined, [{ exitCode: 1, retryable: true, sideEffectFree: true }, { exitCode: 0, events: [], usage: { tokens: 1 } }]);
+    expect((await adapter(retry).execute({ runId: "retry", repositoryPath, role: role(), task: { prompt: "x" } })).attempts).toBe(2);
+    const unproven = new SyntheticRunner(undefined, [{ exitCode: 1, retryable: true }, { exitCode: 0, events: [], usage: { tokens: 1 } }]);
+    expect((await adapter(unproven).execute({ runId: "unproven", repositoryPath, role: role(), task: { prompt: "x" } })).attempts).toBe(1);
+  });
+
+  it("bounds structured event count and type length", async () => {
+    const tooMany = new SyntheticRunner(undefined, [{ exitCode: 0, events: Array.from({ length: 1025 }, () => ({ type: "x" })), usage: { tokens: 1 } }]);
+    expect((await adapter(tooMany).execute({ runId: "many", repositoryPath, role: role(), task: { prompt: "x" } })).failure).toBe("malformed_output");
+    const longType = new SyntheticRunner(undefined, [{ exitCode: 0, events: [{ type: "x".repeat(129) }], usage: { tokens: 1 } }]);
+    expect((await adapter(longType).execute({ runId: "long", repositoryPath, role: role(), task: { prompt: "x" } })).failure).toBe("malformed_output");
+  });
+});
