@@ -66,7 +66,7 @@ run_release_contract() {
 }
 
 run_fast() {
-    printf '%s\n' 'FAST: running Phase 1 through Slice 2.2 gates.'
+    printf '%s\n' 'FAST: running Phase 1 through Slice 2.3 gates.'
 
     run_budget
     cargo fmt --manifest-path "$bran_root/Cargo.toml" --all -- --check
@@ -83,7 +83,7 @@ run_fast() {
     run_release_contract
     run_public_boundary
 
-    printf '%s\n' 'PASS Phase 1 through Slice 2.2 fast gate'
+    printf '%s\n' 'PASS Phase 1 through Slice 2.3 fast gate'
 }
 
 run_security() {
@@ -97,13 +97,14 @@ run_security() {
 }
 
 run_performance() {
-    printf '%s\n' 'PERFORMANCE: running bounded repository scanner and knowledge graph benchmarks.'
+    printf '%s\n' 'PERFORMANCE: running bounded scanner, graph, and context-packet benchmarks.'
 
     run_budget
     cargo bench --manifest-path "$bran_root/Cargo.toml" -p bran-core --bench repository_scan
     cargo bench --manifest-path "$bran_root/Cargo.toml" -p bran-core --bench knowledge_graph
+    cargo bench --manifest-path "$bran_root/Cargo.toml" -p bran-core --bench context_packet
 
-    printf '%s\n' 'PASS Slice 2.2 performance gate'
+    printf '%s\n' 'PASS Slice 2.3 performance gate'
 }
 
 case "$gate_mode" in
@@ -129,6 +130,6 @@ case "$gate_mode" in
         run_conformance
         run_security
         run_performance
-        printf '%s\n' 'PASS Phase 1 through Slice 2.2 full gate'
+        printf '%s\n' 'PASS Phase 1 through Slice 2.3 full gate'
         ;;
 esac

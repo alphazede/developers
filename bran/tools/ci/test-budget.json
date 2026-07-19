@@ -144,6 +144,28 @@
       "classification": "new",
       "source": "crates/bran-core/src/graph/mod.rs",
       "support_fixtures": []
+    },
+    {
+      "stable_id": "P2-PACKET-SQZ",
+      "phase": 2,
+      "slice": "2.3",
+      "runner": "rust",
+      "name": "p2_packet_sqz",
+      "category": "integration",
+      "classification": "new",
+      "source": "crates/bran-core/src/packet/mod.rs",
+      "support_fixtures": []
+    },
+    {
+      "stable_id": "P2-VIEW",
+      "phase": 2,
+      "slice": "2.3",
+      "runner": "rust",
+      "name": "p2_view",
+      "category": "unit",
+      "classification": "new",
+      "source": "crates/bran-core/src/view/mod.rs",
+      "support_fixtures": []
     }
   ]
 }

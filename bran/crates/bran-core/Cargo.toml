@@ -16,3 +16,8 @@ harness = false
 name = "knowledge_graph"
 path = "../../benches/knowledge_graph.rs"
 harness = false
+
+[[bench]]
+name = "context_packet"
+path = "../../benches/context_packet.rs"
+harness = false

@@ -1,11 +1,14 @@
 //! Exact-release verification primitives for Bran distribution metadata.
 
+pub mod adapters;
 pub mod bundle;
 pub mod graph;
 pub mod metadata;
+pub mod packet;
 pub mod profile;
 pub mod scan;
 pub mod schema;
+pub mod view;
 
 // Profile validation exports (Slice 1.2 wiring only)
 pub use crate::profile::{
