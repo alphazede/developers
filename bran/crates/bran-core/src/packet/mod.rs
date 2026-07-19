@@ -562,6 +562,7 @@ mod tests {
         DlpStatus, FidelityStatus, SqzAdapter, SqzAdapterConfig, SqzFailureReason, SqzIdentity,
         SqzPolicy, SqzPort, SqzPortError, SqzPortErrorCode, SqzPortOutput, SqzStatus,
     };
+    use crate::agent::result_store::ResultId;
     use crate::graph::{
         Confidence, EdgeCertainty, EdgeId, EdgeInput, EdgeRelationship, GraphInput, GraphLimits,
         KnowledgeGraph, NodeInput, NodeRole,
@@ -1183,17 +1184,15 @@ mod tests {
         assert_eq!(applied.receipt.requested_max_output_bytes, 150);
         assert_eq!(applied.receipt.effective_max_output_bytes, 150);
         assert!(applied.receipt.monotonic_call_latency >= std::time::Duration::ZERO);
+        let applied_id = ResultId::sha256(applied.packet.payload.as_bytes());
         assert_eq!(
             applied.receipt.sqz_id.as_ref().unwrap().algorithm,
-            "fnv1a64-noncryptographic"
+            applied_id.algorithm()
         );
-        assert!(applied
-            .receipt
-            .sqz_id
-            .as_ref()
-            .unwrap()
-            .value
-            .starts_with("sqz-fnv1a64-"));
+        assert_eq!(
+            applied.receipt.sqz_id.as_ref().unwrap().value,
+            applied_id.value()
+        );
 
         let returned_identity = SqzIdentity::new(
             "unapproved-cargo-install:sqz-cli=1.1.1",
@@ -1215,6 +1214,7 @@ mod tests {
             identity_mismatch.receipt.returned_identity,
             Some(returned_identity)
         );
+        assert_eq!(identity_mismatch.receipt.sqz_id, None);
         assert_eq!(identity_mismatch.packet, bounded);
 
         let off_port = InMemorySqzPort::output(preserved);
@@ -1228,9 +1228,11 @@ mod tests {
         assert_eq!(off.receipt.actual_input_tokens, None);
         assert_eq!(off.receipt.fidelity_status, FidelityStatus::NotEvaluated);
         assert_eq!(off.receipt.dlp_status, DlpStatus::NotEvaluated);
+        assert_eq!(off.receipt.sqz_id, None);
         assert_eq!(off_calls.get(), 0);
 
         let expanded_payload = format!("{}node=node.beta\nnode=node.gamma\n", bounded.payload);
+        let rejected_candidate_id = ResultId::sha256(expanded_payload.as_bytes());
         let not_beneficial = SqzAdapter::new(
             InMemorySqzPort::output(expanded_payload),
             sqz_config(SqzPolicy::PublicOn, 2_000),
@@ -1242,6 +1244,19 @@ mod tests {
         assert!(
             not_beneficial.receipt.candidate_compressed_bytes.unwrap()
                 >= not_beneficial.receipt.raw_bytes
+        );
+        let not_beneficial_id = ResultId::sha256(not_beneficial.packet.payload.as_bytes());
+        assert_eq!(
+            not_beneficial.receipt.sqz_id.as_ref().unwrap().algorithm,
+            not_beneficial_id.algorithm()
+        );
+        assert_eq!(
+            not_beneficial.receipt.sqz_id.as_ref().unwrap().value,
+            not_beneficial_id.value()
+        );
+        assert_ne!(
+            not_beneficial.receipt.sqz_id.as_ref().unwrap().value,
+            rejected_candidate_id.value()
         );
 
         let missing_required = SqzAdapter::new(
@@ -1259,6 +1274,7 @@ mod tests {
             missing_required.receipt.missing_fidelity_anchor_ids,
             vec!["required.delta"]
         );
+        assert_eq!(missing_required.receipt.sqz_id, None);
         assert_eq!(missing_required.packet, bounded);
 
         let dlp_failure = SqzAdapter::new(
@@ -1277,6 +1293,7 @@ mod tests {
             vec!["credential_assignment"]
         );
         assert_eq!(dlp_failure.receipt.dlp_status, DlpStatus::Findings);
+        assert_eq!(dlp_failure.receipt.sqz_id, None);
         assert_eq!(dlp_failure.packet, bounded);
 
         let anchor_dlp_port = InMemorySqzPort::output(preserved);
@@ -1298,6 +1315,7 @@ mod tests {
             anchor_dlp.receipt.dlp_findings,
             vec!["credential_assignment"]
         );
+        assert_eq!(anchor_dlp.receipt.sqz_id, None);
         assert_eq!(anchor_dlp_calls.get(), 0);
 
         let over_bound = SqzAdapter::new(
@@ -1311,6 +1329,7 @@ mod tests {
             over_bound.receipt.failure_reason,
             Some(SqzFailureReason::OutputExceedsBound)
         );
+        assert_eq!(over_bound.receipt.sqz_id, None);
         assert_eq!(over_bound.packet, bounded);
 
         let locked_port = InMemorySqzPort::unavailable();
@@ -1327,6 +1346,7 @@ mod tests {
             ))
         );
         assert_eq!(locked.receipt.policy, SqzPolicy::InternalLocked);
+        assert_eq!(locked.receipt.sqz_id, None);
         assert_eq!(locked_calls.get(), 1);
     }
 }

@@ -1,6 +1,7 @@
 //! Exact-release verification primitives for Bran distribution metadata.
 
 pub mod adapters;
+pub mod agent;
 pub mod bundle;
 pub mod export;
 pub mod graph;

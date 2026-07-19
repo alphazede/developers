@@ -1,10 +1,14 @@
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::ffi::OsStr;
 use std::fmt::Write as _;
 use std::io::IsTerminal;
 use std::path::Path;
 use std::process::ExitCode;
 
+use bran_core::agent::delegate::{DelegationOptions, DelegationRequest};
+use bran_core::agent::receipt::DelegationReceipt;
+use bran_core::agent::runtime::InvocationOutcome;
+use bran_core::agent::{synthetic, synthetic_builtin_profiles, ReasoningLevel, ToolPolicy};
 use bran_core::bundle::{Bundle, Doc, Frontmatter};
 use bran_core::graph::{GraphLimits, KnowledgeGraph, NodeRole};
 use bran_core::metadata::{FactProvenance, MetadataFact};
@@ -364,6 +368,36 @@ impl CliApp {
                     is_interactive: true,
                 }
             }
+            "agents" => {
+                // Slice 3.4 Packet D1: agents list only (headless, no auth/provider/network, no -p)
+                let sub = match it
+                    .next()
+                    .and_then(|o| o.as_ref().to_str().map(|s| s.to_owned()))
+                {
+                    Some(s) => s,
+                    None => return CliResult::usage(make_agents_error("", "missing_subcommand")),
+                };
+                match sub.as_str() {
+                    "list" => {
+                        if it.next().is_some() {
+                            return CliResult::usage(make_agents_error("list", "too_many_args"));
+                        }
+                        do_agents_list()
+                    }
+                    _ => CliResult::usage(make_agents_error(&sub, "unknown_subcommand")),
+                }
+            }
+            "-p" => {
+                // Headless prompt surface: no transport or secrets.
+                let mut rest: Vec<String> = vec![];
+                for a in it {
+                    match a.as_ref().to_str() {
+                        Some(s) => rest.push(s.to_owned()),
+                        None => return CliResult::usage(make_p_error("invalid_utf8")),
+                    }
+                }
+                do_headless_p(rest)
+            }
             _ => CliResult::usage(UNKNOWN_COMMAND_ERROR.to_owned()),
         }
     }
@@ -513,6 +547,27 @@ fn make_maintain_error(sub: &str, detail: &str) -> String {
         "{}",
         "{}",
     )
+}
+
+fn make_agents_error(sub: &str, detail: &str) -> String {
+    let command = if sub.is_empty() {
+        "agents".to_owned()
+    } else {
+        format!("agents.{}", sub)
+    };
+    make_envelope(
+        &command,
+        "error",
+        "null",
+        &[],
+        &[detail.to_owned()],
+        "{}",
+        "{}",
+    )
+}
+
+fn make_p_error(detail: &str) -> String {
+    make_envelope("p", "error", "null", &[], &[detail.to_owned()], "{}", "{}")
 }
 
 fn json_escape(s: &str) -> String {
@@ -1303,6 +1358,299 @@ fn do_maintain_revalidate(root: String) -> CliResult {
     }
 }
 
+fn do_agents_list() -> CliResult {
+    let apr = synthetic_builtin_profiles();
+    let mut agent_strs = vec![];
+    for p in apr.profiles() {
+        let name = json_escape(p.name());
+        let provider = json_escape(p.provider());
+        let model = json_escape(p.model());
+        let account = json_escape(p.account_handle());
+        let reasoning = p.default_reasoning_level().as_str();
+        let tp = p.tool_policy();
+        let allow = tp
+            .allowed()
+            .map(|t| format!("\"{}\"", json_escape(t)))
+            .collect::<Vec<_>>()
+            .join(",");
+        let deny = tp
+            .denied()
+            .map(|t| format!("\"{}\"", json_escape(t)))
+            .collect::<Vec<_>>()
+            .join(",");
+        agent_strs.push(format!(
+            "{{\"name\":\"{}\",\"provider\":\"{}\",\"model\":\"{}\",\"account_handle\":\"{}\",\"default_reasoning\":\"{}\",\"tool_policy\":{{\"allow\":[{}],\"deny\":[{}]}}}}",
+            name, provider, model, account, reasoning, allow, deny
+        ));
+    }
+    let data = format!("{{\"agents\":[{}]}}", agent_strs.join(","));
+    CliResult::success(make_envelope(
+        "agents.list",
+        "ok",
+        &data,
+        &[],
+        &[],
+        "{}",
+        "{}",
+    ))
+}
+
+fn parse_tools(s: &str) -> Result<ToolPolicy, String> {
+    let parts: Vec<&str> = s.split(',').map(|x| x.trim()).collect();
+    if parts.iter().any(|p| p.is_empty()) {
+        return Err("empty_tools".to_owned());
+    }
+    let mut members: Vec<String> = vec![];
+    for p in parts {
+        members.push(p.to_owned());
+    }
+    if members.is_empty() {
+        return Err("empty_tools".to_owned());
+    }
+    if members.len() > 32 {
+        return Err("too_many_tools".to_owned());
+    }
+    let mut seen = BTreeSet::<String>::new();
+    for m in &members {
+        if !seen.insert(m.clone()) {
+            return Err("duplicate_tool".to_owned());
+        }
+        if m != "read" && m != "search" {
+            return Err("denied_tool".to_owned());
+        }
+    }
+    let deny = vec![
+        "write".to_owned(),
+        "edit".to_owned(),
+        "shell".to_owned(),
+        "network".to_owned(),
+    ];
+    ToolPolicy::new(members, deny).map_err(|_| "invalid_tool".to_owned())
+}
+
+fn do_headless_p(args: Vec<String>) -> CliResult {
+    do_headless_p_with(args, synthetic::headless_incomplete_receipt_for)
+}
+
+fn do_headless_p_with(
+    args: Vec<String>,
+    execute: impl FnOnce(&DelegationRequest, bool) -> DelegationReceipt,
+) -> CliResult {
+    // Reject any literal credential/key flags with typed usage (no env, no secret reflection)
+    for arg in &args {
+        if matches!(
+            arg.as_str(),
+            "--api-key" | "--apikey" | "--key" | "--credential" | "--credentials"
+        ) {
+            return CliResult::usage(make_p_error("forbidden_credential_flag"));
+        }
+    }
+
+    let mut agent: Option<String> = None;
+    let mut reasoning: Option<String> = None;
+    let mut tools_str: Option<String> = None;
+    let mut provider: Option<String> = None;
+    let mut model: Option<String> = None;
+    let mut no_session = false;
+    let mut offline = false;
+    let mut positionals: Vec<String> = vec![];
+    let mut prompt_seen = false;
+    let mut i = 0usize;
+    while i < args.len() {
+        let arg = &args[i];
+        if arg.starts_with("--") {
+            if prompt_seen {
+                return CliResult::usage(make_p_error("unknown_option"));
+            }
+            match arg.as_str() {
+                "--agent" => {
+                    if agent.is_some() {
+                        return CliResult::usage(make_p_error("duplicate_option"));
+                    }
+                    i += 1;
+                    if i >= args.len() || args[i].starts_with("--") {
+                        return CliResult::usage(make_p_error("missing_value"));
+                    }
+                    let val = args[i].clone();
+                    if val.trim().is_empty() {
+                        return CliResult::usage(make_p_error("missing_value"));
+                    }
+                    agent = Some(val);
+                }
+                "--reasoning" => {
+                    if reasoning.is_some() {
+                        return CliResult::usage(make_p_error("duplicate_option"));
+                    }
+                    i += 1;
+                    if i >= args.len() || args[i].starts_with("--") {
+                        return CliResult::usage(make_p_error("missing_value"));
+                    }
+                    let val = args[i].clone();
+                    if val.trim().is_empty() {
+                        return CliResult::usage(make_p_error("missing_value"));
+                    }
+                    reasoning = Some(val);
+                }
+                "--tools" => {
+                    if tools_str.is_some() {
+                        return CliResult::usage(make_p_error("duplicate_option"));
+                    }
+                    i += 1;
+                    if i >= args.len() || args[i].starts_with("--") {
+                        return CliResult::usage(make_p_error("missing_value"));
+                    }
+                    let val = args[i].clone();
+                    if val.trim().is_empty() {
+                        return CliResult::usage(make_p_error("missing_value"));
+                    }
+                    tools_str = Some(val);
+                }
+                "--provider" => {
+                    if provider.is_some() {
+                        return CliResult::usage(make_p_error("duplicate_option"));
+                    }
+                    i += 1;
+                    if i >= args.len() || args[i].starts_with("--") {
+                        return CliResult::usage(make_p_error("missing_value"));
+                    }
+                    let val = args[i].clone();
+                    if val.trim().is_empty() {
+                        return CliResult::usage(make_p_error("missing_value"));
+                    }
+                    provider = Some(val);
+                }
+                "--model" => {
+                    if model.is_some() {
+                        return CliResult::usage(make_p_error("duplicate_option"));
+                    }
+                    i += 1;
+                    if i >= args.len() || args[i].starts_with("--") {
+                        return CliResult::usage(make_p_error("missing_value"));
+                    }
+                    let val = args[i].clone();
+                    if val.trim().is_empty() {
+                        return CliResult::usage(make_p_error("missing_value"));
+                    }
+                    model = Some(val);
+                }
+                "--no-session" => {
+                    if no_session {
+                        return CliResult::usage(make_p_error("duplicate_option"));
+                    }
+                    no_session = true;
+                }
+                "--offline" => {
+                    if offline {
+                        return CliResult::usage(make_p_error("duplicate_option"));
+                    }
+                    offline = true;
+                }
+                _ => {
+                    return CliResult::usage(make_p_error("unknown_option"));
+                }
+            }
+        } else {
+            if prompt_seen {
+                return CliResult::usage(make_p_error("too_many_positional"));
+            }
+            positionals.push(arg.clone());
+            prompt_seen = true;
+        }
+        i += 1;
+    }
+
+    if positionals.len() != 1 {
+        return CliResult::usage(make_p_error(if positionals.is_empty() {
+            "missing_prompt"
+        } else {
+            "too_many_positional"
+        }));
+    }
+    let prompt = positionals.into_iter().next().unwrap();
+    if prompt.trim().is_empty() {
+        return CliResult::usage(make_p_error("missing_prompt"));
+    }
+
+    let agent = match agent {
+        Some(a) if !a.trim().is_empty() => a,
+        _ => return CliResult::usage(make_p_error("missing_agent")),
+    };
+
+    let reasoning_level = match reasoning {
+        Some(r) => match ReasoningLevel::parse(&r) {
+            Ok(rl) => Some(rl),
+            Err(_) => return CliResult::usage(make_p_error("invalid_reasoning")),
+        },
+        None => None,
+    };
+
+    let tool_policy = if let Some(ts) = tools_str {
+        match parse_tools(&ts) {
+            Ok(p) => p,
+            Err(detail) => return CliResult::usage(make_p_error(&detail)),
+        }
+    } else {
+        ToolPolicy::read_only_default()
+    };
+
+    // Validate identities via existing core ctor.
+    let mut del_opts = DelegationOptions::new();
+    del_opts.provider_override = provider;
+    del_opts.model_override = model;
+    del_opts.reasoning_override = reasoning_level;
+    del_opts.tool_policy = tool_policy;
+    del_opts.no_session = no_session;
+
+    // Validate identities via the synthetic registries (no silent fallback).
+    let apr = synthetic_builtin_profiles();
+    let profile = match apr.get(&agent) {
+        Ok(p) => p,
+        Err(_) => return CliResult::usage(make_p_error("unknown_profile")),
+    };
+    if del_opts
+        .provider_override
+        .as_deref()
+        .is_some_and(|value| !apr.provider_registry().contains(value))
+    {
+        return CliResult::usage(make_p_error("unknown_provider"));
+    }
+    if let Some(model) = del_opts.model_override.as_deref() {
+        let provider = del_opts
+            .provider_override
+            .as_deref()
+            .unwrap_or(profile.provider());
+        if apr
+            .model_registry()
+            .require_for_provider(provider, model)
+            .is_err()
+        {
+            return CliResult::usage(make_p_error("unknown_model"));
+        }
+    }
+
+    let del_req = match DelegationRequest::new(agent, prompt, del_opts) {
+        Ok(request) => request,
+        Err(_) => return CliResult::usage(make_p_error("invalid_identity")),
+    };
+    let receipt = execute(&del_req, offline);
+    let receipt_json = receipt.to_json();
+    let data = format!("{{\"receipt\":{}}}", receipt_json);
+
+    if matches!(receipt.outcome(), InvocationOutcome::Complete { .. }) {
+        CliResult::success(make_envelope("p", "ok", &data, &[], &[], "{}", "{}"))
+    } else {
+        CliResult::operation(make_envelope(
+            "p",
+            "error",
+            &data,
+            &[],
+            &["runtime_incomplete".to_owned()],
+            "{}",
+            "{}",
+        ))
+    }
+}
+
 struct CliResult {
     output: String,
     exit_code: ExitCode,
@@ -1652,6 +2000,221 @@ mod tests {
         );
         assert!(skill.contains("bounded `git`, `rg`, or language-tool evidence")
             && skill.contains("Never fabricate BRAN results, provenance, metrics, compression, savings, or token counts"));
+
+        // Slice 3.4 p-headless asserts only (compact, inside existing test, zero new test names)
+        let ex1 = CliApp::run(vec![
+            "-p".to_owned(),
+            "--agent".to_owned(),
+            "sol".to_owned(),
+            "tell me about bran".to_owned(),
+        ]);
+        assert!(
+            ex1.output.contains("\"command\":\"p\"") && ex1.output.contains("\"status\":\"error\"")
+        );
+        assert!(
+            ex1.output.contains("runtime_incomplete")
+                && ex1.output.contains("bran-agent-receipt-v1")
+        );
+        assert!(ex1.output.contains("\"profile_name\":\"sol\""));
+        // real runtime disabled path yields unavailable in non-overridden requested; overrides preserved when passed
+        assert!(ex1.output.contains("unavailable"));
+        assert!(
+            ex1.output.contains("\"effective\"")
+                && ex1.output.contains("unavailable")
+                && ex1.output.contains("\"receipt\":")
+        );
+        assert_eq!(ex1.exit_code, TypedExit::Operation.code());
+        assert!(ex1.is_error);
+        let ex2 = CliApp::run(vec![
+            "-p".to_owned(),
+            "--agent".to_owned(),
+            "luna".to_owned(),
+            "--reasoning".to_owned(),
+            "medium".to_owned(),
+            "--tools".to_owned(),
+            "read,search".to_owned(),
+            "--no-session".to_owned(),
+            "--provider".to_owned(),
+            "fixture-provider".to_owned(),
+            "--model".to_owned(),
+            "fixture-luna".to_owned(),
+            "q".to_owned(),
+        ]);
+        assert!(ex2.output.contains("\"no_session\":true") && ex2.output.contains("medium"));
+        assert!(
+            ex2.output.contains("\"profile_name\":\"luna\"")
+                && ex2.output.contains("runtime_incomplete")
+        );
+        // exact reasoning rejection
+        let bad_r = CliApp::run(vec![
+            "-p".to_owned(),
+            "--agent".to_owned(),
+            "sol".to_owned(),
+            "--reasoning".to_owned(),
+            "Medium".to_owned(),
+            "hi".to_owned(),
+        ]);
+        assert!(bad_r.output.contains("invalid_reasoning"));
+        assert_eq!(bad_r.exit_code, TypedExit::Usage.code());
+        // denied tool rejection
+        let bad_t = CliApp::run(vec![
+            "-p".to_owned(),
+            "--agent".to_owned(),
+            "sol".to_owned(),
+            "--tools".to_owned(),
+            "read,write".to_owned(),
+            "hi".to_owned(),
+        ]);
+        assert!(bad_t.output.contains("denied_tool"));
+        assert_eq!(bad_t.exit_code, TypedExit::Usage.code());
+        let empty_t = CliApp::run(vec![
+            "-p".to_owned(),
+            "--agent".to_owned(),
+            "sol".to_owned(),
+            "--tools".to_owned(),
+            "read,,search".to_owned(),
+            "hi".to_owned(),
+        ]);
+        assert!(empty_t.output.contains("empty_tools"));
+        assert_eq!(empty_t.exit_code, TypedExit::Usage.code());
+        let bad_profile = CliApp::run(vec![
+            "-p".to_owned(),
+            "--agent".to_owned(),
+            "nova".to_owned(),
+            "hi".to_owned(),
+        ]);
+        assert!(bad_profile.output.contains("unknown_profile"));
+        let bad_provider = CliApp::run(vec![
+            "-p".to_owned(),
+            "--agent".to_owned(),
+            "sol".to_owned(),
+            "--provider".to_owned(),
+            "other-provider".to_owned(),
+            "hi".to_owned(),
+        ]);
+        assert!(bad_provider.output.contains("unknown_provider"));
+        let bad_model = CliApp::run(vec![
+            "-p".to_owned(),
+            "--agent".to_owned(),
+            "sol".to_owned(),
+            "--model".to_owned(),
+            "other-model".to_owned(),
+            "hi".to_owned(),
+        ]);
+        assert!(bad_model.output.contains("unknown_model"));
+        // missing agent/prompt
+        let miss_a = CliApp::run(vec!["-p".to_owned(), "justprompt".to_owned()]);
+        assert!(miss_a.output.contains("missing_agent"));
+        let miss_p = CliApp::run(vec![
+            "-p".to_owned(),
+            "--agent".to_owned(),
+            "sol".to_owned(),
+        ]);
+        assert!(miss_p.output.contains("missing_prompt"));
+        // unknown/duplicate option
+        let unk = CliApp::run(vec![
+            "-p".to_owned(),
+            "--agent".to_owned(),
+            "sol".to_owned(),
+            "--xyz".to_owned(),
+            "hi".to_owned(),
+        ]);
+        assert!(unk.output.contains("unknown_option"));
+        let dup = CliApp::run(vec![
+            "-p".to_owned(),
+            "--agent".to_owned(),
+            "sol".to_owned(),
+            "--agent".to_owned(),
+            "luna".to_owned(),
+            "hi".to_owned(),
+        ]);
+        assert!(dup.output.contains("duplicate_option"));
+        // no-session receipt + missing value
+        let ns = CliApp::run(vec![
+            "-p".to_owned(),
+            "--agent".to_owned(),
+            "sol".to_owned(),
+            "--no-session".to_owned(),
+            "q".to_owned(),
+        ]);
+        assert!(ns.output.contains("\"no_session\":true"));
+        let mv = CliApp::run(vec!["-p".to_owned(), "--agent".to_owned()]);
+        assert!(mv.output.contains("missing_value"));
+
+        let conn = super::do_headless_p_with(
+            vec![
+                "--agent".to_owned(),
+                "sol".to_owned(),
+                "sol-connected-exact".to_owned(),
+            ],
+            |request, _| bran_core::agent::synthetic::connected_receipt_for(request, true),
+        );
+        assert!(
+            conn.output.contains("\"command\":\"p\"") && conn.output.contains("\"status\":\"ok\"")
+        );
+        assert_eq!(conn.exit_code, TypedExit::Success.code());
+        assert!(!conn.is_error);
+        assert!(conn.output.contains("\"state\":\"complete\""));
+        assert!(conn.output.contains("\"profile_name\":\"sol\""));
+        assert!(conn.output.contains("\"value\":\"fixture-sol\""));
+        assert!(!conn.output.contains("sol-connected-exact")); // canonical omits original prompt
+
+        let unatt = super::do_headless_p_with(
+            vec![
+                "--agent".to_owned(),
+                "luna".to_owned(),
+                "--provider".to_owned(),
+                "fixture-provider".to_owned(),
+                "--model".to_owned(),
+                "fixture-luna".to_owned(),
+                "--reasoning".to_owned(),
+                "medium".to_owned(),
+                "luna-unatt".to_owned(),
+            ],
+            |request, _| bran_core::agent::synthetic::connected_receipt_for(request, false),
+        );
+        assert!(unatt.output.contains("\"status\":\"ok\""));
+        assert_eq!(unatt.exit_code, TypedExit::Success.code());
+        assert!(unatt.output.contains("\"profile_name\":\"luna\""));
+        assert!(unatt.output.contains("\"value\":\"fixture-luna\""));
+        assert!(unatt.output.contains("\"value\":\"medium\""));
+        assert!(unatt.output.contains("unavailable"));
+        assert!(!unatt.output.contains("luna-unatt"));
+
+        let off = CliApp::run(vec![
+            "-p".to_owned(),
+            "--agent".to_owned(),
+            "sol".to_owned(),
+            "--offline".to_owned(),
+            "off-prompt".to_owned(),
+        ]);
+        assert!(off.output.contains("explicit_offline"));
+        assert_eq!(off.exit_code, TypedExit::Operation.code());
+        assert!(off.is_error);
+        assert!(!off.output.contains("off-prompt"));
+
+        // absence of secret material (and no credential reflection)
+        let sec = CliApp::run(vec![
+            "-p".to_owned(),
+            "--agent".to_owned(),
+            "sol".to_owned(),
+            "secret api-key credential".to_owned(),
+        ]);
+        let slow = sec.output.to_ascii_lowercase();
+        assert!(
+            !slow.contains("key")
+                && !slow.contains("credential")
+                && !slow.contains("secret")
+                && !slow.contains("api-key")
+        );
+        let forbidden = CliApp::run(vec![
+            "-p".to_owned(),
+            "--agent".to_owned(),
+            "sol".to_owned(),
+            "--credentials".to_owned(),
+            "hi".to_owned(),
+        ]);
+        assert!(forbidden.output.contains("forbidden_credential_flag"));
         std::fs::remove_dir_all(root).unwrap();
     }
 }

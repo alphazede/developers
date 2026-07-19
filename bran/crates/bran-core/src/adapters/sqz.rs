@@ -3,6 +3,7 @@
 //! This module deliberately owns no process, filesystem, network, or provider
 //! integration. A host supplies those concerns through [`SqzPort`].
 
+use crate::agent::result_store::ResultId;
 use crate::packet::{ContextPacket, EvidencePriority, PreservationAnchor};
 use std::collections::{BTreeMap, BTreeSet};
 use std::time::{Duration, Instant};
@@ -170,7 +171,7 @@ pub enum SqzFailureReason {
     OutputExceedsBound,
 }
 
-/// A deterministic, explicitly non-cryptographic identifier for evaluated output.
+/// A SHA-256 identity for accepted returned content.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct SqzId {
     pub algorithm: &'static str,
@@ -399,7 +400,7 @@ where
                 SqzFailureReason::OutputExceedsBound,
             );
         }
-        let candidate_id = Some(deterministic_id(&output.payload));
+        let candidate_id = Some(content_id(&output.payload));
 
         let (fidelity_status, missing_fidelity_anchor_ids) =
             fidelity_status(&output.payload, &anchors.anchors);
@@ -447,6 +448,7 @@ where
             );
         }
         if candidate_bytes >= raw_bytes {
+            let returned_id = Some(content_id(&packet.payload));
             let receipt = self.receipt(
                 raw_bytes,
                 raw_bytes,
@@ -454,7 +456,7 @@ where
                 effective_max_output_bytes,
                 returned_identity,
                 latency,
-                Some((&output, candidate_bytes, candidate_id)),
+                Some((&output, candidate_bytes, returned_id)),
                 SqzStatus::NotBeneficial,
                 None,
                 fidelity_status,
@@ -583,7 +585,9 @@ where
         let actual_output_tokens = candidate
             .as_ref()
             .and_then(|(output, _, _)| output.actual_output_tokens);
-        let sqz_id = candidate.and_then(|(_, _, id)| id);
+        let sqz_id = matches!(status, SqzStatus::Applied | SqzStatus::NotBeneficial)
+            .then(|| candidate.and_then(|(_, _, id)| id))
+            .flatten();
         let dlp_status = if !dlp_findings.is_empty() {
             DlpStatus::Findings
         } else if status == SqzStatus::Off
@@ -688,15 +692,11 @@ fn anchor_ids(anchors: &[PreservationAnchor]) -> Vec<String> {
         .collect()
 }
 
-fn deterministic_id(output: &str) -> SqzId {
-    let mut value = 0xcbf29ce484222325u64;
-    for byte in output.bytes() {
-        value ^= u64::from(byte);
-        value = value.wrapping_mul(0x100000001b3);
-    }
+fn content_id(output: &str) -> SqzId {
+    let id = ResultId::sha256(output.as_bytes());
     SqzId {
-        algorithm: "fnv1a64-noncryptographic",
-        value: format!("sqz-fnv1a64-{value:016x}"),
+        algorithm: id.algorithm(),
+        value: id.value().to_owned(),
     }
 }
 

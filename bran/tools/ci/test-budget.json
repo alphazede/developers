@@ -235,6 +235,28 @@
       "support_fixtures": [
         "fixtures/obsidian/p3-body.txt"
       ]
+    },
+    {
+      "stable_id": "P3-AGENT-PROFILE",
+      "phase": 3,
+      "slice": "3.4",
+      "runner": "rust",
+      "name": "p3_agent_profile_contract",
+      "category": "contract",
+      "classification": "new",
+      "source": "crates/bran-core/src/agent/mod.rs",
+      "support_fixtures": []
+    },
+    {
+      "stable_id": "P3-AGENT-RUNTIME",
+      "phase": 3,
+      "slice": "3.4",
+      "runner": "rust",
+      "name": "p3_agent_runtime",
+      "category": "integration",
+      "classification": "new",
+      "source": "crates/bran-core/src/agent/coordinator.rs",
+      "support_fixtures": []
     }
   ]
 }
