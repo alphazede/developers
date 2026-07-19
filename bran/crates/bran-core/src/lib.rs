@@ -6,6 +6,7 @@ pub mod graph;
 pub mod metadata;
 pub mod packet;
 pub mod profile;
+pub mod repair;
 pub mod scan;
 pub mod schema;
 pub mod view;
