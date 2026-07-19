@@ -381,6 +381,10 @@ pub fn resolve_advanced(
         capability_available: Some(probe.sqz_available),
     });
 
+    if effective_profile.is_none() {
+        effective.profile = OperatingProfile::OfflineCore;
+    }
+
     let guardrails = guardrail_resolutions(&requested);
     ResolvedSettings {
         requested,
@@ -686,8 +690,60 @@ where
 }
 
 pub fn onboarding_complete(path: &Path) -> io::Result<bool> {
-    let bytes = fs::read(path)?;
-    Ok(bytes.starts_with(format!("version={SETTINGS_VERSION}\ncompleted=true\n").as_bytes()))
+    let bytes = match fs::read(path) {
+        Ok(bytes) => bytes,
+        Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(false),
+        Err(error) => return Err(error),
+    };
+    let contents = match std::str::from_utf8(&bytes) {
+        Ok(contents) => contents,
+        _ => return Ok(false),
+    };
+    if bytes.contains(&b'\r') || !contents.ends_with('\n') {
+        return Ok(false);
+    }
+    let lines: Vec<&str> = contents.lines().collect();
+    if lines.len() != 16 {
+        return Ok(false);
+    }
+    if lines[0] != format!("version={SETTINGS_VERSION}") || lines[1] != "completed=true" {
+        return Ok(false);
+    }
+    if !matches!(
+        lines[2],
+        "profile=offline-core" | "profile=core-sqz" | "profile=connected-agent"
+    ) {
+        return Ok(false);
+    }
+    let boolean_field_prefixes = [
+        "sqz=",
+        "diagnostics=",
+        "voice=",
+        "structured_history=",
+        "saved_chat=",
+        "network=",
+        "auth=",
+        "mutation=",
+    ];
+    for (index, prefix) in boolean_field_prefixes.iter().enumerate() {
+        let field = lines[3 + index];
+        if !field.starts_with(prefix) {
+            return Ok(false);
+        }
+        let value = &field[prefix.len()..];
+        if value != "true" && value != "false" {
+            return Ok(false);
+        }
+    }
+    if lines[11] != "root=bounded-current-root"
+        || lines[12] != "tools=read-only"
+        || lines[13] != "approval=explicit"
+        || lines[14] != "retention=zero-conversation"
+        || lines[15] != "diagnostic_policy=bounded"
+    {
+        return Ok(false);
+    }
+    Ok(true)
 }
 
 fn encode(settings: &Settings) -> Vec<u8> {

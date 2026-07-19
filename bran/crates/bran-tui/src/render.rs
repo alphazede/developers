@@ -9,6 +9,13 @@ pub fn render_surface(
     _motion: bool,
     _native_image: NativeImage,
 ) -> String {
+    if capabilities.columns == 0 || capabilities.columns < 36 {
+        if capabilities.no_color {
+            return "BRAN\nALPHAZEDE.com\n".to_string();
+        } else {
+            return "\x1b[1mBRAN\x1b[0m\n\x1b[2mALPHAZEDE.com\x1b[0m\n".to_string();
+        }
+    }
     let raven = if !capabilities.unicode {
         RAVEN_PLAIN
     } else if capabilities.columns >= 80 {

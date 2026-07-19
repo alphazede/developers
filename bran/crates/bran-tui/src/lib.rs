@@ -109,6 +109,36 @@ mod tests {
         let failed_native = render_surface(TerminalCapabilities::wide(), true, NativeImage::Failed);
         assert!(failed_native.contains(RAVEN_WIDE));
 
+        let zero_width = render_surface(
+            TerminalCapabilities {
+                columns: 0,
+                unicode: true,
+                no_color: false,
+            },
+            true,
+            NativeImage::Unavailable,
+        );
+        assert!(
+            zero_width.contains("BRAN")
+                && zero_width.contains("ALPHAZEDE.com")
+                && !zero_width.contains(RAVEN_WIDE)
+                && !zero_width.contains(RAVEN_NARROW)
+                && !zero_width.contains(RAVEN_PLAIN)
+        );
+        let below_minimum_width = render_surface(
+            TerminalCapabilities {
+                columns: 35,
+                unicode: false,
+                no_color: true,
+            },
+            false,
+            NativeImage::Failed,
+        );
+        assert!(
+            below_minimum_width == "BRAN\nALPHAZEDE.com\n"
+                && !below_minimum_width.contains(RAVEN_PLAIN)
+        );
+
         let result_bound = autocomplete("a", "amber\napple\narch\nafter");
         assert_eq!(result_bound.len(), 3);
         assert_eq!(result_bound[0], "amber");
@@ -264,6 +294,12 @@ mod tests {
             unavailable.resolutions[8].status,
             ResolutionStatus::Unavailable
         );
+        assert_eq!(
+            unavailable.requested.profile,
+            OperatingProfile::ConnectedAgent
+        );
+        assert_eq!(unavailable.effective.profile, OperatingProfile::OfflineCore);
+        assert_eq!(unavailable.effective_profile, None);
 
         let locked = resolve_advanced(
             AdvancedRequest::new(requested.clone()),
@@ -322,9 +358,26 @@ mod tests {
         let settings_path = temp_dir.join("settings.conf");
         std::fs::remove_dir_all(&temp_dir).ok();
         std::fs::create_dir(&temp_dir).unwrap();
+        assert!(!onboarding_complete(&settings_path).unwrap());
         let completion = apply_settings(&settings_path, &quick).unwrap();
         assert!(completion.completed && !completion.should_nag && completion.bytes_written > 0);
         assert!(onboarding_complete(&settings_path).unwrap());
+        std::fs::write(
+            &settings_path,
+            format!(
+                "version={SETTINGS_VERSION}\ncompleted=true\nprofile=offline-core\nsqz=true\ndiagnostics=true\nvoice=false\nstructured_history=false\nsaved_chat=false\nnetwork=false\nauth=false\nmutation=false\nroot=bounded-current-root\ntools=read-only\napproval=explicit\nretention=zero-conversation\n"
+            ),
+        )
+        .unwrap();
+        assert!(!onboarding_complete(&settings_path).unwrap());
+        std::fs::write(
+            &settings_path,
+            format!(
+                "version={SETTINGS_VERSION}\ncompleted=true\nprofile=offline-core\nsqz=true\ndiagnostics=true\nvoice=false\nstructured_history=false\nsaved_chat=false\nnetwork=false\nauth=false\nmutation=false\nroot=bounded-current-root\ntools=read-only\napproval=explicit\nretention=zero-conversation\ndiagnostic_policy=bounded\nextra=foo\n"
+            ),
+        )
+        .unwrap();
+        assert!(!onboarding_complete(&settings_path).unwrap());
         std::fs::write(&settings_path, b"known-prior-bytes").unwrap();
         let replace_error = apply_settings_using(&settings_path, &quick, |_, _| {
             Err(std::io::Error::other("injected replace failure"))
