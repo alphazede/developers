@@ -5,6 +5,9 @@ version = 4
 [[package]]
 name = "bran-cli"
 version = "0.1.0"
+dependencies = [
+ "bran-core",
+]
 
 [[package]]
 name = "bran-core"
