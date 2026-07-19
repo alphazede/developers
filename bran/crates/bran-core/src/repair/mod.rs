@@ -129,6 +129,7 @@ pub struct RepairCoordinator {
 impl RepairCoordinator {
     /// Construct with explicit root and injected validator.
     /// Root must exist and be a directory after canonicalization.
+    #[allow(clippy::result_large_err)] // preserves the public typed terminal-state contract
     pub fn new(root: impl AsRef<Path>, validator: ValidatorFn) -> Result<Self, RepairTerminal> {
         let requested = root.as_ref().to_path_buf();
         let canon = match fs::canonicalize(&requested) {
@@ -374,7 +375,7 @@ fn staged_replace(target: &Path, data: &[u8]) -> io::Result<Option<PathBuf>> {
         .unwrap_or_else(|| "repair".to_owned());
     let nonce = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
-        .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?
+        .map_err(io::Error::other)?
         .as_nanos();
     let tmp = parent.join(format!(".{}.tmp.{}.{}", fname, std::process::id(), nonce));
     let backup = parent.join(format!(".{}.bak.{}.{}", fname, std::process::id(), nonce));
@@ -421,10 +422,7 @@ fn remove_file_if_exists(path: &Path) -> io::Result<()> {
 fn cleanup_error(primary: io::Error, cleanup: io::Result<()>) -> io::Error {
     match cleanup {
         Ok(()) => primary,
-        Err(e) => io::Error::new(
-            io::ErrorKind::Other,
-            format!("{}; cleanup failed: {}", primary, e),
-        ),
+        Err(e) => io::Error::other(format!("{}; cleanup failed: {}", primary, e)),
     }
 }
 
@@ -521,13 +519,13 @@ mod tests {
         // same-length target mutation is stale
         let sl_t = "sl.txt".to_string();
         let sl_rep = b"0123456789abcdef".to_vec();
-        fs::write(root.join(&sl_t), b"0000000000000000".to_vec()).unwrap();
+        fs::write(root.join(&sl_t), b"0000000000000000").unwrap();
         let slp_t = coord.propose(sl_t.clone(), sl_rep.clone());
         let slp = match slp_t {
             RepairTerminal::Proposed(p) => p,
             _ => panic!("expected sl Proposed"),
         };
-        fs::write(root.join(&sl_t), b"1111111111111111".to_vec()).unwrap();
+        fs::write(root.join(&sl_t), b"1111111111111111").unwrap();
         let sl_digest = slp.digest().to_owned();
         let sl_stale = coord.apply(Some(MaintainerAuthority::new("s")), slp, &sl_digest);
         assert!(matches!(sl_stale, RepairTerminal::StaleSource));

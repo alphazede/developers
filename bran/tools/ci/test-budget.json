@@ -178,6 +178,30 @@
       "support_fixtures": [
         "fixtures/views/compiled-view-v1.json"
       ]
+    },
+    {
+      "stable_id": "P3-CLI-MAINTAINER",
+      "phase": 3,
+      "slice": "3.1",
+      "runner": "rust",
+      "name": "p3_cli_maintainer",
+      "category": "unit",
+      "classification": "new",
+      "source": "crates/bran-core/src/repair/mod.rs",
+      "support_fixtures": []
+    },
+    {
+      "stable_id": "P3-OBSIDIAN-EXPORT",
+      "phase": 3,
+      "slice": "3.3",
+      "runner": "rust",
+      "name": "p3_obsidian_export",
+      "category": "unit",
+      "classification": "new",
+      "source": "crates/bran-core/src/export/mod.rs",
+      "support_fixtures": [
+        "fixtures/obsidian/p3-body.txt"
+      ]
     }
   ]
 }

@@ -3,7 +3,7 @@
 set -eu
 
 usage() {
-    printf '%s\n' "usage: $0 --test-budget|--fast|--conformance|--security|--performance|--full" >&2
+    printf '%s\n' "usage: $0 --test-budget|--export|--fast|--conformance|--security|--performance|--full" >&2
     exit 2
 }
 
@@ -12,6 +12,9 @@ usage() {
 case "$1" in
     --test-budget)
         gate_mode='test-budget'
+        ;;
+    --export)
+        gate_mode='export'
         ;;
     --fast)
         gate_mode='fast'
@@ -63,6 +66,14 @@ run_public_boundary() {
 
 run_release_contract() {
     python3 "$bran_root/tools/ci/release_contract_check.py"
+}
+
+run_export() {
+    printf '%s\n' 'EXPORT: running Slice 3.3 Obsidian export gate.'
+    run_budget
+    cargo test --manifest-path "$bran_root/Cargo.toml" -p bran-core p3_obsidian_export
+    run_public_boundary
+    printf '%s\n' 'PASS Slice 3.3 export gate'
 }
 
 run_fast() {
@@ -133,3 +144,7 @@ case "$gate_mode" in
         printf '%s\n' 'PASS Phase 1 through Slice 2.3 full gate'
         ;;
 esac
+
+if [ "$1" = "--export" ]; then
+    run_export
+fi

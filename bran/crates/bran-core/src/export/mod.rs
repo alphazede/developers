@@ -14,10 +14,8 @@ use std::fmt;
 use crate::graph::{EdgeId, NodeId};
 use crate::scan::ContentIdentity;
 
-const PUBLIC_BOUNDARY_CANARIES: [&str; 2] = [
-    "AZ_SYNTHETIC_PUBLIC_BOUNDARY_CANARY_ALPHA_7F3A",
-    "AZ_SYNTHETIC_PUBLIC_BOUNDARY_CANARY_OMEGA_9C2D",
-];
+const PUBLIC_BOUNDARY_CANARY_FIXTURE: &str =
+    include_str!("../../../../fixtures/public-boundary/rejected/synthetic-canaries.txt");
 
 /// Export failures. All are deterministic and never repair input.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -153,7 +151,7 @@ pub fn export_to_obsidian(
             }
         }
 
-        for (k, _) in &node.frontmatter {
+        for k in node.frontmatter.keys() {
             if matches!(
                 k.as_str(),
                 "bran_type" | "bran_node_count" | "bran_edge_count"
@@ -375,9 +373,9 @@ fn check_public_boundary_and_dlp(
 }
 
 fn has_public_boundary_canary(value: &str) -> bool {
-    PUBLIC_BOUNDARY_CANARIES
-        .iter()
-        .any(|canary| value.contains(canary))
+    PUBLIC_BOUNDARY_CANARY_FIXTURE
+        .lines()
+        .any(|line| !line.is_empty() && value.contains(line))
 }
 
 fn build_node_markdown(node: &ExportNode, edges: &[ExportEdge]) -> String {
@@ -403,7 +401,7 @@ fn build_node_markdown(node: &ExportNode, edges: &[ExportEdge]) -> String {
     let mut outs: Vec<&ExportEdge> = edges.iter().filter(|e| e.source == node.id).collect();
     if !outs.is_empty() {
         outs.sort_by(|a, b| a.link_target.cmp(&b.link_target));
-        out.push_str("\n");
+        out.push('\n');
         for e in outs {
             out.push_str(&format!("[[{}]]\n", e.link_target));
         }
@@ -477,7 +475,7 @@ pub fn reparse_obsidian(bundle: &ObsidianBundle) -> Result<Reparsed, ExportError
     let mut edge_set: BTreeMap<EdgeId, ()> = BTreeMap::new();
     let mut link_set: BTreeMap<String, ()> = BTreeMap::new();
 
-    for (_p, content) in bundle.docs() {
+    for content in bundle.docs().values() {
         let fm = parse_frontmatter_block(content);
         if let Some(id_str) = fm.get("bran_node_id") {
             match NodeId::parse(id_str.clone()) {
@@ -490,20 +488,22 @@ pub fn reparse_obsidian(bundle: &ObsidianBundle) -> Result<Reparsed, ExportError
             }
         }
         for (k, v) in &fm {
-            if k.starts_with("bran_edge_") {
-                let parts: Vec<&str> = v.splitn(4, '|').collect();
-                if parts.len() != 4 {
-                    return Err(ExportError::InvalidIdentity(v.clone()));
+            if let Some(suffix) = k.strip_prefix("bran_edge_") {
+                if !suffix.is_empty() && suffix.chars().all(|c| c.is_ascii_digit()) {
+                    let parts: Vec<&str> = v.splitn(4, '|').collect();
+                    if parts.len() != 4 {
+                        return Err(ExportError::InvalidIdentity(v.clone()));
+                    }
+                    let eid = EdgeId::parse(parts[0].to_owned())
+                        .map_err(|_| ExportError::InvalidIdentity(parts[0].to_owned()))?;
+                    let _src = NodeId::parse(parts[1].to_owned())
+                        .map_err(|_| ExportError::InvalidIdentity(parts[1].to_owned()))?;
+                    let _tgt = NodeId::parse(parts[2].to_owned())
+                        .map_err(|_| ExportError::InvalidIdentity(parts[2].to_owned()))?;
+                    validate_obsidian_target(parts[3])?;
+                    edge_set.insert(eid, ());
+                    link_set.insert(parts[3].to_string(), ());
                 }
-                let eid = EdgeId::parse(parts[0].to_owned())
-                    .map_err(|_| ExportError::InvalidIdentity(parts[0].to_owned()))?;
-                let _src = NodeId::parse(parts[1].to_owned())
-                    .map_err(|_| ExportError::InvalidIdentity(parts[1].to_owned()))?;
-                let _tgt = NodeId::parse(parts[2].to_owned())
-                    .map_err(|_| ExportError::InvalidIdentity(parts[2].to_owned()))?;
-                validate_obsidian_target(parts[3])?;
-                edge_set.insert(eid, ());
-                link_set.insert(parts[3].to_string(), ());
             }
         }
     }
@@ -637,9 +637,18 @@ mod tests {
         ));
 
         // identity canary DLP rejection
+        let canary_lines: Vec<&str> = PUBLIC_BOUNDARY_CANARY_FIXTURE
+            .lines()
+            .filter(|l| !l.is_empty())
+            .collect();
+        let omega_canary = canary_lines
+            .get(1)
+            .or_else(|| canary_lines.first())
+            .copied()
+            .expect("fixture must supply canary");
         let bad_c = ExportNode {
-            id: NodeId::parse("file:AZ_SYNTHETIC_PUBLIC_BOUNDARY_CANARY_OMEGA_9C2D")
-                .expect("valid canary node id"),
+            id: NodeId::parse(format!("file:{}", omega_canary))
+                .expect("valid canary node id from fixture"),
             path: "c.md".to_string(),
             frontmatter: BTreeMap::new(),
             body: String::new(),
