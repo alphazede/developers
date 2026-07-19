@@ -42,10 +42,12 @@ jobs:
     steps:
       - name: Resolve and validate tag (canonical bran-vX.Y.Z)
         id: tag
+        env:
+          BRAN_TAG: ${{ inputs.tag }}
         shell: bash
         run: |
-          TAG="${{ inputs.tag }}"
-          if ! printf '%s\n' "$TAG" | grep -Eq '^bran-v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$'; then
+          TAG="$BRAN_TAG"
+          if [[ "$TAG" == *$'\n'* || "$TAG" == *$'\r'* || ! "$TAG" =~ ^bran-v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]; then
             echo "FAIL invalid tag (must be bran-vX.Y.Z): $TAG" >&2
             exit 1
           fi
@@ -104,3 +106,59 @@ jobs:
           path: dist/${{ steps.tag.outputs.value }}-${{ matrix.target }}.${{ matrix.ext }}
           retention-days: 90
           if-no-files-found: error
+
+  # KISS seal-readiness (after all 5 matrix builds). NOT a real seal.
+  # No artifacts downloaded, no signing, no publish. Plan + self-test + budget only.
+  # Real cross-job aggregation/seal is owner-authorized execution only.
+  seal-readiness:
+    needs: build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+
+    steps:
+      - name: Resolve and validate tag (canonical bran-vX.Y.Z)
+        id: tag
+        env:
+          BRAN_TAG: ${{ inputs.tag }}
+        shell: bash
+        run: |
+          TAG="$BRAN_TAG"
+          if [[ "$TAG" == *$'\n'* || "$TAG" == *$'\r'* || ! "$TAG" =~ ^bran-v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]; then
+            echo "FAIL invalid tag (must be bran-vX.Y.Z): $TAG" >&2
+            exit 1
+          fi
+          printf '%s\n' "value=$TAG" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout exact requested tag
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd
+        with:
+          persist-credentials: false
+          ref: refs/tags/${{ steps.tag.outputs.value }}
+
+      - name: Verify HEAD matches exact tag commit (fail on mismatch)
+        shell: bash
+        run: |
+          TAG="${{ steps.tag.outputs.value }}"
+          EXPECTED=$(git rev-parse --verify "refs/tags/$TAG^{commit}")
+          ACTUAL=$(git rev-parse HEAD)
+          if [ "$ACTUAL" != "$EXPECTED" ]; then
+            printf 'FAIL HEAD %s != deref tag %s (%s)\n' "$ACTUAL" "$TAG" "$EXPECTED" >&2
+            exit 1
+          fi
+          printf 'PASS verified exact tag checkout: %s\n' "$ACTUAL"
+
+      - name: build-release.sh --plan for the exact five names (readiness)
+        shell: bash
+        run: |
+          TAG="${{ steps.tag.outputs.value }}"
+          ./bran/tools/ci/build-release.sh --plan --tag "$TAG" --dist /tmp/plan-dist
+
+      - name: release_seal.py --self-test (P4 readiness, not seal)
+        shell: bash
+        run: |
+          python3 bran/tools/ci/release_seal.py --self-test
+
+      - name: test-budget
+        shell: bash
+        run: |
+          python3 bran/tools/ci/test_budget_check.py bran/tools/ci/test-budget.json

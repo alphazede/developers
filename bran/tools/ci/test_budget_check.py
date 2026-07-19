@@ -9,6 +9,9 @@ SLICES = {"1.1": 3, "1.2": 3, "2.1": 2, "2.2": 2, "2.3": 2,
           "5.1": 1, "5.2": 1, "5.3": 0, "5.4": 2, "6.1": 0}
 PHASE_ONE = ("P1-CLI", "P1-RELEASE", "P1-PUBLIC-BOUNDARY", "P1-BUNDLE",
              "P1-PROFILES", "P1-CONFORMANCE")
+REQUIRED_DIRECT_COMMANDS = {
+    "P4-SEALED-RELEASE": ("run_release_seal", 'python3 "$script_dir/release_seal.py" --self-test', "full"),
+}
 FIELDS = {"stable_id", "phase", "slice", "runner", "name", "category",
           "classification", "source", "support_fixtures"}
 RUNNERS = {"rust", "python", "shell", "golden", "fixture"}
@@ -369,7 +372,7 @@ def check_shell(root: Path, journeys: list[dict], errors: list[str]) -> None:
                          "security": {"run_security"},
                          "performance": {"run_performance"},
                          "full": {"run_fast", "run_conformance", "run_security",
-                                  "run_performance"}}
+                                  "run_performance", "run_release_seal"}}
     if dispatch != expected_dispatch:
         errors.append("check.sh supported gate dispatch is missing or not exact")
     def reachable(roots: set[str]) -> set[str]:
@@ -393,7 +396,17 @@ def check_shell(root: Path, journeys: list[dict], errors: list[str]) -> None:
             errors.append(f"check.sh {name} must reach run_budget")
     expected = {budget}
     for journey in journeys:
-        runner, name, source = (journey[key] for key in ("runner", "name", "source"))
+        stable_id, runner, name, source = (journey[key] for key in ("stable_id", "runner", "name", "source"))
+        if stable_id in REQUIRED_DIRECT_COMMANDS:
+            owner, command, mode = REQUIRED_DIRECT_COMMANDS[stable_id]
+            sites = [(site_owner, line) for site_owner, line in all_commands if line == command]
+            allowed = reachable(dispatch.get(mode, set()))
+            other_modes = set().union(*(roots for key, roots in dispatch.items() if key != mode))
+            if (global_commands.count(command) != 1 or sites != [(owner, command)]
+                    or owner not in allowed or owner in reachable(other_modes)):
+                errors.append(f"check.sh must execute {stable_id} exactly once from only the {mode} gate")
+            expected.add(command)
+            continue
         if isinstance(runner, str) and runner in {"python", "shell"} and name == source:
             commands = ({f'python3 "$bran_root/{source}"'} if runner == "python"
                         else {f'sh "$bran_root/{source}"', f'bash "$bran_root/{source}"'})

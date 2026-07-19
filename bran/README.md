@@ -50,7 +50,11 @@ That release shape requires these five platform archives:
 - `bran-vX.Y.Z-aarch64-apple-darwin.tar.gz`
 - `bran-vX.Y.Z-x86_64-pc-windows-msvc.zip`
 
-It also requires `SHA256SUMS`, `SHA256SUMS.sig`, and `bran-release-manifest.json`. Generic `/releases/latest` URLs are unsupported.
+The fixed release assets are the five archives, `SHA256SUMS`, `SHA256SUMS.sig`, and `bran-release-manifest.json`.
+
+- Provenance lives in `bran-release-manifest.json`.
+- Separate SBOM evidence is unavailable in this readiness workflow and deferred to an owner-authorized real release; it is not an extra fixed asset.
+- Release notes are release metadata. Use exact tags only: no `latest`.
 
 For a published exact tag, the locked Cargo install form is:
 

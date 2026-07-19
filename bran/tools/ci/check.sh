@@ -135,6 +135,10 @@ run_performance() {
     printf '%s\n' 'PASS Slice 2.3 performance gate'
 }
 
+run_release_seal() {
+    python3 "$script_dir/release_seal.py" --self-test
+}
+
 case "$gate_mode" in
     test-budget)
         run_budget
@@ -158,7 +162,8 @@ case "$gate_mode" in
         run_conformance
         run_security
         run_performance
-        printf '%s\n' 'PASS Phase 1 through Slice 3.4 full gate'
+        run_release_seal
+        printf '%s\n' 'PASS Phase 1 through Phase 4.2 full gate'
         ;;
 esac
 
