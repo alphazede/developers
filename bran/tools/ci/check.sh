@@ -93,7 +93,7 @@ run_tui() {
 }
 
 run_fast() {
-    printf '%s\n' 'FAST: running Phase 1 through Slice 3.2 gates.'
+    printf '%s\n' 'FAST: running Phase 1 through Slice 3.4 gates.'
 
     run_budget
     cargo fmt --manifest-path "$bran_root/Cargo.toml" --all -- --check
@@ -111,7 +111,7 @@ run_fast() {
     run_release_contract
     run_public_boundary
 
-    printf '%s\n' 'PASS Phase 1 through Slice 3.2 fast gate'
+    printf '%s\n' 'PASS Phase 1 through Slice 3.4 fast gate'
 }
 
 run_security() {
@@ -158,7 +158,7 @@ case "$gate_mode" in
         run_conformance
         run_security
         run_performance
-        printf '%s\n' 'PASS Phase 1 through Slice 3.2 full gate'
+        printf '%s\n' 'PASS Phase 1 through Slice 3.4 full gate'
         ;;
 esac
 
