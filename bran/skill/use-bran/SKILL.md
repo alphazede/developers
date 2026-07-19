@@ -7,6 +7,19 @@ description: Use for repository knowledge and evidence discovery, focused source
 
 Copy this skill folder into the consuming agent host's skill directory. Do not require global model or provider settings.
 
+Verify the local installation before delegating:
+
+```sh
+bran doctor --agent
+bran agents list
+```
+
+Read the complete doctor envelope. Do not treat `requested` as `effective`, and
+do not infer a connected runtime, SQZ capability, reasoning level, or token-limit
+enforcement when its state is `unavailable`. `local_setup_ready` does not make
+`connected_execution_ready`; a validation exit is expected until runtime and
+host attestation are effective.
+
 ## Workflow
 
 1. Run the packet command before broad repository search when a focused context packet can answer the request:
@@ -30,6 +43,22 @@ Copy this skill folder into the consuming agent host's skill directory. Do not r
    ```
 
 Treat `query`, `packet`, and `check` as read-only. Consume the complete returned envelope: act on `status`, investigate and report `failures`, retain and report `provenance`, and report `metrics`. Report actual model tokens as unavailable when the response says unavailable. Label any `bytes-divided-by-four-ceiling` count as an estimate, not actual token use.
+
+## Optional delegated task
+
+Keep repository retrieval separate from optional synthesis. Select a registered
+profile from `bran agents list`, then request an exact supported reasoning value
+and the smallest read-only tool set:
+
+```sh
+bran -p --agent <profile> --reasoning medium --tools read,search --no-session "<task>"
+```
+
+Use `--no-session` when conversation retention is not required. To prove a clean
+return to deterministic offline behavior, add `--offline`; an incomplete receipt
+with explicit offline authority is expected and must not be presented as a
+generated answer. Never pass credentials on the command line. If effective
+execution or token use cannot be attested, report it as unavailable.
 
 ## Maintainer changes
 

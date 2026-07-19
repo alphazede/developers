@@ -14,7 +14,9 @@ use bran_core::agent::receipt::DelegationReceipt;
 use bran_core::agent::runtime::InvocationOutcome;
 use bran_core::agent::{synthetic, synthetic_builtin_profiles, ReasoningLevel, ToolPolicy};
 use bran_core::bundle::{Bundle, Doc, Frontmatter};
-use bran_core::graph::{GraphLimits, KnowledgeGraph, NodeRole};
+use bran_core::graph::{
+    Confidence, GraphInput, GraphLimits, KnowledgeGraph, NodeId, NodeInput, NodeRole, Provenance,
+};
 use bran_core::metadata::{FactProvenance, MetadataFact};
 use bran_core::packet::{
     DependencyClosureLimits, EvidenceContent, EvidencePriority, PacketAssembler,
@@ -30,7 +32,7 @@ use bran_core::view::{
 };
 use bran_tui::{
     apply_settings, load_settings, render_app, OnboardingStep, TerminalCapabilities, TerminalGuard,
-    TerminalPort, TuiAction, TuiApp, TuiEvent,
+    TerminalPort, TuiAction, TuiApp, TuiEvent, DEFAULT_CONNECTED_AGENT_TASK_TOKEN_CEILING,
 };
 
 const SMOKE_OUTPUT: &str = r#"{"schema_version":"1.0.0","command":"smoke","status":"ok","data":{},"warnings":[],"failures":[],"provenance":{},"metrics":{}}"#;
@@ -402,6 +404,22 @@ impl CliApp {
                     _ => CliResult::usage(make_agents_error(&sub, "unknown_subcommand")),
                 }
             }
+            "doctor" => {
+                let mode = match it
+                    .next()
+                    .and_then(|o| o.as_ref().to_str().map(str::to_owned))
+                {
+                    Some(mode) => mode,
+                    None => return CliResult::usage(make_doctor_error("missing_mode")),
+                };
+                if it.next().is_some() {
+                    return CliResult::usage(make_doctor_error("too_many_args"));
+                }
+                match mode.as_str() {
+                    "--onboarding" | "--agent" => do_doctor(&mode),
+                    _ => CliResult::usage(make_doctor_error("unknown_mode")),
+                }
+            }
             "-p" => {
                 // Headless prompt surface: no transport or secrets.
                 let mut rest: Vec<String> = vec![];
@@ -669,6 +687,18 @@ fn make_agents_error(sub: &str, detail: &str) -> String {
 
 fn make_p_error(detail: &str) -> String {
     make_envelope("p", "error", "null", &[], &[detail.to_owned()], "{}", "{}")
+}
+
+fn make_doctor_error(detail: &str) -> String {
+    make_envelope(
+        "doctor",
+        "error",
+        "null",
+        &[],
+        &[detail.to_owned()],
+        "{}",
+        "{}",
+    )
 }
 
 fn json_escape(s: &str) -> String {
@@ -1567,6 +1597,157 @@ fn do_agents_list() -> CliResult {
     ))
 }
 
+/// Read-only setup diagnostics. Capability probes report `unavailable` instead
+/// of initializing auth, network, or a provider to discover them.
+fn do_doctor(mode: &str) -> CliResult {
+    do_doctor_at(mode, Path::new(".bran/settings.conf"), None)
+}
+
+fn do_doctor_at(mode: &str, settings_path: &Path, skill_path: Option<&Path>) -> CliResult {
+    let settings = load_settings(settings_path);
+    let configured = settings.as_ref().ok().and_then(Option::as_ref);
+    let settings_status = match &settings {
+        Ok(Some(_)) => "complete",
+        Ok(None) => "not_configured",
+        Err(_) => "unavailable",
+    };
+    let token_ceiling = configured
+        .map(|value| value.connected_agent_task_token_ceiling)
+        .unwrap_or(DEFAULT_CONNECTED_AGENT_TASK_TOKEN_CEILING);
+
+    let onboarding_ready = configured.is_some();
+    let agent_mode = mode == "--agent";
+    let skill_available = !agent_mode || agent_skill_available(skill_path);
+    let packet_available = !agent_mode || packet_round_trip_available();
+    let local_setup_ready = onboarding_ready && skill_available && packet_available;
+    // This build intentionally owns no connected adapter or host-attestation
+    // probe. Do not turn local setup success into connected execution success.
+    let connected_execution_ready = false;
+    let ready = if agent_mode {
+        local_setup_ready && connected_execution_ready
+    } else {
+        local_setup_ready
+    };
+
+    let mut warnings = Vec::new();
+    if !onboarding_ready {
+        warnings.push("onboarding_settings_unavailable".to_owned());
+    }
+    if agent_mode && !skill_available {
+        warnings.push("agent_skill_unavailable".to_owned());
+    }
+    if agent_mode && !packet_available {
+        warnings.push("packet_round_trip_unavailable".to_owned());
+    }
+    if agent_mode {
+        warnings.push("connected_agent_runtime_unavailable".to_owned());
+        warnings.push("host_attestation_unavailable".to_owned());
+        warnings.push("sqz_capability_unavailable".to_owned());
+    }
+
+    let capability = |available: bool| {
+        if available {
+            "available"
+        } else {
+            "unavailable"
+        }
+    };
+    let data = format!(
+        "{{\"mode\":\"{}\",\"ready\":{},\"local_setup_ready\":{},\"connected_execution_ready\":false,\"connected_execution_status\":\"unavailable\",\"settings_status\":\"{}\",\"connected_task_total_token_ceiling\":{},\"capabilities\":{{\"cli_discovery\":\"available\",\"skill_discovery\":\"{}\",\"workspace_policy\":\"{}\",\"sqz\":\"unavailable\",\"packet_round_trip\":\"{}\",\"connected_agent_runtime\":\"unavailable\",\"host_attestation\":\"unavailable\"}},\"offline_return\":{{\"status\":\"available\",\"network_initialized\":false,\"auth_initialized\":false,\"provider_initialized\":false,\"conversation_retained\":false}}}}",
+        if agent_mode { "agent" } else { "onboarding" },
+        ready,
+        local_setup_ready,
+        settings_status,
+        token_ceiling,
+        if agent_mode { capability(skill_available) } else { "unavailable" },
+        capability(onboarding_ready),
+        if agent_mode { capability(packet_available) } else { "unavailable" },
+    );
+    let status = if ready { "ok" } else { "warning" };
+    let output = make_envelope(
+        "doctor",
+        status,
+        &data,
+        &warnings,
+        &[],
+        "{\"sources\":[\"local-settings\",\"local-skill\",\"bran-core\"]}",
+        "{\"provider_calls\":0,\"auth_calls\":0,\"network_calls\":0}",
+    );
+    CliResult {
+        output,
+        exit_code: if ready {
+            TypedExit::Success.code()
+        } else {
+            TypedExit::Validation.code()
+        },
+        is_error: false,
+        is_interactive: false,
+    }
+}
+
+fn agent_skill_available(explicit: Option<&Path>) -> bool {
+    explicit.is_some_and(Path::is_file)
+        || std::env::var_os("BRAN_SKILL_PATH").is_some_and(|path| Path::new(&path).is_file())
+        || [
+            ".agents/skills/use-bran/SKILL.md",
+            ".codex/skills/use-bran/SKILL.md",
+            "skill/use-bran/SKILL.md",
+            "bran/skill/use-bran/SKILL.md",
+        ]
+        .iter()
+        .any(|path| Path::new(path).is_file())
+}
+
+fn packet_round_trip_available() -> bool {
+    (|| -> Option<()> {
+        let id = NodeId::parse("doctor.packet").ok()?;
+        let node = NodeInput::new(
+            id.clone(),
+            NodeRole::Document,
+            Provenance::new("bran-doctor", "builtin://packet").ok()?,
+            Confidence::new(100).ok()?,
+        );
+        let graph = KnowledgeGraph::build(
+            GraphInput::new(vec![node], vec![]),
+            GraphLimits::new(1, 1).ok()?,
+        )
+        .ok()?;
+        let view = ViewCompiler::new()
+            .compile(
+                &ViewSpec {
+                    source: ViewSource::Roles(vec![NodeRole::Document]),
+                    filter: ViewFilter::All,
+                    sort: ViewSort::NodeId,
+                    grouping: ViewGrouping::None,
+                    fields: vec![ViewField::ProvenanceLocator, ViewField::NodeId],
+                    presentation: Presentation::Json,
+                    max_items: 1,
+                    max_bytes: 4_096,
+                },
+                &graph,
+            )
+            .ok()?;
+        let evidence = [EvidenceContent::new(
+            id,
+            "doctor packet round trip",
+            EvidencePriority::Recommended,
+            100,
+            1,
+            vec![],
+        )];
+        let request = PacketAssemblyRequest {
+            view: &view,
+            graph: &graph,
+            evidence: &evidence,
+            limits: PacketLimits::new(1, 4_096, None),
+            dependency_limits: DependencyClosureLimits::new(1, 1).ok()?,
+        };
+        let packet = PacketAssembler::new().assemble(&request).ok()?;
+        (packet.receipt.selected_ids.len() == 1).then_some(())
+    })()
+    .is_some()
+}
+
 fn parse_tools(s: &str) -> Result<ToolPolicy, String> {
     let parts: Vec<&str> = s.split(',').map(|x| x.trim()).collect();
     if parts.iter().any(|p| p.is_empty()) {
@@ -1995,6 +2176,35 @@ mod tests {
         let dependency_document = "---\ntype: concept\ntitle: Dep\nokf_status: active\ntags: p3\ntags: packet\ntimestamp: 2026-07-19T00:00:00Z\nresource: test://dep\npublic_boundary: safe\n---\ndep [reference](x)\n# Citations\nref\n";
         std::fs::write(root.join("seed.md"), seed_document.as_bytes()).unwrap();
         std::fs::write(root.join("dep.md"), dependency_document.as_bytes()).unwrap();
+
+        // Slice 5.4 extends this existing setup journey: both doctors are
+        // read-only, and agent readiness is based on a real packet result.
+        let settings_path = base.join(format!("{unique}-settings.conf"));
+        bran_tui::apply_settings(&settings_path, &bran_tui::quick_safe_config()).unwrap();
+        let skill_path = base.join(format!("{unique}-SKILL.md"));
+        std::fs::write(&skill_path, "# local agent skill\n").unwrap();
+        let onboarding_doctor =
+            super::do_doctor_at("--onboarding", &settings_path, Some(&skill_path));
+        assert_eq!(onboarding_doctor.exit_code, ExitCode::SUCCESS);
+        assert!(onboarding_doctor.output.contains("\"ready\":true"));
+        assert!(onboarding_doctor
+            .output
+            .contains("\"connected_task_total_token_ceiling\":8500"));
+        let agent_doctor = super::do_doctor_at("--agent", &settings_path, Some(&skill_path));
+        assert_eq!(agent_doctor.exit_code, TypedExit::Validation.code());
+        assert!(agent_doctor.output.contains("\"ready\":false"));
+        assert!(agent_doctor.output.contains("\"local_setup_ready\":true"));
+        assert!(agent_doctor
+            .output
+            .contains("\"connected_execution_status\":\"unavailable\""));
+        assert!(agent_doctor
+            .output
+            .contains("\"packet_round_trip\":\"available\""));
+        assert!(agent_doctor
+            .output
+            .contains("\"host_attestation\":\"unavailable\""));
+        assert!(agent_doctor.output.contains("\"provider_calls\":0"));
+
         let packet_result =
             CliApp::run(vec!["packet".to_owned(), proot.clone(), "seed".to_owned()]);
         assert_eq!(packet_result.exit_code, ExitCode::SUCCESS);
@@ -2503,6 +2713,8 @@ mod tests {
             "hi".to_owned(),
         ]);
         assert!(forbidden.output.contains("forbidden_credential_flag"));
+        std::fs::remove_file(settings_path).unwrap();
+        std::fs::remove_file(skill_path).unwrap();
         std::fs::remove_dir_all(root).unwrap();
     }
 }

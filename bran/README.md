@@ -12,11 +12,11 @@ public_boundary: public
 
 ![BRAN seated between two ravens beneath the memory tree](assets/brand/bran-repository-raven.png)
 
-BRAN is the repository-intelligence product and its `bran` headless executable.
+BRAN is a local repository-intelligence engine with a headless `bran` executable
+and an optional terminal interface. Deterministic repository scanning, focused
+packets, validation, and offline browsing do not require an agent account.
 
-## Current Slice 1.1
-
-Slice 1.1 provides a versioned, non-interactive `bran smoke` command, an exact-release manifest and verifier contract, and a public-boundary gate.
+## Build and try it
 
 Build and test the current scaffold:
 
@@ -30,11 +30,36 @@ Run the smoke command from the repository root:
 cargo run --quiet --manifest-path bran/Cargo.toml --bin bran -- smoke
 ```
 
-It writes exactly:
+It writes a versioned JSON envelope. Start the TUI with:
 
-```json
-{"version":"1","status":"ok"}
+```sh
+cargo run --quiet --manifest-path bran/Cargo.toml --bin bran -- tui
 ```
+
+First-run onboarding shows requested and effective settings for offline mode,
+SQZ, connected-agent mode, voice, structured history, and saved chat. A missing
+capability remains visible as unavailable; BRAN does not simulate it. The safe
+default is offline, read-only, zero-conversation retention. The configurable
+connected-task total-token ceiling defaults to exactly 8,500. It is a requested
+host limit until a connected adapter can attest enforcement.
+
+After onboarding, inspect local readiness without contacting an account:
+
+```sh
+bran doctor --onboarding
+bran doctor --agent
+bran agents list
+```
+
+Both doctor modes are read-only. Their envelopes report unavailable capability
+and attestation fields explicitly and include zero provider, auth, and network
+call metrics. Agent doctor exits with validation status until connected runtime
+and host attestation are effective, even when `local_setup_ready` is true. See
+[Agent setup](docs/integrations/agent-setup.md) for the two
+supported setup journeys, reasoning/tool recipes, no-session operation, and the
+offline-return check. Install the public agent instructions from
+[`skill/use-bran`](skill/use-bran/SKILL.md) when an external agent host should
+call BRAN.
 
 ## Future release contract
 
