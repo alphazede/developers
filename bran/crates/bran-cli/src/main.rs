@@ -1967,7 +1967,7 @@ mod tests {
             "propose".to_owned(),
             proot.clone(),
             stale_target.clone(),
-            "repl-for-stale\n".to_owned(),
+            "stale-replacement\n".to_owned(),
         ]);
         assert!(stale_proposal.output.contains("\"status\":\"ok\""));
         let digest_key = "\"digest\":\"";
@@ -1987,7 +1987,7 @@ mod tests {
             "apply".to_owned(),
             proot.clone(),
             stale_target.clone(),
-            "repl-for-stale\n".to_owned(),
+            "stale-replacement\n".to_owned(),
             stale_digest.clone(),
             "bran-cli-fixture-v1".to_owned(),
         ]);
@@ -2006,7 +2006,7 @@ mod tests {
             "apply".to_owned(),
             proot.clone(),
             stale_target,
-            "repl-for-stale\n".to_owned(),
+            "stale-replacement\n".to_owned(),
             malformed_digest,
             "bran-cli-fixture-v1".to_owned(),
         ]);
@@ -2021,7 +2021,7 @@ mod tests {
             "apply".to_owned(),
             proot.clone(),
             "stale.txt".to_owned(),
-            "repl-for-stale\n".to_owned(),
+            "stale-replacement\n".to_owned(),
             malformed_nonempty_digest,
             "bran-cli-fixture-v1".to_owned(),
         ]);
