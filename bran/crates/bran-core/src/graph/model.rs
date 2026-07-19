@@ -405,6 +405,9 @@ impl GraphInput {
     pub fn edges(&self) -> &[EdgeInput] {
         &self.edges
     }
+    pub(super) fn into_parts(self) -> (Vec<NodeInput>, Vec<EdgeInput>) {
+        (self.nodes, self.edges)
+    }
 }
 
 /// Explicit resource bounds for deterministic graph construction.

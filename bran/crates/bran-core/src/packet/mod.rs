@@ -278,7 +278,6 @@ impl PacketAssembler {
         );
         for item in request.view.items() {
             candidates.push(Candidate {
-                id: item.id.clone(),
                 provenance: item.provenance.clone(),
                 evidence: evidence
                     .get(&item.id)
@@ -291,7 +290,6 @@ impl PacketAssembler {
                 .node(id)
                 .expect("admitted dependency is a present graph node");
             candidates.push(Candidate {
-                id: id.clone(),
                 provenance: node.provenance().clone(),
                 evidence: evidence
                     .get(id)
@@ -307,14 +305,18 @@ impl PacketAssembler {
         let mut raw_bytes = 0usize;
 
         for candidate in candidates {
-            let encoded = encode_item(&candidate.id, &candidate.provenance, candidate.evidence);
+            let encoded = encode_item(
+                &candidate.evidence.id,
+                &candidate.provenance,
+                candidate.evidence,
+            );
             let next_bytes =
                 raw_bytes
                     .checked_add(encoded.len())
                     .ok_or(PacketError::ArithmeticOverflow {
                         operation: "packet raw byte count",
                     })?;
-            let next_tokens = estimate_tokens(next_bytes)?;
+            let next_tokens = estimate_tokens(next_bytes);
             let rejection = if items.len() == limits.max_items {
                 Some(PacketBound::Items)
             } else if next_bytes > limits.max_bytes {
@@ -331,16 +333,16 @@ impl PacketAssembler {
             if let Some(bound) = rejection {
                 if candidate.evidence.priority == EvidencePriority::Required {
                     return Err(PacketError::RequiredEvidenceDoesNotFit {
-                        id: candidate.id.clone(),
+                        id: candidate.evidence.id.clone(),
                         bound,
                     });
                 }
-                omitted_ids.push(candidate.id.clone());
+                omitted_ids.push(candidate.evidence.id.clone());
                 continue;
             }
 
             let item = ContextItem {
-                id: candidate.id.clone(),
+                id: candidate.evidence.id.clone(),
                 provenance: candidate.provenance.clone(),
                 content: candidate.evidence.content.clone(),
                 priority: candidate.evidence.priority,
@@ -355,7 +357,8 @@ impl PacketAssembler {
             items.push(item);
         }
 
-        let estimated_tokens = estimate_tokens(raw_bytes)?;
+        let estimated_tokens = estimate_tokens(raw_bytes);
+        let omitted_any = !omitted_ids.is_empty();
         Ok(ContextPacket {
             items,
             payload,
@@ -369,7 +372,7 @@ impl PacketAssembler {
                     .collect(),
                 admitted_dependency_ids: closure.admitted_ids,
                 selected_ids,
-                omitted_ids: omitted_ids.clone(),
+                omitted_ids,
                 dependency_closure_truncated: closure.truncated,
                 dependency_max_depth: request.dependency_limits.max_depth(),
                 dependency_max_nodes: request.dependency_limits.max_nodes(),
@@ -379,14 +382,13 @@ impl PacketAssembler {
                 effective_max_items: limits.max_items,
                 effective_max_bytes: limits.max_bytes,
                 runtime_token_ceiling: limits.runtime_token_ceiling,
-                truncated: request.view.truncated() || closure.truncated || !omitted_ids.is_empty(),
+                truncated: request.view.truncated() || closure.truncated || omitted_any,
             },
         })
     }
 }
 
 struct Candidate<'a> {
-    id: NodeId,
     provenance: Provenance,
     evidence: &'a EvidenceContent,
 }
@@ -536,7 +538,7 @@ fn candidate_order(left: &Candidate<'_>, right: &Candidate<'_>) -> std::cmp::Ord
         .cmp(&right.evidence.priority)
         .then_with(|| right.evidence.authority.cmp(&left.evidence.authority))
         .then_with(|| right.evidence.freshness.cmp(&left.evidence.freshness))
-        .then_with(|| left.id.cmp(&right.id))
+        .then_with(|| left.evidence.id.cmp(&right.evidence.id))
 }
 
 fn encode_item(id: &NodeId, provenance: &Provenance, evidence: &EvidenceContent) -> String {
@@ -549,8 +551,8 @@ fn encode_item(id: &NodeId, provenance: &Provenance, evidence: &EvidenceContent)
     )
 }
 
-fn estimate_tokens(raw_bytes: usize) -> Result<usize, PacketError> {
-    Ok(raw_bytes / 4 + usize::from(!raw_bytes.is_multiple_of(4)))
+fn estimate_tokens(raw_bytes: usize) -> usize {
+    raw_bytes / 4 + usize::from(!raw_bytes.is_multiple_of(4))
 }
 
 #[cfg(test)]

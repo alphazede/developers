@@ -23,20 +23,20 @@ pub struct KnowledgeGraph {
 
 impl KnowledgeGraph {
     pub fn build(input: GraphInput, limits: GraphLimits) -> Result<Self, GraphError> {
-        if input.nodes().len() > limits.max_nodes() {
+        let (mut nodes, mut edges) = input.into_parts();
+        if nodes.len() > limits.max_nodes() {
             return Err(GraphError::NodeLimitExceeded {
                 limit: limits.max_nodes(),
-                actual: input.nodes().len(),
+                actual: nodes.len(),
             });
         }
-        if input.edges().len() > limits.max_edges() {
+        if edges.len() > limits.max_edges() {
             return Err(GraphError::EdgeLimitExceeded {
                 limit: limits.max_edges(),
-                actual: input.edges().len(),
+                actual: edges.len(),
             });
         }
 
-        let mut nodes = input.nodes().to_vec();
         nodes.sort_by(|left, right| left.id().cmp(right.id()));
         let mut node_index = HashMap::with_capacity(nodes.len());
         for (position, node) in nodes.iter().enumerate() {
@@ -45,7 +45,6 @@ impl KnowledgeGraph {
             }
         }
 
-        let mut edges = input.edges().to_vec();
         edges.sort_by(|left, right| left.id().cmp(right.id()));
         let mut edge_index = HashMap::with_capacity(edges.len());
         let mut forward = HashMap::new();
@@ -78,12 +77,6 @@ impl KnowledgeGraph {
                 .entry(edge.target().clone())
                 .or_insert_with(Vec::new)
                 .push(edge.id().clone());
-        }
-        for adjacent in forward.values_mut() {
-            adjacent.sort();
-        }
-        for adjacent in reverse.values_mut() {
-            adjacent.sort();
         }
         Ok(Self {
             nodes,
