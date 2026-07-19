@@ -13,7 +13,8 @@ test("shows truthful source and privacy controls with confirm-before-change", as
   await expect(section.getByText("Normalized title and deadline plus message/thread provenance; the selected fragment and raw body are discarded.")).toBeVisible();
   await expect(section.getByText(/This route does not validate a Google-issued grant; normal Gmail OAuth and broad Gmail scopes are disabled/)).toBeVisible();
   await expect(section.getByText("Apple-compatible calendar file path; no Apple credentials requested.")).toBeVisible();
-  await expect(section.getByText(/Fixture only/)).toHaveCount(3);
+  await expect(section.getByText(/Fixture only/)).toHaveCount(7);
+  await expect(section.getByText(/Not configured/)).toHaveCount(0);
 
   const trigger = section.getByRole("button", { name: "Preview ICS import" });
   await trigger.click();

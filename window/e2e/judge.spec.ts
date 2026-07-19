@@ -83,7 +83,8 @@ test("@judge completes the fixed synthetic story accessibly without egress or so
   await expect(sources.getByText("Normalized payload seam for a separately configured Workspace add-on current-message grant")).toBeVisible();
   await expect(sources.getByText("This route does not validate a Google-issued grant; normal Gmail OAuth and broad Gmail scopes are disabled.")).toBeVisible();
   await expect(sources.getByText("Apple-compatible calendar file path; no Apple credentials requested.")).toBeVisible();
-  await expect(sources.getByText(/Fixture only/)).toHaveCount(3);
+  await expect(sources.getByText(/Fixture only/)).toHaveCount(7);
+  await expect(sources.getByText(/Not configured/)).toHaveCount(0);
   await expect(sources.getByText("Deterministic evidence view. Explanations never approve, change, or guarantee a proposal.")).toBeVisible();
 
   for (const label of ["Preview ICS import", "Preview Microsoft fixture revoke", "Preview data export", "Preview profile deletion"]) {
