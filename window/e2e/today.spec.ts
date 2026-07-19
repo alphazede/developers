@@ -6,6 +6,7 @@ test("renders the deterministic Today surface and supports safe native placement
   page.on("console", (message) => { if (message.type() === "error") errors.push(message.text()); });
   page.on("pageerror", (error) => errors.push(error.message));
 
+  await page.setViewportSize({ width: 1440, height: 3000 });
   await page.goto("/");
   await expect(page.getByRole("main", { name: "Today" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Personal rhythm" })).toBeVisible();
@@ -26,6 +27,20 @@ test("renders the deterministic Today surface and supports safe native placement
   await expect(page.getByRole("status", { name: "Placement updates" })).toContainText("Picked up Review imported follow-up");
 
   const available = page.getByRole("button", { name: /Place at 15:30.*Available/ });
+  const pickupBox = await pickup.boundingBox();
+  const targetBox = await available.boundingBox();
+  expect(pickupBox).not.toBeNull();
+  expect(targetBox).not.toBeNull();
+  await page.mouse.move(pickupBox!.x + pickupBox!.width / 2, pickupBox!.y + pickupBox!.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(pickupBox!.x + pickupBox!.width / 2 + 12, pickupBox!.y + pickupBox!.height / 2, { steps: 2 });
+  await page.mouse.move(targetBox!.x + targetBox!.width / 2, targetBox!.y + targetBox!.height / 2, { steps: 20 });
+  await page.mouse.up();
+  await expect(page.getByRole("status", { name: "Placement updates" })).toContainText("Source task unchanged");
+  await expect(page.getByRole("heading", { name: "Local preview" })).toBeVisible();
+  await expect(page.getByLabel("GitHub source task, read-only").first()).toContainText("Read-only");
+
+  await pickup.click();
   await available.focus();
   await page.keyboard.press("Enter");
   await expect(page.getByRole("status", { name: "Placement updates" })).toContainText("Source task unchanged");

@@ -4,17 +4,13 @@ import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it } from "vitest";
 
-import { buildSourcePrivacyRows, mergeSourceManifests } from "../../../src/components/sources/source-model";
+import { buildSourcePrivacyRows, mergeSourceManifests, syntheticPrivacyManifests } from "../../../src/components/sources/source-model";
 import { SourcesPrivacySection } from "../../../src/components/sources/sources-privacy-section";
 import type { ConnectorManifest } from "../../../src/application/connectors";
 
 afterEach(cleanup);
 const freshness = { schemaVersion: 1 as const, fetchedAt: "2026-07-23T15:00:00Z", sourceUpdatedAt: null, expiresAt: null, state: "fixture" as const };
-const fixtures: ConnectorManifest[] = [
-  { schemaVersion: 1, source: "microsoft", mode: "fixture", capabilities: ["calendar.fixture.read"], consentRevision: 0, freshness },
-  { schemaVersion: 1, source: "strava", mode: "fixture", capabilities: ["activity.fixture.read"], consentRevision: 0, freshness },
-  { schemaVersion: 1, source: "oura", mode: "fixture", capabilities: ["readiness.fixture.read"], consentRevision: 0, freshness },
-];
+const fixtures = syntheticPrivacyManifests(freshness.fetchedAt);
 const explanation = { schemaVersion: 1 as const, score: 82, heading: "Why this time was suggested", bullets: ["Evidence data: capacity-fit (32 points, fixture)."], source: "deterministic" as const };
 
 describe("SourcesPrivacySection", () => {
@@ -26,8 +22,8 @@ describe("SourcesPrivacySection", () => {
     expect(screen.getByText(/This route does not validate a Google-issued grant; normal Gmail OAuth and broad Gmail scopes are disabled/)).toBeTruthy();
     expect(screen.getByText("Apple-compatible calendar file path; no Apple credentials requested.")).toBeTruthy();
     expect(screen.queryByRole("button", { name: /connect apple/i })).toBeNull();
-    expect(screen.getAllByText(/Fixture only/)).toHaveLength(3);
-    expect(screen.getAllByText(/Not configured/).length).toBeGreaterThanOrEqual(4);
+    expect(screen.getAllByText(/Fixture only/)).toHaveLength(7);
+    expect(screen.queryByText(/Not configured/)).toBeNull();
     expect(screen.getAllByRole("button").filter((button) => !(button as HTMLButtonElement).disabled).every((button) => button.textContent?.startsWith("Preview"))).toBe(true);
   });
 
@@ -63,7 +59,17 @@ describe("SourcesPrivacySection", () => {
     const live: ConnectorManifest = { schemaVersion: 1, source: "github", mode: "github-app", capabilities: ["task.connect", "task.read", "task.sync", "task.revoke"], consentRevision: 3, freshness: { ...freshness, state: "fresh" } };
     const rows = buildSourcePrivacyRows(mergeSourceManifests(fixtures, [live]));
     expect(rows.find((row) => row.source === "github")).toMatchObject({ status: "Live", freshness: `fresh; checked ${freshness.fetchedAt}` });
-    expect(rows.filter((row) => row.status === "Fixture only")).toHaveLength(3);
+    expect(rows.filter((row) => row.status === "Fixture only")).toHaveLength(6);
     expect(JSON.stringify(rows)).not.toMatch(/"(?:accessToken|refreshToken|clientSecret|ciphertext)":/i);
+  });
+
+  it("keeps stale and revoked sources explicit after live manifests override fixtures", () => {
+    const stale: ConnectorManifest = { schemaVersion: 1, source: "github", mode: "github-app", capabilities: ["task.connect", "task.read", "task.sync", "task.revoke"], consentRevision: 3, freshness: { ...freshness, state: "stale" } };
+    const revoked: ConnectorManifest = { schemaVersion: 1, source: "linear", mode: "oauth", capabilities: [], consentRevision: 4, freshness: { ...freshness, state: "revoked" } };
+    const rows = buildSourcePrivacyRows(mergeSourceManifests(fixtures, [stale, revoked]));
+    expect(rows.find((row) => row.source === "github")).toMatchObject({ status: "Stale", freshness: `stale; checked ${freshness.fetchedAt}` });
+    expect(rows.find((row) => row.source === "github")?.actions.map(({ enabled }) => enabled)).toEqual([false, true]);
+    expect(rows.find((row) => row.source === "linear")).toMatchObject({ status: "Revoked", freshness: `revoked; checked ${freshness.fetchedAt}` });
+    expect(rows.find((row) => row.source === "linear")?.actions.every(({ enabled }) => !enabled)).toBe(true);
   });
 });
