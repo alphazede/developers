@@ -10,6 +10,8 @@ public_boundary: public
 
 # BRAN
 
+![BRAN seated between two ravens beneath the memory tree](assets/brand/bran-repository-raven.png)
+
 BRAN is the repository-intelligence product and its `bran` headless executable.
 
 ## Current Slice 1.1

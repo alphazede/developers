@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import os
 import stat
 import subprocess
@@ -13,6 +14,9 @@ from pathlib import Path
 MAX_TEXT_FILE_BYTES = 1024 * 1024
 REJECTED_FIXTURE_RELATIVE = Path("bran/fixtures/public-boundary/rejected/synthetic-canaries.txt")
 PUBLIC_SAFE_FIXTURE_RELATIVE = Path("bran/fixtures/public-boundary/public-safe/neutral-product-text.txt")
+ALLOWED_BINARY_RELATIVE = Path("bran/assets/brand/bran-repository-raven.png")
+ALLOWED_BINARY_SIZE = 1974398
+ALLOWED_BINARY_SHA256 = "4f6f1c4a4d82b6ef661d80602831c562c0d824daa36c009394c40dcdef1b4a2d"
 
 # Keep the complete canaries out of this source file so the checker (which is itself
 # scanned) does not mask an accidental literal copy here.
@@ -111,6 +115,28 @@ def get_text_or_fail(path: Path) -> str:
         raise ValueError("invalid UTF-8")
 
 
+def validate_allowed_binary(path: Path) -> None:
+    """Fail closed unless the sole allowed binary is the authorized exact file."""
+    try:
+        st = path.lstat()
+    except FileNotFoundError:
+        raise ValueError("missing")
+    except OSError as exc:
+        raise ValueError(f"unreadable ({exc})")
+    if stat.S_ISLNK(st.st_mode):
+        raise ValueError("symlink")
+    if not stat.S_ISREG(st.st_mode):
+        raise ValueError("non-regular")
+    if st.st_size != ALLOWED_BINARY_SIZE:
+        raise ValueError(f"unexpected size {st.st_size}")
+    try:
+        digest = hashlib.sha256(path.read_bytes()).hexdigest()
+    except OSError as exc:
+        raise ValueError(f"read error: {exc}")
+    if digest != ALLOWED_BINARY_SHA256:
+        raise ValueError("unexpected SHA-256")
+
+
 def main() -> int:
     if len(sys.argv) > 1:
         print("usage: public_boundary_check.py", file=sys.stderr)
@@ -161,6 +187,7 @@ def main() -> int:
     # This preserves fail-closed symlink rejection: a symlink alias cannot match lexical.
     scanned = 0
     allowed_skips = 0
+    allowed_binaries = 0
     violations: list[tuple[Path, tuple[str, ...]]] = []
     for path in enumerated:
         try:
@@ -171,6 +198,14 @@ def main() -> int:
         if rel == REJECTED_FIXTURE_RELATIVE:
             # explicit, observable skip of ONLY the designated fixture via lexical identity
             allowed_skips += 1
+            continue
+        if rel == ALLOWED_BINARY_RELATIVE:
+            try:
+                validate_allowed_binary(path)
+            except ValueError as exc:
+                print(f"FAIL {rel}: authorized binary {exc}")
+                return 1
+            allowed_binaries += 1
             continue
         try:
             text = get_text_or_fail(path)
@@ -200,9 +235,13 @@ def main() -> int:
         print(f"FAIL designated rejected fixture absent from Git enumeration or duplicated (observed count {allowed_skips})")
         return 1
 
+    if allowed_binaries != 1:
+        print(f"FAIL authorized binary absent from Git enumeration or duplicated (observed count {allowed_binaries})")
+        return 1
+
     print(
         "PASS public boundary check: "
-        f"scanned={scanned} allowed_skips={allowed_skips} "
+        f"scanned={scanned} allowed_skips={allowed_skips} allowed_binaries={allowed_binaries} "
         "public_safe_fixture=clean rejected_test_fixture=detected"
     )
     return 0
