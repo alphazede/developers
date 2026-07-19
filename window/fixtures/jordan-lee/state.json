@@ -445,7 +445,7 @@
       "title": "Review imported follow-up",
       "state": "open",
       "durationMinutes": 30,
-      "deadlineAt": "2026-07-23T20:00:00Z",
+      "deadlineAt": "2026-07-23T21:00:00Z",
       "priority": 40,
       "projectRef": null,
       "labels": [
@@ -556,6 +556,32 @@
         },
         "importedAt": "2026-07-23T15:00:00Z"
       }
+    }
+  ],
+  "schedulingIntents": [
+    {
+      "schemaVersion": 1,
+      "taskId": "a1000000-0000-4000-8000-000000000011",
+      "requiredCapacity": 55,
+      "goalAlignment": 60
+    },
+    {
+      "schemaVersion": 1,
+      "taskId": "a1000000-0000-4000-8000-000000000012",
+      "requiredCapacity": 75,
+      "goalAlignment": 75
+    },
+    {
+      "schemaVersion": 1,
+      "taskId": "a1000000-0000-4000-8000-000000000013",
+      "requiredCapacity": 85,
+      "goalAlignment": 90
+    },
+    {
+      "schemaVersion": 1,
+      "taskId": "a1000000-0000-4000-8000-000000000014",
+      "requiredCapacity": 35,
+      "goalAlignment": 45
     }
   ],
   "commitments": [
@@ -1079,7 +1105,7 @@
       "id": "c3000000-0000-4000-8000-000000000001",
       "observedAt": "2026-07-09T19:00:00Z",
       "localTime": "14:00",
-      "value": 0.35,
+      "value": -0.35,
       "reliability": 0.9,
       "signal": "meeting-after",
       "provenance": {
@@ -1194,7 +1220,7 @@
       "id": "c3000000-0000-4000-8000-000000000006",
       "observedAt": "2026-07-14T19:00:00Z",
       "localTime": "14:00",
-      "value": 0.3,
+      "value": -0.3,
       "reliability": 0.9,
       "signal": "meeting-after",
       "provenance": {
@@ -1332,7 +1358,7 @@
       "id": "c3000000-0000-4000-8000-000000000012",
       "observedAt": "2026-07-20T19:00:00Z",
       "localTime": "14:00",
-      "value": 0.25,
+      "value": -0.25,
       "reliability": 0.9,
       "signal": "meeting-after",
       "provenance": {

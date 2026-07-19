@@ -13,7 +13,12 @@ const port = await new Promise((resolve, reject) => {
 const sentinel = "APP_SENTINEL_NEVER_EMIT";
 const receiptDirectory = await mkdtemp(join(tmpdir(), "app-network-"));
 const receipt = join(receiptDirectory, "receipt");
-const environment = { ...process.env, APP_RUNTIME_MODE: "synthetic", APP_SMOKE_PORT: String(port), APP_NETWORK_RECEIPT: receipt, HTTP_PROXY: sentinel, HTTPS_PROXY: sentinel, ALL_PROXY: sentinel, GOOGLE_CLIENT_SECRET: sentinel, GITHUB_TOKEN: sentinel, LINEAR_API_KEY: sentinel };
+const inheritedNames = ["CI", "FORCE_COLOR", "HOME", "LANG", "LC_ALL", "LOGNAME", "NO_COLOR", "PATH", "SHELL", "TEMP", "TERM", "TMP", "TMPDIR", "TZ", "USER"];
+const environment = {
+  ...Object.fromEntries(inheritedNames.flatMap((name) => process.env[name] === undefined ? [] : [[name, process.env[name]]])),
+  APP_RUNTIME_MODE: "synthetic", APP_SMOKE_PORT: String(port), APP_NETWORK_RECEIPT: receipt, NEXT_TELEMETRY_DISABLED: "1",
+  HTTP_PROXY: sentinel, HTTPS_PROXY: sentinel, ALL_PROXY: sentinel, GOOGLE_CLIENT_SECRET: sentinel, GITHUB_TOKEN: sentinel, LINEAR_API_KEY: sentinel,
+};
 const child = spawn(process.execPath, ["--require", "./tools/release/no-network-guard.cjs", "./node_modules/next/dist/bin/next", "start", "-H", "127.0.0.1", "-p", String(port)], { env: environment, stdio: ["ignore", "pipe", "pipe"] });
 let output = "";
 child.stdout.on("data", (value) => { output += value; });
@@ -30,7 +35,7 @@ try {
     try {
       const response = await fetch(`http://127.0.0.1:${port}/`);
       const body = await response.text();
-      if (response.ok && body.includes("deterministic synthetic data")) {
+      if (response.ok && body.includes("Personal rhythm")) {
         if (output.includes(sentinel)) throw new Error("startup emitted a sentinel");
         console.log(`startup no-network receipt: loopback http://127.0.0.1:${port}/`);
         break;

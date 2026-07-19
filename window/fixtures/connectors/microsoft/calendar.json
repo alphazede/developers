@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 1,
+  "source": "microsoft",
+  "capability": "calendar.fixture.read",
+  "consentRevision": 1,
+  "fetchedAt": "2026-07-23T15:00:00Z",
+  "pages": [
+    {
+      "records": [
+        { "schemaVersion": 1, "id": "ms-event-b", "title": "Fixture planning review", "startAt": "2026-07-23T19:30:00Z", "endAt": "2026-07-23T20:00:00Z", "updatedAt": "2026-07-22T18:00:00Z", "protected": false },
+        { "schemaVersion": 1, "id": "ms-event-a", "title": "Fixture protected time", "startAt": "2026-07-23T18:00:00Z", "endAt": "2026-07-23T18:30:00Z", "updatedAt": "2026-07-21T18:00:00Z", "protected": true }
+      ]
+    }
+  ]
+}

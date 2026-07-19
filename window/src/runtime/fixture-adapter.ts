@@ -85,6 +85,17 @@ export class FixtureAdapter {
     if (JSON.stringify([state.tasks, state.commitments, state.observations]) !== JSON.stringify([tasks, commitments, observations])) {
       throw new Error("Golden state does not match normalized fixture records");
     }
+    const expectedIntents = [
+      { schemaVersion: 1, taskId: "a1000000-0000-4000-8000-000000000011", requiredCapacity: 55, goalAlignment: 60 },
+      { schemaVersion: 1, taskId: "a1000000-0000-4000-8000-000000000012", requiredCapacity: 75, goalAlignment: 75 },
+      { schemaVersion: 1, taskId: "a1000000-0000-4000-8000-000000000013", requiredCapacity: 85, goalAlignment: 90 },
+      { schemaVersion: 1, taskId: "a1000000-0000-4000-8000-000000000014", requiredCapacity: 35, goalAlignment: 45 },
+    ];
+    if (JSON.stringify(state.schedulingIntents) !== JSON.stringify(expectedIntents)
+      || state.schedulingIntents.some((intent) => tasks.find((task) => task.id === intent.taskId)?.state !== "open")
+      || tasks.some((task) => task.state === "open" && !state.schedulingIntents.some((intent) => intent.taskId === task.id))) {
+      throw new Error("Golden scheduling intents are invalid");
+    }
     if (Object.keys(state.connections).sort().join() !== [...fixtureSources].sort().join()
       || Object.values(state.connections).some((connection) => connection.consentRevision < 1 || connection.capabilities.length === 0 || connection.freshness.state !== "fixture")) {
       throw new Error("Golden state connections are incomplete");
@@ -121,8 +132,10 @@ export class FixtureAdapter {
       throw new Error("Recommendation golden references invalid fixture inputs");
     }
     const importedPlacement = recommendations.expectedOutcomes.find((outcome) => outcome.kind === "immutable-imported-task-placement")!;
+    const importedTask = tasks.find((task) => task.id === importedPlacement.taskId);
     if (importedPlacement.expectedAction !== "local-proposal-only"
-      || !tasks.some((task) => task.id === importedPlacement.taskId && task.immutable && ["github", "linear"].includes(task.source))) {
+      || !importedTask?.immutable || !["github", "linear"].includes(importedTask.source)
+      || importedTask.deadlineAt !== "2026-07-23T21:00:00Z" || importedPlacement.endAt !== importedTask.deadlineAt) {
       throw new Error("Imported task placement must remain local-only");
     }
     return { manifest, stateBytes: text("state.json"), recommendationsBytes: text("recommendations.json") };

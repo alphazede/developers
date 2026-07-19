@@ -1,0 +1,38 @@
+{
+  "pages": [
+    {
+      "items": [
+        {
+          "installationId": 9001,
+          "repositoryFullName": "alphazede/window-demo",
+          "issueNumber": 42,
+          "title": "Review imported follow-up",
+          "state": "open",
+          "labels": ["scheduler", "backend"],
+          "milestone": "MVP",
+          "assigneeIds": ["private-user-1", "private-user-2"],
+          "projectReference": "capacity-project",
+          "updatedAt": "2026-07-22T18:00:00Z"
+        }
+      ],
+      "nextCursor": "github-page-2"
+    },
+    {
+      "items": [
+        {
+          "installationId": 9001,
+          "repositoryFullName": "alphazede/window-demo",
+          "issueNumber": 7,
+          "title": "Confirm scheduler evidence",
+          "state": "open",
+          "labels": ["evidence"],
+          "milestone": null,
+          "assigneeIds": [],
+          "projectReference": null,
+          "updatedAt": "2026-07-21T18:00:00Z"
+        }
+      ],
+      "nextCursor": null
+    }
+  ]
+}

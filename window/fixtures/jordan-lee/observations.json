@@ -4,7 +4,7 @@
     "id": "c3000000-0000-4000-8000-000000000001",
     "observedAt": "2026-07-09T19:00:00Z",
     "localTime": "14:00",
-    "value": 0.35,
+    "value": -0.35,
     "reliability": 0.9,
     "signal": "meeting-after",
     "provenance": {
@@ -119,7 +119,7 @@
     "id": "c3000000-0000-4000-8000-000000000006",
     "observedAt": "2026-07-14T19:00:00Z",
     "localTime": "14:00",
-    "value": 0.3,
+    "value": -0.3,
     "reliability": 0.9,
     "signal": "meeting-after",
     "provenance": {
@@ -257,7 +257,7 @@
     "id": "c3000000-0000-4000-8000-000000000012",
     "observedAt": "2026-07-20T19:00:00Z",
     "localTime": "14:00",
-    "value": 0.25,
+    "value": -0.25,
     "reliability": 0.9,
     "signal": "meeting-after",
     "provenance": {

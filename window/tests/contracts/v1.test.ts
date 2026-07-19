@@ -8,6 +8,7 @@ import {
   fixtureManifestV1Schema,
   localStateV1Schema,
   normalizedTaskV1Schema,
+  schedulingIntentV1Schema,
   domainEventV1Schema,
 } from "../../src/contracts/v1";
 import { FixtureAdapter } from "../../src/runtime/fixture-adapter";
@@ -70,7 +71,10 @@ describe("V1 contracts", () => {
     expect(observations.filter((item) => item.provenance.source === "oura").every((item) => item.signal === "readiness")).toBe(true);
     expect(observations.filter((item) => ["github", "linear"].includes(item.provenance.source)).every((item) => item.signal === "task-outcome")).toBe(true);
     expect(observations.filter((item) => item.signal === "readiness").map((item) => item.value)).toEqual([0.68, 0.52, 0.4]);
-    expect(observations.filter((item) => item.signal === "meeting-after").map((item) => item.value)).toEqual([0.35, 0.3, 0.25]);
+    const meetingAfter = observations.filter((item) => item.signal === "meeting-after");
+    expect(meetingAfter.map((item) => item.value)).toEqual([-0.35, -0.3, -0.25]);
+    expect(meetingAfter.reduce((sum, item) => sum + item.value * item.reliability, 0)
+      / meetingAfter.reduce((sum, item) => sum + item.reliability, 0)).toBeLessThanOrEqual(-0.25);
     expect(observations.map((item) => item.observedAt.slice(0, 10))).toEqual(Array.from({ length: 14 }, (_, index) => `2026-07-${String(index + 9).padStart(2, "0")}`));
     expect(new Set([...tasks.map((item) => item.provenance.source), ...commitments.map((item) => item.provenance.source), ...observations.map((item) => item.provenance.source)])).toEqual(new Set(["local", "fixture", "google-calendar", "gmail", "github", "linear", "microsoft", "strava", "oura", "ics"]));
     expect(commitments.some((item) => item.protected && item.title === "Protected workout")).toBe(true);
@@ -78,6 +82,13 @@ describe("V1 contracts", () => {
     expect(state.tasks).toEqual(tasks);
     expect(state.commitments).toEqual(commitments);
     expect(state.observations).toEqual(observations);
+    expect(state.schedulingIntents).toEqual([
+      { schemaVersion: 1, taskId: "a1000000-0000-4000-8000-000000000011", requiredCapacity: 55, goalAlignment: 60 },
+      { schemaVersion: 1, taskId: "a1000000-0000-4000-8000-000000000012", requiredCapacity: 75, goalAlignment: 75 },
+      { schemaVersion: 1, taskId: "a1000000-0000-4000-8000-000000000013", requiredCapacity: 85, goalAlignment: 90 },
+      { schemaVersion: 1, taskId: "a1000000-0000-4000-8000-000000000014", requiredCapacity: 35, goalAlignment: 45 },
+    ]);
+    expect(state.schedulingIntents.map((intent) => intent.taskId)).toEqual(tasks.filter((task) => task.state === "open").map((task) => task.id));
     expect(recommendations.expectedOutcomes.map((item: { kind: string }) => item.kind)).toEqual([
       "stronger-morning-deep-work",
       "lower-capacity-administration",
@@ -105,8 +116,30 @@ describe("V1 contracts", () => {
     expect(protectedOutcome.rationale).toBe(`${protectedCommitment.title} remains unavailable.`);
     expect(commitments.some((item) => item.id === "b2000000-0000-4000-8000-000000000016" && item.endAt === commitments.find((other) => other.id === "b2000000-0000-4000-8000-000000000017")?.startAt)).toBe(true);
     const imported = outcomes.find((outcome: { kind: string }) => outcome.kind === "immutable-imported-task-placement")!;
-    expect(tasks.find((task) => task.id === imported.taskId)).toMatchObject({ source: "github", immutable: true });
+    const importedTask = tasks.find((task) => task.id === imported.taskId)!;
+    expect(importedTask).toMatchObject({ source: "github", immutable: true, deadlineAt: "2026-07-23T21:00:00Z" });
+    expect(imported.endAt).toBe(importedTask.deadlineAt);
     expect(imported.expectedAction).toBe("local-proposal-only");
+  });
+
+  it("validates scheduling intent values, uniqueness, and task references", async () => {
+    const state = JSON.parse(await readFile(statePath, "utf8"));
+    const valid = { schemaVersion: 1, taskId: "a1000000-0000-4000-8000-000000000011", requiredCapacity: 55, goalAlignment: 60 };
+
+    expect(schedulingIntentV1Schema.parse(valid)).toEqual(valid);
+    for (const invalid of [
+      { ...valid, schemaVersion: 2 },
+      { ...valid, requiredCapacity: -1 },
+      { ...valid, requiredCapacity: 101 },
+      { ...valid, requiredCapacity: 55.5 },
+      { ...valid, goalAlignment: -1 },
+      { ...valid, goalAlignment: 101 },
+      { ...valid, goalAlignment: 60.5 },
+      { ...valid, extra: true },
+    ]) expect(() => schedulingIntentV1Schema.parse(invalid)).toThrow();
+    expect(schedulingIntentV1Schema.parse({ ...valid, requiredCapacity: null, goalAlignment: null })).toMatchObject({ requiredCapacity: null, goalAlignment: null });
+    expect(() => localStateV1Schema.parse({ ...state, schedulingIntents: [state.schedulingIntents[0], state.schedulingIntents[0]] })).toThrow();
+    expect(() => localStateV1Schema.parse({ ...state, schedulingIntents: [{ ...valid, taskId: "a1000000-0000-4000-8000-000000000099" }] })).toThrow();
   });
 
   it("loads verified fixture bytes identically across fresh adapters and a simulated restart", async () => {
@@ -120,10 +153,10 @@ describe("V1 contracts", () => {
     expect(third.stateBytes).toBe(restarted.stateBytes);
     expect(first.recommendationsBytes).toBe(second.recommendationsBytes);
     expect(first.manifest.expected).toEqual({
-      stateSha256: "9b068658ad4c19eb13e7715987a093e09470cb826f744e844bc250b8b1a10e2f",
+      stateSha256: "5733f5d25e908121215647a33b4570d0f353eb77d17b4154c3c9befc43259b96",
       recommendationsSha256: "2b28b7f752cd540af983c7c858eaab2491d1382a2f77cb1b05832d467dc1b7c4",
     });
-    expect(sha256(await readFile(manifestPath, "utf8"))).toBe("583725fb32f57a0919742aac8c7e6d023b66ccc84329ffaeb5b760f0ba61d63d");
+    expect(sha256(await readFile(manifestPath, "utf8"))).toBe("b22cedf7ae739feb1c868dbb8627992634f3cd2c6fe2b205dcd60409d5ec1c98");
     expect(sha256(first.stateBytes)).toBe(first.manifest.expected.stateSha256);
     expect(sha256(first.recommendationsBytes)).toBe(first.manifest.expected.recommendationsSha256);
   });
@@ -133,6 +166,14 @@ describe("V1 contracts", () => {
       const directory = await mkdtemp(join(tmpdir(), "fixture-"));
       await cp(fixtureDirectory, directory, { recursive: true });
       return new URL(`file://${directory}/`);
+    };
+    const writeState = async (directory: URL, state: Record<string, unknown>) => {
+      const bytes = `${JSON.stringify(state)}\n`;
+      await writeFile(new URL("state.json", directory), bytes);
+      const manifest = JSON.parse(await readFile(new URL("manifest.json", directory), "utf8"));
+      manifest.files["state.json"].sha256 = sha256(bytes);
+      manifest.expected.stateSha256 = sha256(bytes);
+      await writeFile(new URL("manifest.json", directory), `${JSON.stringify(manifest)}\n`);
     };
     const adapter = new FixtureAdapter();
     const tampered = await copy();
@@ -156,13 +197,33 @@ describe("V1 contracts", () => {
     const stateMismatch = await copy();
     const mismatchedState = JSON.parse(await readFile(new URL("state.json", stateMismatch), "utf8"));
     mismatchedState.tasks.pop();
-    const stateBytes = `${JSON.stringify(mismatchedState)}\n`;
-    await writeFile(new URL("state.json", stateMismatch), stateBytes);
-    const stateManifest = JSON.parse(await readFile(new URL("manifest.json", stateMismatch), "utf8"));
-    stateManifest.files["state.json"].sha256 = sha256(stateBytes);
-    stateManifest.expected.stateSha256 = sha256(stateBytes);
-    await writeFile(new URL("manifest.json", stateMismatch), `${JSON.stringify(stateManifest)}\n`);
+    mismatchedState.schedulingIntents.pop();
+    await writeState(stateMismatch, mismatchedState);
     await expect(adapter.loadFixtureDirectory(stateMismatch)).rejects.toThrow("does not match normalized fixture records");
+
+    const wrongIntent = await copy();
+    const wrongIntentState = JSON.parse(await readFile(new URL("state.json", wrongIntent), "utf8"));
+    wrongIntentState.schedulingIntents[0].requiredCapacity = 56;
+    await writeState(wrongIntent, wrongIntentState);
+    await expect(adapter.loadFixtureDirectory(wrongIntent)).rejects.toThrow("Golden scheduling intents are invalid");
+
+    const duplicateIntent = await copy();
+    const duplicateIntentState = JSON.parse(await readFile(new URL("state.json", duplicateIntent), "utf8"));
+    duplicateIntentState.schedulingIntents.push(duplicateIntentState.schedulingIntents[0]);
+    await writeState(duplicateIntent, duplicateIntentState);
+    await expect(adapter.loadFixtureDirectory(duplicateIntent)).rejects.toThrow();
+
+    const orphanIntent = await copy();
+    const orphanIntentState = JSON.parse(await readFile(new URL("state.json", orphanIntent), "utf8"));
+    orphanIntentState.schedulingIntents[0].taskId = "a1000000-0000-4000-8000-000000000099";
+    await writeState(orphanIntent, orphanIntentState);
+    await expect(adapter.loadFixtureDirectory(orphanIntent)).rejects.toThrow();
+
+    const malformedIntent = await copy();
+    const malformedIntentState = JSON.parse(await readFile(new URL("state.json", malformedIntent), "utf8"));
+    malformedIntentState.schedulingIntents[0].goalAlignment = 101;
+    await writeState(malformedIntent, malformedIntentState);
+    await expect(adapter.loadFixtureDirectory(malformedIntent)).rejects.toThrow();
 
     const malformedRecommendations = await copy();
     const recommendations = JSON.parse(await readFile(new URL("recommendations.json", malformedRecommendations), "utf8"));
@@ -175,7 +236,8 @@ describe("V1 contracts", () => {
     await writeFile(new URL("manifest.json", malformedRecommendations), `${JSON.stringify(recommendationManifest)}\n`);
     await expect(adapter.loadFixtureDirectory(malformedRecommendations)).rejects.toThrow();
 
-    await Promise.all([tampered, countMismatch, missing, extra, stateMismatch, malformedRecommendations].map((directory) => rm(directory, { recursive: true, force: true })));
+    await Promise.all([tampered, countMismatch, missing, extra, stateMismatch, wrongIntent, duplicateIntent, orphanIntent, malformedIntent, malformedRecommendations]
+      .map((directory) => rm(directory, { recursive: true, force: true })));
   });
 
   it("rejects unknown keys, future versions, malformed instants, and invalid zones", () => {

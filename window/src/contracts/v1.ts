@@ -38,6 +38,10 @@ export const normalizedTaskV1Schema = z.object({
   durationMinutes: z.number().int().positive().max(1_440).nullable(), deadlineAt: instant.nullable(), priority: z.number().int().min(0).max(100).nullable(),
   projectRef: text(256).nullable(), labels: z.array(text(128)).max(100), immutable: z.boolean(), provenance: provenanceV1Schema,
 }).strict();
+export const schedulingIntentV1Schema = z.object({
+  schemaVersion, taskId: id, requiredCapacity: z.number().int().min(0).max(100).nullable(),
+  goalAlignment: z.number().int().min(0).max(100).nullable(),
+}).strict();
 export const normalizedCommitmentV1Schema = z.object({
   schemaVersion, id, kind: z.enum(["calendar-event", "selected-email-commitment", "protected-time", "recovery-buffer"]), title: text(),
   startAt: instant.nullable(), endAt: instant.nullable(), deadlineAt: instant.nullable(), hard: z.boolean(), protected: z.boolean(),
@@ -94,15 +98,24 @@ export const domainEventV1Schema = z.discriminatedUnion("type", [
 ]);
 export const localStateV1Schema = z.object({
   schemaVersion, revision: z.number().int().nonnegative(), profileId: id, timeZone, connections: boundedRecord(z.object({ capabilities: z.array(text(128)).max(100), consentRevision: z.number().int().nonnegative(), freshness: freshnessV1Schema }).strict(), 20),
-  tasks: z.array(normalizedTaskV1Schema).max(10_000), commitments: z.array(normalizedCommitmentV1Schema).max(2_000), observations: z.array(observationV1Schema).max(10_000), proposals: z.array(proposalV1Schema).max(10_000), events: z.array(domainEventV1Schema).max(10_000),
+  tasks: z.array(normalizedTaskV1Schema).max(10_000), schedulingIntents: z.array(schedulingIntentV1Schema).max(10_000), commitments: z.array(normalizedCommitmentV1Schema).max(2_000), observations: z.array(observationV1Schema).max(10_000), proposals: z.array(proposalV1Schema).max(10_000), events: z.array(domainEventV1Schema).max(10_000),
   commandReceipts: boundedRecord(z.object({ revision: z.number().int().nonnegative(), resultId: id }).strict(), 10_000),
-}).strict();
+}).strict().superRefine(({ tasks, schedulingIntents }, ctx) => {
+  const taskIds = new Set(tasks.map((task) => task.id));
+  const intentIds = new Set<string>();
+  schedulingIntents.forEach((intent, index) => {
+    if (intentIds.has(intent.taskId)) ctx.addIssue({ code: "custom", path: ["schedulingIntents", index, "taskId"], message: "Scheduling intent task IDs must be unique" });
+    if (!taskIds.has(intent.taskId)) ctx.addIssue({ code: "custom", path: ["schedulingIntents", index, "taskId"], message: "Scheduling intent must reference an existing task" });
+    intentIds.add(intent.taskId);
+  });
+});
 export const tokenEnvelopeV1Schema = z.object({ schemaVersion, keyId: text(128), algorithm: z.literal("AES-256-GCM"), nonce: text(512), ciphertext: text(10_000), authTag: text(512), createdAt: instant }).strict();
 
 export type Source = z.infer<typeof sourceSchema>;
 export type FreshnessV1 = z.infer<typeof freshnessV1Schema>;
 export type ProvenanceV1 = z.infer<typeof provenanceV1Schema>;
 export type NormalizedTaskV1 = z.infer<typeof normalizedTaskV1Schema>;
+export type SchedulingIntentV1 = z.infer<typeof schedulingIntentV1Schema>;
 export type NormalizedCommitmentV1 = z.infer<typeof normalizedCommitmentV1Schema>;
 export type ObservationV1 = z.infer<typeof observationV1Schema>;
 export type ProposalV1 = z.infer<typeof proposalV1Schema>;

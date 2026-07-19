@@ -1,0 +1,16 @@
+{
+  "message": {
+    "id": "message-1",
+    "threadId": "thread-1",
+    "subject": "Requested follow-up",
+    "selectedBodyFragment": "Please send the confirmed summary by Friday.",
+    "internalDate": "2026-07-23T18:00:00Z"
+  },
+  "confirmation": {
+    "confirmed": true,
+    "messageId": "message-1",
+    "fragmentSha256": "30efa78ac6731f2ac0ec2fe99da30a9b7057b87c036e604b3da8a9f1b1a3bb0b",
+    "title": "Send confirmed summary",
+    "deadlineAt": "2026-07-24T22:00:00Z"
+  }
+}

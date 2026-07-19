@@ -7,6 +7,8 @@ const net = require("node:net");
 const tls = require("node:tls");
 
 const allowedPort = Number(process.env.APP_SMOKE_PORT);
+const buildIpcCandidate = process.env.APP_ALLOW_TURBOPACK_IPC === "1" && /^\d+$/.test(process.argv[2] ?? "") ? Number(process.argv[2]) : NaN;
+const buildIpcPort = Number.isSafeInteger(buildIpcCandidate) && buildIpcCandidate > 0 && buildIpcCandidate <= 65_535 ? buildIpcCandidate : NaN;
 const receipt = process.env.APP_NETWORK_RECEIPT;
 const loopback = (host) => [undefined, "127.0.0.1", "::1", "localhost"].includes(host);
 const deny = (name) => {
@@ -24,7 +26,7 @@ for (const name of ["lookup", "resolve", "resolve4", "resolve6", "resolveAny", "
 
 const connect = (original, name) => function (...args) {
   const value = typeof args[0] === "object" ? args[0] : { port: args[0], host: args[1] };
-  if (loopback(value.host) && Number(value.port) === allowedPort) return original.apply(this, args);
+  if (loopback(value.host) && [allowedPort, buildIpcPort].includes(Number(value.port))) return original.apply(this, args);
   throw deny(name);
 };
 net.connect = connect(net.connect, "socket");
@@ -44,8 +46,8 @@ for (const [client, name] of [[http, "http"], [https, "https"]]) {
 }
 
 const originalFetch = global.fetch;
-global.fetch = async (input) => {
+global.fetch = async (input, init) => {
   const url = new URL(typeof input === "string" ? input : input.url);
-  if (loopback(url.hostname) && Number(url.port) === allowedPort) return originalFetch(url);
+  if (loopback(url.hostname) && Number(url.port) === allowedPort) return originalFetch(input, init);
   throw deny("fetch");
 };

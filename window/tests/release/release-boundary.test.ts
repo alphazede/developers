@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { spawnSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -17,6 +17,8 @@ describe("release boundary", () => {
     expect(ReleaseBoundary.verifyPublic(manifest)).toBe(true);
     expect(ReleaseBoundary.verifyPublic({ ...manifest, private: false })).toBe(false);
     expect(ReleaseBoundary.verifyPublic({ ...manifest, license: "MIT" })).toBe(false);
+    expect(ReleaseBoundary.verifyPublic({ ...manifest, name: "Win" + "dow" })).toBe(false);
+    expect(ReleaseBoundary.verifyPublic({ ...manifest, files: [...manifest.files, "DESIGN.md"] })).toBe(false);
     expect(ReleaseBoundary.verifyPublic({ ...manifest, dependencies: { ...manifest.dependencies, zod: "latest" } })).toBe(false);
     expect(loadRuntimeMode({ APP_RUNTIME_MODE: "live" })).toBe("live");
   });
@@ -25,7 +27,7 @@ describe("release boundary", () => {
     const root = await mkdtemp(join(tmpdir(), "packed-"));
     try {
       const leaks = [
-        "AlphaZede", "WNDW", "Everest", "WINDOW_RUNTIME_MODE", "/home/example", "private plan", "internal preview",
+        "Alpha" + "Zede", "WN" + "DW", "Ever" + "est", "Win" + "dow", "WINDOW" + "_RUNTIME_MODE", "/" + "home/example", "private " + "plan", "internal " + "preview",
         "token=credential", "secret = 'non-empty'", '"api_key": "key-value"', "password=hunter2",
         'GITHUB_TOKEN="ghp_1234567890"', "APP_DATA_KEY='data-key-value'", "client_secret=`client-secret-value`",
         "access-token=bareAccess123", '"data-key": "quoted-data-key"', "clientSecret='client-value'",
@@ -37,8 +39,11 @@ describe("release boundary", () => {
         ...leaks.map((content, index) => writeFile(join(root, `leak-${index}.txt`), content)),
       ]);
       const { inspectPackedFiles } = await import(publicCheckPath.href);
-      const failures = await inspectPackedFiles(root, ["safe.txt", "tests/hidden.ts", ...leaks.map((_, index) => `leak-${index}.txt`)]);
-      expect(failures).toEqual(expect.arrayContaining(["forbidden packed path: tests/hidden.ts", ...leaks.map((_, index) => `forbidden packed content: leak-${index}.txt`)]));
+      const failures = await inspectPackedFiles(root, ["safe.txt", ".next/hidden.ts", ".local/owner.json", "playwright-report/index.html", ...leaks.map((_, index) => `leak-${index}.txt`)]);
+      expect(failures).toEqual(expect.arrayContaining([
+        "forbidden packed path: .next/hidden.ts", "forbidden packed path: .local/owner.json", "forbidden packed path: playwright-report/index.html",
+        ...leaks.map((_, index) => `forbidden packed content: leak-${index}.txt`),
+      ]));
     } finally { await rm(root, { recursive: true, force: true }); }
   });
 
@@ -54,10 +59,41 @@ describe("release boundary", () => {
         "type CamelCredentials = { googleClientSecret: string; linearAccessToken: AccessToken; someServiceApiKey?: string; googleRefreshToken: TokenValue; oauthAccessToken: string; backupServicePassword: string; storageServiceDataKey: Buffer }",
         'const googleClientSecret = ""; const linearAccessToken = \'\'; const someServiceApiKey = ``',
         'const someServiceEndpoint = "public"; const customerApiKeyStatus = "missing"; const credentialHelper = "safe"',
+        '{"nextPageToken":"synthetic-page-2"}',
       ];
       await Promise.all(safe.map((content, index) => writeFile(join(root, `safe-${index}.txt`), content)));
       const { inspectPackedFiles } = await import(publicCheckPath.href);
       expect(await inspectPackedFiles(root, safe.map((_, index) => `safe-${index}.txt`))).toEqual([]);
+    } finally { await rm(root, { recursive: true, force: true }); }
+  });
+
+  it("allows only reviewed URL values in their exact packed source paths", async () => {
+    const root = await mkdtemp(join(tmpdir(), "packed-urls-"));
+    const approved = {
+      "src/server/oauth/one-time.ts": [
+        "https://accounts.google.com/o/oauth2/v2/auth", "https://oauth2.googleapis.com/token",
+        "https://linear.app/oauth/authorize", "https://api.linear.app/oauth/token",
+        "https://www.googleapis.com/auth/calendar.readonly", "https://www.googleapis.com/auth/calendar.events",
+      ],
+      "src/server/oauth/github-installation.ts": ["https://github.com/apps/${this.appSlug}/installations/new?${new"],
+      "src/server/connectors/live-runtime.ts": [
+        "https://www.googleapis.com/calendar/v3/calendars/primary/events", "https://oauth2.googleapis.com/revoke",
+        "https://api.github.com", "https://api.linear.app/graphql",
+      ],
+    } as const;
+    try {
+      for (const [path, values] of Object.entries(approved)) {
+        await mkdir(join(root, path, ".."), { recursive: true });
+        await writeFile(join(root, path), values.map((value) => `\"${value}\"`).join("\n"));
+      }
+      const { inspectPackedFiles } = await import(publicCheckPath.href);
+      expect(await inspectPackedFiles(root, Object.keys(approved))).toEqual([]);
+      await writeFile(join(root, "src/server/oauth/one-time.ts"), '"https://example.invalid/oauth/token"');
+      expect(await inspectPackedFiles(root, ["src/server/oauth/one-time.ts"])).toEqual(["forbidden packed URL: src/server/oauth/one-time.ts"]);
+      await writeFile(join(root, "src/server/oauth/one-time.ts"), '"https://api.linear.app/oauth/token?credential=literal"');
+      expect(await inspectPackedFiles(root, ["src/server/oauth/one-time.ts"])).toEqual(["forbidden packed URL: src/server/oauth/one-time.ts"]);
+      await writeFile(join(root, "wrong.ts"), '"https://api.linear.app/oauth/token"');
+      expect(await inspectPackedFiles(root, ["wrong.ts"])).toEqual(["forbidden packed URL: wrong.ts"]);
     } finally { await rm(root, { recursive: true, force: true }); }
   });
 
@@ -105,8 +141,9 @@ describe("release boundary", () => {
   it("keeps the packed runtime file contract exact", async () => {
     const { inspectPackContract, packManifest, packedFileAllowlist } = await import(publicCheckPath.href);
     expect(packedFileAllowlist).toEqual([...packedFileAllowlist].sort());
-    expect(packedFileAllowlist).toHaveLength(23);
+    expect(packedFileAllowlist).toHaveLength(128);
     expect(packedFileAllowlist.some((path: string) => path.startsWith(".local/"))).toBe(false);
+    expect(packedFileAllowlist).not.toContain("DESIGN.md");
     expect(packManifest(new URL("../..", import.meta.url).pathname)).toEqual(packedFileAllowlist);
     expect(inspectPackContract(packedFileAllowlist)).toEqual([]);
     expect(inspectPackContract(packedFileAllowlist.filter((path: string) => path !== "src/app/page.tsx"))).toContain("missing packed contract file: src/app/page.tsx");
@@ -147,5 +184,19 @@ describe("release boundary", () => {
     const result = spawnSync(process.execPath, ["-e", script], { cwd: new URL("../..", import.meta.url), encoding: "utf8" });
     expect(result.status).toBe(0);
     expect(result.stdout).toContain("neutral marker");
+  });
+
+  it("preserves selected-loopback fetch options", () => {
+    const script = "const http=require('node:http'); const server=http.createServer((req,res)=>{let body='';req.on('data',chunk=>body+=chunk);req.on('end',()=>res.end(req.method+' '+req.headers['x-test']+' '+body))}).listen(0,'127.0.0.1',async()=>{const port=server.address().port;process.env.APP_SMOKE_PORT=String(port);require('./tools/release/no-network-guard.cjs');const response=await fetch('http://127.0.0.1:'+port,{method:'POST',headers:{'x-test':'kept'},body:'payload'});process.stdout.write(await response.text());server.close()})";
+    const result = spawnSync(process.execPath, ["-e", script], { cwd: new URL("../..", import.meta.url), encoding: "utf8" });
+    expect(result.status).toBe(0);
+    expect(result.stdout).toBe("POST kept payload");
+  });
+
+  it("allows only the declared Turbopack build-child IPC port", () => {
+    const script = "const net=require('node:net');const server=net.createServer(socket=>socket.end('ipc')).listen(0,'127.0.0.1',()=>{const port=server.address().port;process.env.APP_ALLOW_TURBOPACK_IPC='1';process.argv[2]=String(port);require('./tools/release/no-network-guard.cjs');const socket=net.connect(port,'127.0.0.1');socket.on('data',value=>process.stdout.write(value));socket.on('end',()=>server.close())})";
+    const result = spawnSync(process.execPath, ["-e", script], { cwd: new URL("../..", import.meta.url), encoding: "utf8" });
+    expect(result.status).toBe(0);
+    expect(result.stdout).toBe("ipc");
   });
 });

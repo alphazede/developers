@@ -307,7 +307,7 @@
     "title": "Review imported follow-up",
     "state": "open",
     "durationMinutes": 30,
-    "deadlineAt": "2026-07-23T20:00:00Z",
+    "deadlineAt": "2026-07-23T21:00:00Z",
     "priority": 40,
     "projectRef": null,
     "labels": [

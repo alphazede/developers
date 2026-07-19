@@ -23,6 +23,7 @@ const state = (revision = 0, commandReceipts: LocalStateV1["commandReceipts"] = 
   timeZone: "America/Chicago",
   connections: {},
   tasks: [],
+  schedulingIntents: [],
   commitments: [],
   observations: [],
   proposals: [],

@@ -2,3 +2,4 @@ name: AlphaZede Developers CodeQL
 
 paths:
   - az-sports-dev
+  - window
