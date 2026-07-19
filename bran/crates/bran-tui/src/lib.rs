@@ -9,14 +9,16 @@ pub use diagnostics::{DiagnosticRecord, DiagnosticStore, Severity};
 pub use domain::{autocomplete, NativeImage, TerminalCapabilities, TuiAction, TuiApp, TuiEvent};
 pub use render::{render_app, render_surface, RAVEN_NARROW, RAVEN_PLAIN, RAVEN_WIDE};
 pub use settings::{
-    apply_settings, apply_settings_using, cancel_or_decide_later, local_practice_query,
-    onboarding_complete, quick_safe_config, readiness_receipt, repair_proposal, resolve_advanced,
-    AdvancedRequest, ApprovalPolicy, CapabilityProbe, CompletionReceipt, DeferredOnboarding,
-    DiagnosticPolicy, Feature, FlowChoice, Guardrail, GuardrailResolution, GuardrailValue,
-    OnboardingMode, OnboardingStep, OperatingProfile, Policy, PracticeReceipt,
-    ProviderTokenAttestation, ReadinessReceipt, RepairProposal, ResolutionProvenance,
-    ResolutionStatus, ResolvedSettings, RetentionPolicy, RootScope, SettingResolution, Settings,
-    TokenProjection, ToolPolicy, ONBOARDING_STEPS, PRACTICE_QUERY_LIMIT, SETTINGS_VERSION,
+    apply_settings, apply_settings_using, cancel_or_decide_later, load_settings,
+    local_practice_query, onboarding_complete, quick_safe_config, readiness_receipt,
+    repair_proposal, resolve_advanced, AdvancedRequest, ApprovalPolicy, CapabilityProbe,
+    CompletionReceipt, DeferredOnboarding, DiagnosticPolicy, Feature, FlowChoice, Guardrail,
+    GuardrailResolution, GuardrailValue, OnboardingMode, OnboardingStep, OperatingProfile, Policy,
+    PracticeReceipt, ProviderTokenAttestation, ReadinessReceipt, RepairProposal,
+    ResolutionProvenance, ResolutionStatus, ResolvedSettings, RetentionPolicy, RootScope,
+    SettingResolution, Settings, TokenProjection, ToolPolicy,
+    DEFAULT_CONNECTED_AGENT_TASK_TOKEN_CEILING, ONBOARDING_STEPS, PRACTICE_QUERY_LIMIT,
+    SETTINGS_VERSION,
 };
 
 /// A terminal state boundary. Platform raw-mode adapters stay outside this crate.
@@ -145,7 +147,7 @@ mod tests {
         assert_eq!(result_bound[2], "arch");
         let scan_bound = autocomplete(
             "late",
-            "zero\none\ntwo\nthree\nfour\nfive\nsix\nseven\nlate",
+            "zero\none\ntwo\nthree\nfour\nfive\nsix\nseven\neight\nnine\nlate",
         );
         assert!(scan_bound.is_empty());
 
@@ -220,6 +222,11 @@ mod tests {
 
         let quick = quick_safe_config();
         assert_eq!(quick.profile, OperatingProfile::OfflineCore);
+        assert_eq!(
+            quick.connected_agent_task_token_ceiling,
+            DEFAULT_CONNECTED_AGENT_TASK_TOKEN_CEILING
+        );
+        assert_eq!(DEFAULT_CONNECTED_AGENT_TASK_TOKEN_CEILING, 8_500);
         assert!(quick.sqz && quick.diagnostics);
         assert!(!quick.structured_history);
         assert!(
@@ -275,6 +282,7 @@ mod tests {
         requested.network = true;
         requested.auth = true;
         requested.mutation = true;
+        requested.connected_agent_task_token_ceiling = 12_345;
         let unavailable = resolve_advanced(
             AdvancedRequest::new(requested.clone()),
             CapabilityProbe::default(),
@@ -340,6 +348,14 @@ mod tests {
         let readiness = readiness_receipt(&unavailable, None);
         assert_eq!(readiness.requested, requested);
         assert_eq!(readiness.effective, unavailable.effective);
+        assert_eq!(
+            readiness.requested.connected_agent_task_token_ceiling,
+            12_345
+        );
+        assert_eq!(
+            readiness.effective.connected_agent_task_token_ceiling,
+            12_345
+        );
         assert_eq!(readiness.locked.len(), 1);
         assert_eq!(readiness.locked[0], Feature::Sqz);
         assert_eq!(readiness.unavailable.len(), 7);
@@ -364,9 +380,42 @@ mod tests {
         std::fs::remove_dir_all(&temp_dir).ok();
         std::fs::create_dir(&temp_dir).unwrap();
         assert!(!onboarding_complete(&settings_path).unwrap());
-        let completion = apply_settings(&settings_path, &quick).unwrap();
+        let mut persisted = quick.clone();
+        persisted.connected_agent_task_token_ceiling = 12_345;
+        let completion = apply_settings(&settings_path, &persisted).unwrap();
         assert!(completion.completed && !completion.should_nag && completion.bytes_written > 0);
         assert!(onboarding_complete(&settings_path).unwrap());
+        assert_eq!(
+            load_settings(&settings_path).unwrap(),
+            Some(persisted.clone())
+        );
+        let saved = std::fs::read_to_string(&settings_path).unwrap();
+        std::fs::write(
+            &settings_path,
+            saved.replacen(&format!("version={SETTINGS_VERSION}"), "version=1", 1),
+        )
+        .unwrap();
+        assert_eq!(load_settings(&settings_path).unwrap(), None);
+        std::fs::write(
+            &settings_path,
+            saved.replacen(
+                "connected_agent_task_token_ceiling=12345",
+                "connected_agent_task_token_ceiling=0",
+                1,
+            ),
+        )
+        .unwrap();
+        assert_eq!(load_settings(&settings_path).unwrap(), None);
+        std::fs::write(
+            &settings_path,
+            saved.replacen(
+                "connected_agent_task_token_ceiling=12345",
+                "connected_agent_task_token_ceiling=4294967296",
+                1,
+            ),
+        )
+        .unwrap();
+        assert_eq!(load_settings(&settings_path).unwrap(), None);
         std::fs::write(
             &settings_path,
             format!(
@@ -400,6 +449,7 @@ mod tests {
         assert_eq!(deferred.settings, quick);
         let mut current = quick.clone();
         current.voice = true;
+        current.connected_agent_task_token_ceiling = 12_345;
         let repair = repair_proposal(
             &current,
             CapabilityProbe {
@@ -487,16 +537,17 @@ mod tests {
         enter(&mut app, "");
         enter(&mut app, "advanced");
         enter(&mut app, "core-sqz");
-        enter(&mut app, "-sqz +voice +history +chat");
+        enter(&mut app, "-sqz +voice +history +chat tokens=12345");
         assert!(
             !app.draft.sqz
                 && app.draft.voice
                 && app.draft.structured_history
                 && app.draft.saved_chat
         );
+        assert_eq!(app.draft.connected_agent_task_token_ceiling, 12_345);
         assert_eq!(app.draft.profile, OperatingProfile::OfflineCore);
         let configured = app.draft.clone();
-        enter(&mut app, "+voice typo");
+        enter(&mut app, "+voice tokens=0");
         assert_eq!(app.draft, configured);
         assert_eq!(app.status, "choose a current-step option");
         enter(&mut app, "");

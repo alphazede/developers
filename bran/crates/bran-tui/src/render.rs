@@ -79,10 +79,18 @@ pub fn render_app(app: &TuiApp, caps: TerminalCapabilities) -> String {
     out.push_str(&format!("flow: {:?}\n", app.flow));
     out.push_str(&format!("profile: {}\n", profile_label(app.draft.profile)));
     out.push_str(&format!("requested: {}\n", features(&app.draft)));
+    out.push_str(&format!(
+        "requested per-task token ceiling: {}\n",
+        app.draft.connected_agent_task_token_ceiling
+    ));
     out.push_str("guardrails: bounded root, read-only, explicit approval\n");
     out.push_str(&format!("step: {}\n", step_label(app.step)));
     if let Some(r) = &app.resolved {
         out.push_str(&format!("effective: {}\n", features(&r.effective)));
+        out.push_str(&format!(
+            "effective per-task token ceiling: {}\n",
+            r.effective.connected_agent_task_token_ceiling
+        ));
         let unavailable = r
             .resolutions
             .iter()
@@ -127,7 +135,7 @@ fn step_label(step: crate::settings::OnboardingStep) -> &'static str {
         crate::settings::OnboardingStep::FlowChoice => "Quick/Advanced",
         crate::settings::OnboardingStep::OperatingProfile => "Profile (offline/core-sqz/connected)",
         crate::settings::OnboardingStep::Guardrails => {
-            "Guardrails (advanced: +/-sqz +/-voice +/-history +/-chat)"
+            "Guardrails (advanced: +/-sqz +/-voice +/-history +/-chat tokens=N)"
         }
         crate::settings::OnboardingStep::CapabilityCheck => "Capability Check",
         crate::settings::OnboardingStep::ReadinessReview => "Readiness",

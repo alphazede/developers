@@ -1,9 +1,13 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::ffi::OsStr;
-use std::fmt::Write as _;
-use std::io::IsTerminal;
+use std::io::{IsTerminal, Write};
 use std::path::Path;
 use std::process::ExitCode;
+
+use crossterm::cursor::{Hide, Show};
+use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
+use crossterm::terminal::{self, Clear, ClearType, EnterAlternateScreen, LeaveAlternateScreen};
+use crossterm::{execute, queue};
 
 use bran_core::agent::delegate::{DelegationOptions, DelegationRequest};
 use bran_core::agent::receipt::DelegationReceipt;
@@ -25,8 +29,8 @@ use bran_core::view::{
     Presentation, ViewCompiler, ViewField, ViewFilter, ViewGrouping, ViewSort, ViewSource, ViewSpec,
 };
 use bran_tui::{
-    quick_safe_config, readiness_receipt, render_surface, resolve_advanced, AdvancedRequest,
-    CapabilityProbe, NativeImage, OperatingProfile, Policy, TerminalCapabilities,
+    apply_settings, load_settings, render_app, OnboardingStep, TerminalCapabilities, TerminalGuard,
+    TerminalPort, TuiAction, TuiApp, TuiEvent,
 };
 
 const SMOKE_OUTPUT: &str = r#"{"schema_version":"1.0.0","command":"smoke","status":"ok","data":{},"warnings":[],"failures":[],"provenance":{},"metrics":{}}"#;
@@ -50,8 +54,19 @@ impl TypedExit {
 }
 
 fn main() -> ExitCode {
-    let is_terminal = std::io::stdout().is_terminal();
-    CliApp::run_for_terminal(std::env::args_os().skip(1), is_terminal).write_to_stdio()
+    let arguments: Vec<_> = std::env::args_os().skip(1).collect();
+    if arguments.len() == 1
+        && arguments[0] == "tui"
+        && std::io::stdin().is_terminal()
+        && std::io::stdout().is_terminal()
+    {
+        return run_tui();
+    }
+    CliApp::run_for_terminal(
+        arguments,
+        std::io::stdin().is_terminal() && std::io::stdout().is_terminal(),
+    )
+    .write_to_stdio()
 }
 
 struct CliApp;
@@ -362,7 +377,7 @@ impl CliApp {
                     ));
                 }
                 CliResult {
-                    output: make_tui_surface(),
+                    output: String::new(),
                     exit_code: TypedExit::Success.code(),
                     is_error: false,
                     is_interactive: true,
@@ -403,65 +418,151 @@ impl CliApp {
     }
 }
 
-fn make_tui_surface() -> String {
-    let settings = quick_safe_config();
-    let resolved = resolve_advanced(
-        AdvancedRequest::new(settings),
-        CapabilityProbe::default(),
-        Policy::default(),
-    );
-    let receipt = readiness_receipt(&resolved, None);
-    let mut surface = render_surface(tui_terminal_capabilities(), false, NativeImage::Unavailable);
-    let profile = receipt
-        .effective_profile
-        .unwrap_or(receipt.effective.profile);
+struct CrosstermPort;
 
-    let _ = writeln!(surface);
-    let _ = writeln!(surface, "Quick mode readiness");
-    let _ = writeln!(surface, "flow: Quick");
-    let _ = writeln!(surface, "profile: {}", profile_name(profile));
-    let _ = writeln!(
-        surface,
-        "safe defaults: bounded current root, read-only tools, explicit approval"
-    );
-    let _ = writeln!(
-        surface,
-        "offline core usable: {}",
-        resolved.offline_core_usable
-    );
-    let _ = writeln!(surface, "retention: {}", receipt.retention);
-    let _ = writeln!(surface, "data flow: {}", receipt.data_flow);
-    let _ = writeln!(
-        surface,
-        "network/auth/mutation/audio: unavailable in this fallback"
-    );
-    let _ = writeln!(surface, "raw key events unavailable in std-only fallback");
-    let _ = writeln!(
-        surface,
-        "autocomplete key handling unavailable in std-only fallback"
-    );
-    let _ = writeln!(surface, "Ctrl+S voice unavailable in std-only fallback");
-    surface
-}
+impl TerminalPort for CrosstermPort {
+    fn enter(&mut self) -> Result<(), String> {
+        terminal::enable_raw_mode().map_err(|error| error.to_string())?;
+        execute!(std::io::stdout(), EnterAlternateScreen, Hide).map_err(|error| error.to_string())
+    }
 
-fn tui_terminal_capabilities() -> TerminalCapabilities {
-    let columns = std::env::var("COLUMNS")
-        .ok()
-        .and_then(|value| value.parse::<u16>().ok())
-        .filter(|columns| *columns > 0)
-        .unwrap_or(80);
-    TerminalCapabilities {
-        columns,
-        unicode: true,
-        no_color: true,
+    fn restore(&mut self) {
+        let _ = execute!(std::io::stdout(), Show, LeaveAlternateScreen);
+        let _ = terminal::disable_raw_mode();
     }
 }
 
-fn profile_name(profile: OperatingProfile) -> &'static str {
-    match profile {
-        OperatingProfile::OfflineCore => "offline-core",
-        OperatingProfile::CoreSqz => "core-sqz",
-        OperatingProfile::ConnectedAgent => "connected-agent",
+fn run_tui() -> ExitCode {
+    let mut port = CrosstermPort;
+    let result = (|| -> Result<(), String> {
+        let _guard =
+            TerminalGuard::enter(&mut port).map_err(|e| format!("tui terminal error: {e}"))?;
+        let mut app = TuiApp::default();
+        match load_settings(Path::new(".bran/settings.conf")) {
+            Ok(Some(settings)) => {
+                app.draft = settings;
+                app.step = OnboardingStep::Complete;
+                app.status = "resumed settings".to_owned();
+                let req = bran_tui::AdvancedRequest::new(app.draft.clone());
+                app.resolved = Some(bran_tui::resolve_advanced(req, app.capability, app.policy));
+            }
+            Ok(None) => {}
+            Err(_) => app.status = "settings unavailable; onboarding".to_owned(),
+        }
+        loop {
+            if let Err(error) = draw_tui(&app) {
+                return Err(format!("tui render error: {error}"));
+            }
+            let event = match event::read() {
+                Ok(event) => event,
+                Err(error) => return Err(format!("tui input error: {error}")),
+            };
+            match event {
+                Event::Resize(columns, _) => app.handle(TuiEvent::Resize { columns }),
+                Event::Key(key)
+                    if matches!(key.kind, KeyEventKind::Press | KeyEventKind::Repeat) =>
+                {
+                    if let Some(event) = map_key(key, app.input.is_empty()) {
+                        app.handle(event);
+                    } else if key.code == KeyCode::Tab {
+                        app.update_suggestions(tui_candidates(&app));
+                    }
+                }
+                _ => continue,
+            }
+            if let Some(action) = app.take_action() {
+                match action {
+                    TuiAction::Query(query) => match do_query(".".to_owned(), query) {
+                        Ok((data, warnings, failures, provenance, metrics)) => {
+                            app.status = make_envelope(
+                                "query",
+                                "ok",
+                                &data,
+                                &warnings,
+                                &failures,
+                                &provenance,
+                                &metrics,
+                            )
+                        }
+                        Err(error) => {
+                            app.status =
+                                make_envelope("query", "error", "null", &[], &[error], "{}", "{}")
+                        }
+                    },
+                    TuiAction::Apply => {
+                        let path = Path::new(".bran/settings.conf");
+                        let persisted = std::fs::create_dir_all(".bran")
+                            .and_then(|_| apply_settings(path, &app.draft))
+                            .is_ok();
+                        app.handle(TuiEvent::ApplyFinished { persisted });
+                    }
+                    TuiAction::Quit => return Ok(()),
+                }
+            }
+        }
+    })();
+    if let Err(error) = result {
+        eprintln!("{}", error);
+        return TypedExit::Operation.code();
+    }
+    ExitCode::SUCCESS
+}
+
+fn draw_tui(app: &TuiApp) -> std::io::Result<()> {
+    let columns = terminal::size().map(|(columns, _)| columns).unwrap_or(80);
+    let mut output = std::io::stdout();
+    queue!(
+        output,
+        Clear(ClearType::All),
+        crossterm::cursor::MoveTo(0, 0)
+    )?;
+    let no_color = std::env::var_os("NO_COLOR").is_some();
+    write!(
+        output,
+        "{}",
+        render_app(
+            app,
+            TerminalCapabilities {
+                columns,
+                unicode: true,
+                no_color
+            }
+        )
+    )?;
+    output.flush()
+}
+
+fn map_key(key: KeyEvent, input_empty: bool) -> Option<TuiEvent> {
+    match (key.code, key.modifiers) {
+        (KeyCode::Char('c'), KeyModifiers::CONTROL) => Some(TuiEvent::Quit),
+        (KeyCode::Char('s'), KeyModifiers::CONTROL) => Some(TuiEvent::CtrlS),
+        (KeyCode::Char('q'), KeyModifiers::NONE) if input_empty => Some(TuiEvent::Quit),
+        (KeyCode::Char(character), modifiers)
+            if modifiers.is_empty() || modifiers == KeyModifiers::SHIFT =>
+        {
+            Some(TuiEvent::Input(character))
+        }
+        (KeyCode::Backspace, _) => Some(TuiEvent::Backspace),
+        (KeyCode::Enter, _) => Some(TuiEvent::Enter),
+        (KeyCode::Esc, _) => Some(TuiEvent::Escape),
+        (KeyCode::Up, _) => Some(TuiEvent::Up),
+        (KeyCode::Down, _) => Some(TuiEvent::Down),
+        _ => None,
+    }
+}
+
+fn tui_candidates(app: &TuiApp) -> &'static str {
+    use bran_tui::OnboardingStep::*;
+    match app.step {
+        FlowChoice => "quick\nadvanced",
+        OperatingProfile => "offline\ncore-sqz\nconnected",
+        Guardrails => {
+            "next\n+sqz\n-sqz\n+voice\n-voice\n+history\n-history\n+chat\n-chat\ntokens=8500"
+        }
+        Diagnose => "next\nrepair",
+        Apply => "apply",
+        Complete => "query\npacket\ncheck",
+        _ => "back",
     }
 }
 
@@ -2088,14 +2189,7 @@ mod tests {
         assert_eq!(s1.is_error, s2.is_error);
         assert!(!s1.is_interactive && !s2.is_interactive);
         let tu = super::CliApp::run_for_terminal(vec!["tui".to_owned()], true);
-        assert!(
-            tu.output.contains("BRAN")
-                && tu.output.contains("ALPHAZEDE.com")
-                && tu.output.contains("Quick mode readiness")
-                && tu.output.contains("bounded current root")
-                && tu.output.contains("raw key events unavailable")
-                && tu.output.contains("Ctrl+S voice unavailable")
-        );
+        assert!(tu.output.is_empty());
         assert!(tu.is_interactive);
         assert_eq!(tu.exit_code, ExitCode::SUCCESS);
         assert!(!tu.is_error);
@@ -2111,6 +2205,35 @@ mod tests {
         assert_eq!(tui_extra.exit_code, TypedExit::Usage.code());
         assert!(tui_extra.is_error);
         assert!(!tui_extra.is_interactive);
+        assert!(matches!(
+            super::map_key(
+                crossterm::event::KeyEvent::new(
+                    crossterm::event::KeyCode::Char('q'),
+                    crossterm::event::KeyModifiers::NONE
+                ),
+                true
+            ),
+            Some(bran_tui::TuiEvent::Quit)
+        ));
+        assert!(matches!(
+            super::map_key(
+                crossterm::event::KeyEvent::new(
+                    crossterm::event::KeyCode::Char('q'),
+                    crossterm::event::KeyModifiers::NONE
+                ),
+                false
+            ),
+            Some(bran_tui::TuiEvent::Input('q'))
+        ));
+        let mut tui_app = bran_tui::TuiApp::default();
+        tui_app.update_suggestions(super::tui_candidates(&tui_app));
+        assert!(!tui_app.suggestions.is_empty());
+        tui_app.step = bran_tui::OnboardingStep::Guardrails;
+        tui_app.input = "tokens=".to_owned();
+        tui_app.update_suggestions(super::tui_candidates(&tui_app));
+        assert!(tui_app.suggestions.contains(&"tokens=8500".to_owned()));
+        tui_app.handle(bran_tui::TuiEvent::Resize { columns: 40 });
+        assert_eq!(tui_app.columns, Some(40));
         let r1 = super::CliApp::run_for_terminal(
             vec![
                 "maintain".to_owned(),

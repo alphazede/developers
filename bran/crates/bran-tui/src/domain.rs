@@ -279,6 +279,7 @@ impl TuiApp {
 
     fn set_features(&mut self, input: &str) -> bool {
         let mut settings = self.draft.clone();
+        let mut token_ceiling = None;
         for feature in input.split_ascii_whitespace() {
             match feature {
                 "+sqz" => {
@@ -299,8 +300,17 @@ impl TuiApp {
                 "-history" => settings.structured_history = false,
                 "+chat" => settings.saved_chat = true,
                 "-chat" => settings.saved_chat = false,
+                value if value.starts_with("tokens=") => {
+                    match (token_ceiling, value["tokens=".len()..].parse::<u32>().ok()) {
+                        (None, Some(value)) if value > 0 => token_ceiling = Some(value),
+                        _ => return false,
+                    }
+                }
                 _ => return false,
             }
+        }
+        if let Some(value) = token_ceiling {
+            settings.connected_agent_task_token_ceiling = value;
         }
         self.draft = settings;
         true
@@ -330,10 +340,10 @@ impl TuiApp {
     }
 }
 
-pub const AUTOCOMPLETE_SCAN_BUDGET: usize = 8;
+pub const AUTOCOMPLETE_SCAN_BUDGET: usize = 10;
 pub const AUTOCOMPLETE_RESULT_BUDGET: usize = 3;
 
-/// Returns prefix matches from at most the first eight newline-separated candidates.
+/// Returns prefix matches from at most the first ten newline-separated candidates.
 pub fn autocomplete(query: &str, candidates: &str) -> Vec<String> {
     let query = query.to_ascii_lowercase();
     let mut results = Vec::new();

@@ -4,8 +4,9 @@ use std::fs::{self, OpenOptions};
 use std::io::{self, Write};
 use std::path::Path;
 
-pub const SETTINGS_VERSION: u32 = 1;
+pub const SETTINGS_VERSION: u32 = 2;
 pub const PRACTICE_QUERY_LIMIT: usize = 256;
+pub const DEFAULT_CONNECTED_AGENT_TASK_TOKEN_CEILING: u32 = 8_500;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum OnboardingStep {
@@ -169,6 +170,8 @@ pub struct Settings {
     pub network: bool,
     pub auth: bool,
     pub mutation: bool,
+    /// Per Connected Agent task; not an Arena total or provider telemetry.
+    pub connected_agent_task_token_ceiling: u32,
     pub root: RootScope,
     pub tools: ToolPolicy,
     pub approval: ApprovalPolicy,
@@ -193,6 +196,7 @@ pub fn quick_safe_config() -> Settings {
         network: false,
         auth: false,
         mutation: false,
+        connected_agent_task_token_ceiling: DEFAULT_CONNECTED_AGENT_TASK_TOKEN_CEILING,
         root: RootScope::BoundedCurrentRoot,
         tools: ToolPolicy::ReadOnly,
         approval: ApprovalPolicy::Explicit,
@@ -690,31 +694,39 @@ where
 }
 
 pub fn onboarding_complete(path: &Path) -> io::Result<bool> {
+    Ok(load_settings(path)?.is_some())
+}
+
+pub fn load_settings(path: &Path) -> io::Result<Option<Settings>> {
     let bytes = match fs::read(path) {
         Ok(bytes) => bytes,
-        Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(false),
+        Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(None),
         Err(error) => return Err(error),
     };
-    let contents = match std::str::from_utf8(&bytes) {
+    Ok(decode(&bytes))
+}
+
+fn decode(bytes: &[u8]) -> Option<Settings> {
+    let contents = match std::str::from_utf8(bytes) {
         Ok(contents) => contents,
-        _ => return Ok(false),
+        _ => return None,
     };
     if bytes.contains(&b'\r') || !contents.ends_with('\n') {
-        return Ok(false);
+        return None;
     }
     let lines: Vec<&str> = contents.lines().collect();
-    if lines.len() != 16 {
-        return Ok(false);
+    if lines.len() != 17 {
+        return None;
     }
     if lines[0] != format!("version={SETTINGS_VERSION}") || lines[1] != "completed=true" {
-        return Ok(false);
+        return None;
     }
-    if !matches!(
-        lines[2],
-        "profile=offline-core" | "profile=core-sqz" | "profile=connected-agent"
-    ) {
-        return Ok(false);
-    }
+    let profile = match lines[2] {
+        "profile=offline-core" => OperatingProfile::OfflineCore,
+        "profile=core-sqz" => OperatingProfile::CoreSqz,
+        "profile=connected-agent" => OperatingProfile::ConnectedAgent,
+        _ => return None,
+    };
     let boolean_field_prefixes = [
         "sqz=",
         "diagnostics=",
@@ -725,32 +737,57 @@ pub fn onboarding_complete(path: &Path) -> io::Result<bool> {
         "auth=",
         "mutation=",
     ];
+    let mut values = [false; 8];
     for (index, prefix) in boolean_field_prefixes.iter().enumerate() {
         let field = lines[3 + index];
         if !field.starts_with(prefix) {
-            return Ok(false);
+            return None;
         }
         let value = &field[prefix.len()..];
-        if value != "true" && value != "false" {
-            return Ok(false);
-        }
+        values[index] = match value {
+            "true" => true,
+            "false" => false,
+            _ => return None,
+        };
     }
-    if lines[11] != "root=bounded-current-root"
-        || lines[12] != "tools=read-only"
-        || lines[13] != "approval=explicit"
-        || lines[14] != "retention=zero-conversation"
-        || lines[15] != "diagnostic_policy=bounded"
+    let connected_agent_task_token_ceiling = lines[11]
+        .strip_prefix("connected_agent_task_token_ceiling=")?
+        .parse::<u32>()
+        .ok()
+        .filter(|value| *value > 0)?;
+    if lines[12] != "root=bounded-current-root"
+        || lines[13] != "tools=read-only"
+        || lines[14] != "approval=explicit"
+        || lines[15] != "retention=zero-conversation"
+        || lines[16] != "diagnostic_policy=bounded"
     {
-        return Ok(false);
+        return None;
     }
-    Ok(true)
+    Some(Settings {
+        profile,
+        sqz: values[0],
+        diagnostics: values[1],
+        voice: values[2],
+        structured_history: values[3],
+        saved_chat: values[4],
+        network: values[5],
+        auth: values[6],
+        mutation: values[7],
+        connected_agent_task_token_ceiling,
+        root: RootScope::BoundedCurrentRoot,
+        tools: ToolPolicy::ReadOnly,
+        approval: ApprovalPolicy::Explicit,
+        retention: RetentionPolicy::ZeroConversation,
+        diagnostic_policy: DiagnosticPolicy::Bounded,
+    })
 }
 
 fn encode(settings: &Settings) -> Vec<u8> {
     format!(
-        "version={SETTINGS_VERSION}\ncompleted=true\nprofile={}\nsqz={}\ndiagnostics={}\nvoice={}\nstructured_history={}\nsaved_chat={}\nnetwork={}\nauth={}\nmutation={}\nroot=bounded-current-root\ntools=read-only\napproval=explicit\nretention=zero-conversation\ndiagnostic_policy=bounded\n",
+        "version={SETTINGS_VERSION}\ncompleted=true\nprofile={}\nsqz={}\ndiagnostics={}\nvoice={}\nstructured_history={}\nsaved_chat={}\nnetwork={}\nauth={}\nmutation={}\nconnected_agent_task_token_ceiling={}\nroot=bounded-current-root\ntools=read-only\napproval=explicit\nretention=zero-conversation\ndiagnostic_policy=bounded\n",
         profile_name(settings.profile), settings.sqz, settings.diagnostics, settings.voice,
         settings.structured_history, settings.saved_chat, settings.network, settings.auth, settings.mutation,
+        settings.connected_agent_task_token_ceiling,
     ).into_bytes()
 }
 
