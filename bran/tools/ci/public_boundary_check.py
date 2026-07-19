@@ -40,14 +40,14 @@ def repo_root() -> Path:
 def enumerate_phase1_public_surface_files(git_root: Path) -> list[Path]:
     """Enumerate exactly the Phase 1 public surface files Git considers tracked or untracked/nonignored.
     Uses exactly one fail-closed git ls-files call: git ls-files -z --cached --others --exclude-standard --
-    bran README.md .github/workflows/bran-fast.yml tools/okf/config.yaml
+    bran README.md .github/workflows/bran-fast.yml .github/workflows/bran-release.yml tools/okf/config.yaml
     from repository root. Parses NUL-delimited bytes losslessly with os.fsdecode.
     Returned paths are guaranteed to be lexically under repo root (reject absolute
     or parent traversal paths). Raises on any failure.
     """
     try:
         result = subprocess.run(
-            ["git", "ls-files", "-z", "--cached", "--others", "--exclude-standard", "--", "bran", "README.md", ".github/workflows/bran-fast.yml", "tools/okf/config.yaml"],
+            ["git", "ls-files", "-z", "--cached", "--others", "--exclude-standard", "--", "bran", "README.md", ".github/workflows/bran-fast.yml", ".github/workflows/bran-release.yml", "tools/okf/config.yaml"],
             cwd=git_root,
             capture_output=True,
             check=True,

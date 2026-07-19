@@ -49,7 +49,17 @@ else
     [ -n "$target" ] || usage
 fi
 
-if ! printf '%s\n' "$tag" | grep -Eq '^bran-v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$'; then
+# Reject line terminators before applying the canonical whole-string regex.
+lf='
+'
+cr=''
+case "$tag" in
+    *"$lf"*|*"$cr"*)
+        printf 'FAIL invalid tag (must be bran-vX.Y.Z): %s\n' "$tag" >&2
+        exit 1
+        ;;
+esac
+if ! printf '%s' "$tag" | grep -Eq '^bran-v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$'; then
     printf 'FAIL invalid tag (must be bran-vX.Y.Z): %s\n' "$tag" >&2
     exit 1
 fi
