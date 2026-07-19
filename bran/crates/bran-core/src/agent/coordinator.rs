@@ -795,7 +795,7 @@ fn encode_field(encoded: &mut Vec<u8>, field: &[u8]) {
 #[cfg(test)]
 mod tests {
     use super::super::delegate::{DelegationOptions, DelegationRequest};
-    use super::super::result_store::MemoryResultStore;
+    use super::super::result_store::{MemoryResultStore, ResultStoreError};
     use super::super::runtime::{
         AgentFailure, ArtifactKind, Attestation, AuthError, AuthStore, InvocationLifecycle,
         InvocationOutcome, InvocationState, LosslessArtifact, ProviderError,
@@ -1907,6 +1907,10 @@ mod tests {
         // --- ResultStore invariants (straightforward public API): bounded, oldest-first, dedup, ttl, byte exact
         {
             let mut rs = MemoryResultStore::new(2, 1024, 512, 100).unwrap();
+            assert_eq!(
+                rs.put_batch(std::iter::empty::<&[u8]>(), 10),
+                Err(ResultStoreError::EmptyInput)
+            );
             let p1 = rs.put(b"first-bytes", 10).unwrap();
             let _p2 = rs.put(b"second-bytes", 11).unwrap();
             assert_eq!(rs.receipt().entry_count, 2);

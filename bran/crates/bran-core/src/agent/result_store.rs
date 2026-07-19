@@ -250,6 +250,9 @@ impl MemoryResultStore {
         for payload in payloads {
             ids.push(trial.put(payload, now_tick)?.id);
         }
+        if ids.is_empty() {
+            return Err(ResultStoreError::EmptyInput);
+        }
         if ids.iter().any(|id| !trial.entries.contains_key(id)) {
             return Err(ResultStoreError::BatchCapacityExceeded);
         }
