@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { BUILTIN_ROUTES, createAgentAdapter, routeFor, type ProcessRunner, type RouteDescriptor } from "../adapters/adapters.js";
+import { BUILTIN_ROUTES, createAgentAdapter, routeFor, type ProcessRunner, type RouteDescriptor, type RouteModelOption } from "../adapters/adapters.js";
 import {
   parseAgentProfile,
   resolveRun,
@@ -10,11 +10,12 @@ import {
   type Selection,
 } from "../profile/profile.js";
 
-export const REASONING_LEVELS = ["low", "medium", "high", "xhigh"] as const;
+export const REASONING_LEVELS = ["default", "off", "none", "minimal", "low", "medium", "high", "xhigh", "max", "ultra", "thinking"] as const;
 
 export interface RouteInspectionPort {
   executableAvailable(executable: string): boolean;
   currentSelection?(route: RouteDescriptor): { readonly model: string; readonly reasoning: string };
+  modelOptions?(route: RouteDescriptor, repositoryPath?: string): readonly RouteModelOption[];
 }
 
 export interface VerificationPort {
@@ -26,8 +27,8 @@ export class AdapterVerification implements VerificationPort {
   async verify(selection: Selection, role: RoleProjection, repositoryPath: string): Promise<boolean> {
     const adapter = createAgentAdapter(selection, this.runner);
     if (!adapter) return false;
-    const receipt = await adapter.execute({ runId: `readiness-${randomUUID()}`, repositoryPath, role: { ...role, authority: { ...role.authority, write: false, network: false, externalAction: false }, toolAllow: role.toolAllow.filter((tool) => !/write|edit|shell|bash/i.test(tool)), sessionId: null }, task: { prompt: "Return a short structured completion confirming readiness. Do not read or write repository files." } });
-    return receipt.status === "completed" && receipt.events.some((event) => /^(complete|completed|done|result|turn\.completed|agent_end)$/i.test(event.type));
+    const receipt = await adapter.execute({ runId: `readiness-${randomUUID()}`, repositoryPath, role: { ...role, authority: { ...role.authority, write: false, network: selection.provider === "agy" ? role.authority.network : false, externalAction: false }, toolAllow: role.toolAllow.filter((tool) => !/write|edit|shell|bash/i.test(tool)), sessionId: null }, task: { prompt: "Return a short structured completion confirming readiness. Do not read or write repository files." } });
+    return receipt.status === "completed" && receipt.events.some((event) => /^(complete|completed|done|result|turn\.completed|agent_end|step_finish)$/i.test(event.type));
   }
 }
 
@@ -38,6 +39,7 @@ export interface RouteInspection {
   readonly detected: boolean;
   readonly capabilities: readonly string[];
   readonly reasoning: string;
+  readonly models: readonly RouteModelOption[];
 }
 
 export type ReadinessResult =
@@ -79,8 +81,8 @@ const BASE_PROFILE: AgentProfile = (() => {
 })();
 
 function descriptor(selection: Selection): RouteDescriptor | undefined {
-  if (!(REASONING_LEVELS as readonly string[]).includes(selection.reasoning)) return undefined;
-  return routeFor(selection);
+  const route = routeFor(selection);
+  return route?.reasoningLevels.includes(selection.reasoning) ? route : undefined;
 }
 
 export class ReadinessService {
@@ -90,15 +92,20 @@ export class ReadinessService {
     private readonly overrides: RunOverrides = {},
   ) {}
 
-  inspect(): readonly RouteInspection[] {
+  inspect(repositoryPath = process.cwd()): readonly RouteInspection[] {
     return BUILTIN_ROUTES.slice(0, 16).map((route) => {
+      const detected = this.inspection.executableAvailable(route.executable);
       const current = this.inspection.currentSelection?.(route);
+      const discovered = detected ? this.inspection.modelOptions?.(route, repositoryPath) ?? [] : [];
+      const models = discovered.length ? discovered : [{ model: current?.model ?? route.model, label: current?.model === "*" || !current ? "Agent default" : current.model, reasoningLevels: route.reasoningLevels, defaultReasoning: route.reasoningLevels.includes(current?.reasoning ?? "") ? current!.reasoning : route.reasoningLevels[0] }];
+      const selectedModel = models.find(({ model }) => model === current?.model) ?? models[0];
       return {
         id: route.id,
         provider: route.provider,
-        model: current?.model ?? route.model,
-        reasoning: current && (REASONING_LEVELS as readonly string[]).includes(current.reasoning) ? current.reasoning : "medium",
-        detected: this.inspection.executableAvailable(route.executable),
+        model: selectedModel.model,
+        reasoning: selectedModel.reasoningLevels.includes(current?.reasoning ?? "") ? current!.reasoning : selectedModel.defaultReasoning,
+        models,
+        detected,
         capabilities: route.capabilities.slice(0, 16),
       };
     });
@@ -112,14 +119,18 @@ export class ReadinessService {
     };
     const route = descriptor(effectiveSelection);
     const detected = route ? this.inspection.executableAvailable(route.executable) : false;
-    if (!route || !detected) {
+    const discovered = route && detected ? this.inspection.modelOptions?.(route, repositoryPath) : undefined;
+    const models = discovered?.length ? discovered : undefined;
+    const selectedModel = models?.find(({ model }) => model === effectiveSelection.model);
+    if (!route || !detected || (models && (!selectedModel || !selectedModel.reasoningLevels.includes(effectiveSelection.reasoning)))) {
       return { status: "blocked", detected, verified: false, code: "selection_unavailable", repair: "choose_detected_route" };
     }
     const resolved = resolveRun({ ...BASE_PROFILE, selection }, this.overrides, randomUUID());
     if (resolved.status !== "ready") {
       return { status: "blocked", detected, verified: false, code: "selection_unavailable", repair: "choose_detected_route" };
     }
-    const verified = this.verification ? await this.verification.verify(effectiveSelection, resolved.value.roles[0], repositoryPath).catch(() => false) : false;
+    const verificationRole = resolved.value.roles.find((role) => role.role === "crewmate") ?? resolved.value.roles[0];
+    const verified = this.verification ? await this.verification.verify(effectiveSelection, verificationRole, repositoryPath).catch(() => false) : false;
     return { status: verified ? "ready" : "detected", detected: true, verified, run: resolved.value };
   }
 }

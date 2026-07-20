@@ -100,6 +100,16 @@ describe("JourneyService", () => {
     expect(normalRunner.calls[0].args).not.toContain("--allow-subagents");
   });
 
+  it("preserves Agy's required online authority during the actual journey", async () => {
+    const selection = { provider: "agy", model: "Gemini 3.5 Flash (Medium)", reasoning: "medium" };
+    const run = resolved(selection);
+    const unlimited = { ...run, roles: run.roles.map((role) => ({ ...role, limits: { ...role.limits, tokenBudget: Number.MAX_SAFE_INTEGER } })) };
+    const runner = new StubRunner(completed('BEARING_RESULT {"kind":"question","question":"Continue?"}', 0));
+    expect((await new JourneyService(runner).execute(await request({ selection, run: unlimited }))).status).toBe("question");
+    expect(runner.calls[0].args).toEqual(expect.arrayContaining(["--sandbox", "--add-dir", "__BEARING_PROMPT_DIR__"]));
+    expect(runner.calls[0].args).not.toContain("--dangerously-skip-permissions");
+  });
+
   it("covers every stage with its existing skill or command", async () => {
     const commands = { "set-bearings": "$to-plan", "gather-supplies": "$grill-with-docs", "map-route": "$design-driven-build", "draft-implementation": "$to-plan", "execute-explorer": "$conductor-orchestrate", "execute-expedition": "$ultimate-loop" } as const;
     for (const [stage, command] of Object.entries(commands) as [Exclude<JourneyStage, "review">, string][]) {

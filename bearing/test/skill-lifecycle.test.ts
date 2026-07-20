@@ -5,9 +5,10 @@ import {
   SKILL_NAMES,
   SkillLifecycleService,
 } from "../src/skills/skill-lifecycle.js";
+import { BUILTIN_ROUTES } from "../src/adapters/adapters.js";
 
 const service = new SkillLifecycleService();
-const routes = ["codex", "claude", "grok-safe", "pi"];
+const routes = BUILTIN_ROUTES.map(({ id }) => id);
 const fingerprints = [
   ["3b3de6336b48901e5e16c5d74546526d5cadd2d1dd8225def75ca44ac049d860", 111],
   ["2828987ba022e151dedfcf41d97e71968657121136d0681ad4b4ed8dd1289070", 143],

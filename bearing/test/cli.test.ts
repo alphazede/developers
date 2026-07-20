@@ -54,6 +54,11 @@ describe("parseStartArgs", () => {
     expect(parseStartArgs(["start", "--decision-depth", "medium"]).ok).toBe(false);
   });
 
+  it("accepts provider-native reasoning overrides", () => {
+    expect(parseStartArgs(["start", "--reasoning", "max"])).toMatchObject({ ok: true, overrides: { reasoning: "max" } });
+    expect(parseStartArgs(["start", "--reasoning", "thinking"])).toMatchObject({ ok: true, overrides: { reasoning: "thinking" } });
+  });
+
   it("accepts an optional safe-integer budget and rejects unsafe values", () => {
     expect(parseStartArgs(["start", "--budget", "9007199254740991"])).toMatchObject({ ok: true, overrides: { budget: { tokens: Number.MAX_SAFE_INTEGER } } });
     expect(parseStartArgs(["start", "--budget", "9007199254740992"]).ok).toBe(false);

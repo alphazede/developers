@@ -6,9 +6,24 @@ describe("readiness service", () => {
     let checks = 0;
     const service = new ReadinessService({ executableAvailable: () => { checks += 1; return true; } }, { verify: async () => { throw new Error("must not verify"); } });
     const routes = service.inspect();
-    expect(routes).toHaveLength(4);
+    expect(routes).toHaveLength(6);
     expect(routes.every((route) => route.detected)).toBe(true);
-    expect(checks).toBe(4);
+    expect(checks).toBe(6);
+  });
+
+  it("discovers models from the selected repository", async () => {
+    const repositories: string[] = [];
+    const inspection = {
+      executableAvailable: () => true,
+      modelOptions: (_route: unknown, repositoryPath?: string) => {
+        repositories.push(repositoryPath ?? "");
+        return [{ model: "repo/model", label: "Repo model", reasoningLevels: ["high"], defaultReasoning: "high" }];
+      },
+    };
+    const service = new ReadinessService(inspection);
+    expect(service.inspect("/selected/repository")).toHaveLength(6);
+    expect((await service.check({ provider: "opencode", model: "repo/model", reasoning: "high" }, "/selected/repository")).status).toBe("detected");
+    expect(repositories).toEqual(Array(7).fill("/selected/repository"));
   });
 
   it("uses one shared selection across distinct roles and distinguishes detected from verified", async () => {
@@ -32,6 +47,20 @@ describe("readiness service", () => {
     const service = new ReadinessService({ executableAvailable: () => false });
     expect(await service.check({ provider: "codex", model: "gpt-5.6-terra", reasoning: "medium" })).toEqual({ status: "blocked", detected: false, verified: false, code: "selection_unavailable", repair: "choose_detected_route" });
     expect(await service.check({ provider: "unknown", model: "unknown", reasoning: "medium" })).toEqual({ status: "blocked", detected: false, verified: false, code: "selection_unavailable", repair: "choose_detected_route" });
+  });
+
+  it("accepts only a discovered model's native reasoning levels", async () => {
+    const inspection = {
+      executableAvailable: () => true,
+      modelOptions: () => [{ model: "openai/gpt-5", label: "GPT-5", reasoningLevels: ["default", "high"], defaultReasoning: "default" }],
+    };
+    expect((await new ReadinessService(inspection).check({ provider: "opencode", model: "openai/gpt-5", reasoning: "high" })).status).toBe("detected");
+    expect((await new ReadinessService(inspection).check({ provider: "opencode", model: "openai/gpt-5", reasoning: "max" })).status).toBe("blocked");
+  });
+
+  it("uses the route fallback when discovery returns no models", async () => {
+    const result = await new ReadinessService({ executableAvailable: () => true, modelOptions: () => [] }).check({ provider: "codex", model: "*", reasoning: "medium" });
+    expect(result.status).toBe("detected");
   });
 
   it("preserves the Codex wildcard selection for configured-model execution", async () => {

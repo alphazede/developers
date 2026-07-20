@@ -211,7 +211,7 @@ export class JourneyService {
       const adapter = createAgentAdapter(request.selection, this.runner);
       if (!adapter) return { status: "failure", code: "crewmate_unavailable", tokens: 0 };
       let receipt;
-      try { receipt = await adapter.execute({ runId: processRunId, repositoryPath, role: { ...projected, sessionId: null, authority: { ...projected.authority, network: false, externalAction: false } }, task: { prompt: taskPrompt }, ...(request.stage === "execute-expedition" ? { allowSubagents: true } : {}) }); }
+      try { receipt = await adapter.execute({ runId: processRunId, repositoryPath, role: { ...projected, sessionId: null, authority: { ...projected.authority, network: request.selection.provider === "agy", externalAction: false } }, task: { prompt: taskPrompt }, ...(request.stage === "execute-expedition" ? { allowSubagents: true } : {}) }); }
       catch { return { status: "failure", code: "adapter_failed", tokens: 0 }; }
       if (receipt.status !== "completed") return { status: "failure", code: receipt.failure === "token_budget" ? "token_budget" : receipt.failure === "cancelled" ? "cancelled" : "adapter_failed", tokens: receipt.usage.tokens };
       tokens = receipt.usage.tokens;

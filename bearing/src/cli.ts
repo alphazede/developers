@@ -3,6 +3,7 @@ import { createServer, type Server } from "node:http";
 import { spawn, type ChildProcess } from "node:child_process";
 import { pathToFileURL } from "node:url";
 import { NodeProcessRunner } from "./adapters/process-runner.js";
+import { REASONING_LEVELS } from "./onboarding/readiness.js";
 import type { RunOverrides } from "./profile/profile.js";
 import {
   LocalSessionService,
@@ -28,7 +29,7 @@ export type ParseResult = { ok: true; noOpen: boolean; overrides: RunOverrides }
 
 const VALUE_FLAGS = new Set(["agent", "provider", "model", "reasoning", "decision-depth", "tools", "exclude-tools", "timeout", "max-turns", "budget"]);
 const BOOLEAN_FLAGS = new Set(["no-open", "no-session", "offline"]);
-const REASONING = new Set(["low", "medium", "high", "xhigh"]);
+const REASONING = new Set<string>(REASONING_LEVELS);
 const DECISION_DEPTH = new Set(["focused", "standard", "deep"]);
 const PER_ROLE = /^(navigator|explorer|crewmate|surveyor)[:=]/i;
 

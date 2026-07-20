@@ -12,18 +12,28 @@ export interface RouteDescriptor {
   readonly executable: string;
   readonly capabilities: readonly string[];
   readonly compatibleFallbacks: readonly string[];
+  readonly reasoningLevels: readonly string[];
+}
+
+export interface RouteModelOption {
+  readonly model: string;
+  readonly label: string;
+  readonly reasoningLevels: readonly string[];
+  readonly defaultReasoning: string;
 }
 
 /** Exact built-ins; only these routes can be selected without a custom registry. */
 export const BUILTIN_ROUTES: readonly RouteDescriptor[] = [
-  { id: "codex", provider: "codex", model: "*", executable: "codex", capabilities: ["structured-events"], compatibleFallbacks: [] },
-  { id: "claude", provider: "claude", model: "*", executable: "claude", capabilities: ["structured-events"], compatibleFallbacks: [] },
-  { id: "grok-safe", provider: "grok", model: "grok-build", executable: "grok-safe", capabilities: ["structured-events"], compatibleFallbacks: [] },
-  { id: "pi", provider: "pi", model: "*", executable: "pi", capabilities: ["structured-events"], compatibleFallbacks: [] },
+  { id: "codex", provider: "codex", model: "*", executable: "codex", capabilities: ["structured-events"], compatibleFallbacks: [], reasoningLevels: ["low", "medium", "high", "xhigh", "max", "ultra"] },
+  { id: "claude", provider: "claude", model: "*", executable: "claude", capabilities: ["structured-events"], compatibleFallbacks: [], reasoningLevels: ["low", "medium", "high", "xhigh", "max"] },
+  { id: "agy", provider: "agy", model: "*", executable: "agy", capabilities: ["headless-output"], compatibleFallbacks: [], reasoningLevels: ["low", "medium", "high", "thinking"] },
+  { id: "grok-build", provider: "grok", model: "grok-build", executable: "grok-safe", capabilities: ["structured-events"], compatibleFallbacks: [], reasoningLevels: ["low", "medium", "high", "xhigh"] },
+  { id: "opencode", provider: "opencode", model: "*", executable: "opencode", capabilities: ["structured-events"], compatibleFallbacks: [], reasoningLevels: ["default", "none", "minimal", "low", "medium", "high", "xhigh", "max"] },
+  { id: "pi", provider: "pi", model: "*", executable: "pi", capabilities: ["structured-events"], compatibleFallbacks: [], reasoningLevels: ["off", "minimal", "low", "medium", "high", "xhigh"] },
 ];
 
 export interface IsolationAttestation { readonly isolated: boolean; readonly evidence: string; }
-export interface ProcessInvocation { readonly routeId: string; readonly executable: string; readonly args: readonly string[]; readonly stdin: string; readonly cwd: string; readonly timeoutMs: number; readonly runId: string; }
+export interface ProcessInvocation { readonly routeId: string; readonly executable: string; readonly args: readonly string[]; readonly stdin: string; readonly cwd: string; readonly timeoutMs: number; readonly runId: string; readonly promptFile?: boolean; readonly environment?: Readonly<Record<string, string>>; }
 export interface ProcessResult {
   readonly exitCode?: number;
   readonly timedOut?: boolean;
@@ -153,7 +163,7 @@ type InvocationBuild = { readonly ok: true; readonly value: ProcessInvocation; r
 function buildInvocation(route: RouteDescriptor, selection: Selection, request: ExecuteRequest): InvocationBuild {
   const role = request.role;
   if (role.authority.externalAction || !role.authority.read || !role.authority.workspace) return { ok: false, warnings: ["authority_unsupported"] };
-  if (!["low", "medium", "high", "xhigh"].includes(selection.reasoning)) return { ok: false, warnings: ["reasoning_unsupported"] };
+  if (!route.reasoningLevels.includes(selection.reasoning)) return { ok: false, warnings: ["reasoning_unsupported"] };
   if (!role.authority.write && role.toolAllow.some((tool) => /write|edit|shell|bash/i.test(tool))) return { ok: false, warnings: ["tool_authority_conflict"] };
   const common = { routeId: route.id, executable: route.executable, stdin: request.task.prompt, cwd: request.repositoryPath, timeoutMs: role.limits.timeoutMs, runId: request.runId };
   if (route.provider === "codex") {
@@ -176,6 +186,35 @@ function buildInvocation(route: RouteDescriptor, selection: Selection, request: 
     if ([...requestedTools].some((tool) => !["read", "search", "edit", "write"].includes(tool))) return { ok: false, warnings: ["claude_tool_policy_unsupported"] };
     const allowedTools = [requestedTools.has("read") ? "Read" : "", ...(requestedTools.has("search") ? ["Glob", "Grep"] : []), ...(requestedTools.has("edit") || requestedTools.has("write") ? ["Edit"] : []), requestedTools.has("write") ? "Write" : ""].filter(Boolean).join(",");
     return { ok: true, value: { ...common, args: ["--print", "--output-format", "stream-json", "--verbose", ...modelArgs, "--effort", selection.reasoning, "--permission-mode", "dontAsk", "--allowedTools", allowedTools, "--no-session-persistence"] }, warnings: [] };
+  }
+  if (route.provider === "agy") {
+    if (role.sessionId !== null) return { ok: false, warnings: ["agy_session_policy_unsupported"] };
+    if (!role.authority.network) return { ok: false, warnings: ["agy_network_policy_unsupported"] };
+    if (role.limits.tokenBudget !== Number.MAX_SAFE_INTEGER) return { ok: false, warnings: ["agy_token_budget_unsupported"] };
+    const mode = role.authority.write ? "accept-edits" : "plan";
+    const modelArgs = selection.model === "*" ? [] : ["--model", selection.model];
+    return { ok: true, value: { ...common, args: ["--sandbox", "--add-dir", "__BEARING_PROMPT_DIR__", "--mode", mode, ...modelArgs, "--print", "Read and follow the complete task in @__BEARING_PROMPT_FILE__."], promptFile: true }, warnings: ["usage_unavailable", "provider_permissions_inherited"] };
+  }
+  if (route.provider === "opencode") {
+    if (role.sessionId !== null) return { ok: false, warnings: ["opencode_session_policy_unsupported"] };
+    const modelArgs = selection.model === "*" ? [] : ["--model", selection.model];
+    const variantArgs = selection.reasoning === "default" ? [] : ["--variant", selection.reasoning];
+    const requestedTools = new Set(role.toolAllow.map((tool) => tool.toLowerCase()));
+    const permissions = {
+      "*": "deny",
+      read: requestedTools.has("read") ? "allow" : "deny",
+      glob: requestedTools.has("search") ? "allow" : "deny",
+      grep: requestedTools.has("search") ? "allow" : "deny",
+      edit: role.authority.write && (requestedTools.has("write") || requestedTools.has("edit")) ? "allow" : "deny",
+      bash: role.authority.write && (requestedTools.has("shell") || requestedTools.has("bash")) ? "allow" : "deny",
+      skill: "allow",
+      task: request.allowSubagents === true ? "allow" : "deny",
+      webfetch: role.authority.network && (requestedTools.has("web") || requestedTools.has("webfetch")) ? "allow" : "deny",
+      websearch: role.authority.network && (requestedTools.has("search") || requestedTools.has("web") || requestedTools.has("websearch")) ? "allow" : "deny",
+      external_directory: "deny",
+      question: "deny",
+    };
+    return { ok: true, value: { ...common, args: ["run", "--format", "json", "--dir", request.repositoryPath, ...modelArgs, ...variantArgs, "--file", "__BEARING_PROMPT_FILE__", "Read and follow the attached task instructions."], promptFile: true, environment: { OPENCODE_PERMISSION: JSON.stringify(permissions) } }, warnings: [] };
   }
   if (route.provider === "pi") {
     if (role.sessionId !== null) return { ok: false, warnings: ["pi_session_policy_unsupported"] };

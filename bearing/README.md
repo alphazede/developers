@@ -78,7 +78,7 @@ The CLI accepts only the following bounded overrides:
 | `--no-open` | Do not open a browser. |
 | `--agent` | Shared agent reference. |
 | `--provider`, `--model` | Shared route selection; never per-role. |
-| `--reasoning` | `low`, `medium`, `high`, or `xhigh`. |
+| `--reasoning` | One provider-supported value: `default`, `off`, `none`, `minimal`, `low`, `medium`, `high`, `xhigh`, `max`, `ultra`, or `thinking`. The chosen model is validated before launch. |
 | `--decision-depth` | `focused`, `standard`, or `deep`. |
 | `--tools`, `--exclude-tools` | Bounded comma-separated tool names. |
 | `--no-session` | Disable provider session persistence for the run. |

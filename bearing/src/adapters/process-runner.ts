@@ -1,8 +1,8 @@
-import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
-import { accessSync, constants, readFileSync, realpathSync, statSync } from "node:fs";
-import { homedir } from "node:os";
+import { execFileSync, spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
+import { accessSync, constants, mkdtempSync, readFileSync, realpathSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { homedir, tmpdir } from "node:os";
 import { delimiter, isAbsolute, join, relative } from "node:path";
-import type { ProcessInvocation, ProcessResult, ProcessRunner, RouteDescriptor } from "./adapters.js";
+import type { ProcessInvocation, ProcessResult, ProcessRunner, RouteDescriptor, RouteModelOption } from "./adapters.js";
 
 const MAX_STDOUT = 1024 * 1024;
 const MAX_STDERR = 64 * 1024;
@@ -12,8 +12,10 @@ type SpawnPort = (executable: string, args: readonly string[], options: {
   readonly shell: false;
   readonly detached: true;
   readonly stdio: ["pipe", "pipe", "pipe"];
+  readonly env?: NodeJS.ProcessEnv;
 }) => ChildProcessWithoutNullStreams;
 type ResolvePort = (executable: string, cwd: string) => { executable: string; cwd: string } | undefined;
+type InspectPort = (executable: string, args: readonly string[], cwd: string) => string;
 
 function available(executable: string): boolean {
   const candidates = executable.includes("/") ? [executable] : (process.env.PATH ?? "").split(delimiter).filter(isAbsolute).map((directory) => join(directory, executable));
@@ -56,10 +58,11 @@ function terminate(child: ChildProcessWithoutNullStreams): void {
 function tokenUsage(value: unknown): number | undefined {
   if (typeof value !== "object" || value === null) return undefined;
   const record = value as Record<string, unknown>;
-  const usage = typeof record.usage === "object" && record.usage !== null ? record.usage as Record<string, unknown> : record;
+  const part = typeof record.part === "object" && record.part !== null ? record.part as Record<string, unknown> : undefined;
+  const usage = typeof part?.tokens === "object" && part.tokens !== null ? part.tokens as Record<string, unknown> : typeof record.usage === "object" && record.usage !== null ? record.usage as Record<string, unknown> : record;
   const direct = usage.tokens ?? usage.total_tokens ?? usage.totalTokens;
   if (Number.isSafeInteger(direct) && (direct as number) >= 0) return direct as number;
-  const parts = [usage.input_tokens, usage.output_tokens].filter((entry): entry is number => Number.isSafeInteger(entry) && (entry as number) >= 0);
+  const parts = [usage.input_tokens, usage.output_tokens, usage.input, usage.output, usage.reasoning].filter((entry): entry is number => Number.isSafeInteger(entry) && (entry as number) >= 0);
   if (parts.length) return parts.reduce((sum, entry) => sum + entry, 0);
   return Number.isSafeInteger(usage.cached_input_tokens) && (usage.cached_input_tokens as number) >= 0 ? usage.cached_input_tokens as number : undefined;
 }
@@ -74,7 +77,7 @@ function safe(value: unknown, depth = 0): unknown {
   return Object.fromEntries(Object.entries(value).slice(0, 64).flatMap(([key, entry]) => EVENT_DATA_KEYS.has(key) && !/key|secret|token|credential|authorization|password/i.test(key) ? [[key, safe(entry, depth + 1)]] : []));
 }
 
-function normalize(stdout: string): { events: readonly unknown[]; usage: { tokens: number } } | undefined {
+function normalize(stdout: string, routeId: string): { events: readonly unknown[]; usage: { tokens: number } } | undefined {
   const trimmed = stdout.trim();
   if (!trimmed) return undefined;
   let values: unknown[];
@@ -82,18 +85,21 @@ function normalize(stdout: string): { events: readonly unknown[]; usage: { token
     const parsed = JSON.parse(trimmed);
     values = Array.isArray(parsed) ? parsed : [parsed];
   } catch {
-    try { values = trimmed.split(/\r?\n/).filter(Boolean).map((line) => JSON.parse(line)); } catch { return undefined; }
+    try { values = trimmed.split(/\r?\n/).filter(Boolean).map((line) => JSON.parse(line)); }
+    catch { return routeId === "agy" ? { events: [{ type: "complete", data: { content: safe(trimmed) } }], usage: { tokens: 0 } } : undefined; }
   }
   if (!values.length || values.length > 1024 || values.some((value) => typeof value !== "object" || value === null || Array.isArray(value))) return undefined;
   let tokens: number | undefined;
   const events = values.map((value) => {
     const record = value as Record<string, unknown>;
     const found = tokenUsage(record);
-    if (found !== undefined) tokens = found;
+    if (found !== undefined) tokens = routeId === "opencode" ? (tokens ?? 0) + found : found;
     const type = typeof record.type === "string" ? record.type : typeof record.event === "string" ? record.event : "message";
     const item = typeof record.item === "object" && record.item !== null && !Array.isArray(record.item) ? record.item as Record<string, unknown> : undefined;
+    const part = typeof record.part === "object" && record.part !== null && !Array.isArray(record.part) ? record.part as Record<string, unknown> : undefined;
     const agentMessage = type === "item.completed" && item?.type === "agent_message" && typeof item.text === "string" ? item.text : undefined;
-    const data = agentMessage ?? record.data ?? record.message ?? record.text ?? record.content ?? record.result ?? record.status;
+    const partText = typeof part?.text === "string" ? part.text : undefined;
+    const data = agentMessage ?? partText ?? record.data ?? record.message ?? record.text ?? record.content ?? record.result ?? record.status;
     return { type, ...(data === undefined ? {} : { data: typeof data === "object" && data !== null && !Array.isArray(data) ? safe(data) : { content: safe(data) } }) };
   });
   return tokens === undefined ? undefined : { events, usage: { tokens } };
@@ -108,7 +114,7 @@ export class NodeProcessRunner implements ProcessRunner {
   private readonly children = new Map<string, ChildProcessWithoutNullStreams>();
   private readonly cancelled = new Set<string>();
 
-  constructor(private readonly spawnProcess: SpawnPort = spawn, private readonly inspectExecutable: (executable: string) => boolean = available, private readonly resolveExecutable: ResolvePort = resolveSpawn) {}
+  constructor(private readonly spawnProcess: SpawnPort = spawn, private readonly inspectExecutable: (executable: string) => boolean = available, private readonly resolveExecutable: ResolvePort = resolveSpawn, private readonly inspectProcess: InspectPort = inspectLines) {}
 
   executableAvailable(executable: string): boolean { return this.inspectExecutable(executable); }
 
@@ -129,8 +135,60 @@ export class NodeProcessRunner implements ProcessRunner {
         const provider = text(settings.defaultProvider), model = text(settings.defaultModel);
         return { model: provider && model ? `${provider}/${model}` : "*", reasoning: text(settings.defaultThinkingLevel) ?? "medium" };
       }
+      if (route.provider === "opencode") {
+        const settings = jsonObject(join(homedir(), ".config", "opencode", "opencode.json"));
+        return { model: text(settings.model) ?? "*", reasoning: "default" };
+      }
     } catch { /* use the route default */ }
     return { model: route.model, reasoning: "medium" };
+  }
+
+  modelOptions(route: RouteDescriptor, repositoryPath = process.cwd()): readonly RouteModelOption[] {
+    const current = this.currentSelection(route);
+    try {
+      if (route.provider === "codex") {
+        const cache = jsonObject(join(homedir(), ".codex", "models_cache.json"));
+        const models = Array.isArray(cache.models) ? cache.models : [];
+        const options = models.flatMap((entry): RouteModelOption[] => {
+          if (typeof entry !== "object" || entry === null || Array.isArray(entry)) return [];
+          const model = text((entry as Record<string, unknown>).slug);
+          const supported = (entry as Record<string, unknown>).supported_reasoning_levels;
+          const levels = Array.isArray(supported) ? supported.flatMap((level) => typeof level === "object" && level !== null && !Array.isArray(level) ? [text((level as Record<string, unknown>).effort)].filter((value): value is string => !!value) : []) : [];
+          if (!model || !levels.length) return [];
+          const defaultReasoning = text((entry as Record<string, unknown>).default_reasoning_level) ?? levels[0];
+          return [{ model, label: text((entry as Record<string, unknown>).display_name) ?? model, reasoningLevels: levels, defaultReasoning }];
+        });
+        if (options.length) return options.slice(0, 64);
+      }
+      if (route.provider === "claude") return uniqueModels([current.model, "sonnet", "opus", "haiku", "fable"], route.reasoningLevels, current.reasoning);
+      if (route.provider === "agy") return this.inspectRoute(route, ["models"], repositoryPath).flatMap((line): RouteModelOption[] => {
+        const match = /^(.*?) \((Low|Medium|High|Thinking)\)$/.exec(line);
+        if (!match) return [];
+        const reasoning = match[2].toLowerCase();
+        return [{ model: line, label: line, reasoningLevels: [reasoning], defaultReasoning: reasoning }];
+      }).slice(0, 64);
+      if (route.provider === "grok") return [{ model: "grok-build", label: "Grok Build", reasoningLevels: route.reasoningLevels, defaultReasoning: route.reasoningLevels.includes(current.reasoning) ? current.reasoning : "medium" }];
+      if (route.provider === "opencode") return this.inspectRoute(route, ["models"], repositoryPath).filter((line) => /^[a-z0-9._-]+\/[A-Za-z0-9._:/-]+$/.test(line)).slice(0, 64).map((model) => {
+        const levels = opencodeReasoning(model.split("/", 1)[0] ?? "");
+        return { model, label: model, reasoningLevels: levels, defaultReasoning: levels[0] };
+      });
+      if (route.provider === "pi") return this.inspectRoute(route, ["--list-models"], repositoryPath).slice(1).flatMap((line): RouteModelOption[] => {
+        const columns = line.trim().split(/\s+/);
+        if (columns.length < 6) return [];
+        const model = `${columns[0]}/${columns[1]}`;
+        const levels = columns[4] === "yes" ? ["off", "minimal", "low", "medium", "high", "xhigh"] : ["off"];
+        return [{ model, label: model, reasoningLevels: levels, defaultReasoning: levels.includes(current.reasoning) ? current.reasoning : levels[0] }];
+      }).slice(0, 64);
+    } catch { /* fall through to the configured/default model */ }
+    const model = current.model === "*" ? route.model : current.model;
+    return [{ model, label: model === "*" ? "Agent default" : model, reasoningLevels: route.reasoningLevels, defaultReasoning: route.reasoningLevels.includes(current.reasoning) ? current.reasoning : route.reasoningLevels[0] }];
+  }
+
+  private inspectRoute(route: RouteDescriptor, args: readonly string[], repositoryPath: string): string[] {
+    const resolved = this.resolveExecutable(route.executable, repositoryPath);
+    if (!resolved) throw new Error("unsafe inspection executable");
+    const output = this.inspectProcess(resolved.executable, args, resolved.cwd);
+    return output.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
   }
 
   cancel(runId: string): void {
@@ -146,9 +204,20 @@ export class NodeProcessRunner implements ProcessRunner {
     if (!spawn) return Promise.resolve({ exitCode: 1 });
     return new Promise((resolve) => {
       let child: ChildProcessWithoutNullStreams;
+      let promptDirectory: string | undefined;
+      let args = invocation.args;
+      let environment = invocation.environment;
       try {
-        child = this.spawnProcess(spawn.executable, invocation.args, { cwd: spawn.cwd, shell: false, detached: true, stdio: ["pipe", "pipe", "pipe"] });
+        if (invocation.promptFile) {
+          promptDirectory = mkdtempSync(join(tmpdir(), "bearing-prompt-"));
+          const promptPath = join(promptDirectory, "task.md");
+          writeFileSync(promptPath, invocation.stdin, { encoding: "utf8", mode: 0o600 });
+          args = invocation.args.map((argument) => argument.replaceAll("__BEARING_PROMPT_FILE__", promptPath).replaceAll("__BEARING_PROMPT_DIR__", promptDirectory!));
+          environment = environment && Object.fromEntries(Object.entries(environment).map(([key, value]) => [key, value.replaceAll("__BEARING_PROMPT_FILE__", promptPath).replaceAll("__BEARING_PROMPT_DIR__", promptDirectory!)]));
+        }
+        child = this.spawnProcess(spawn.executable, args, { cwd: spawn.cwd, shell: false, detached: true, stdio: ["pipe", "pipe", "pipe"], ...(environment ? { env: { ...process.env, ...environment } } : {}) });
       } catch {
+        if (promptDirectory) rmSync(promptDirectory, { recursive: true, force: true });
         resolve({ exitCode: 1 });
         return;
       }
@@ -163,6 +232,7 @@ export class NodeProcessRunner implements ProcessRunner {
         settled = true;
         clearTimeout(timer);
         this.children.delete(invocation.runId);
+        if (promptDirectory) rmSync(promptDirectory, { recursive: true, force: true });
         resolve(result);
       };
       const captured = (): string => Buffer.concat(stdout).toString("utf8");
@@ -184,14 +254,30 @@ export class NodeProcessRunner implements ProcessRunner {
         if (this.cancelled.has(invocation.runId)) { finish(mayHaveSideEffect(body) ? { unknownSideEffect: true } : { cancelled: true }); return; }
         if (overflow) { finish(mayHaveSideEffect(body) ? { unknownSideEffect: true } : { exitCode: 0, events: "oversized" }); return; }
         if (code !== 0) { finish(mayHaveSideEffect(body) ? { unknownSideEffect: true } : { exitCode: code ?? 1 }); return; }
-        const parsed = normalize(body);
+        const parsed = normalize(body, invocation.routeId);
         if (!parsed) { finish({ unknownSideEffect: true }); return; }
         finish({ exitCode: 0, ...parsed });
       });
       child.stdin.on("error", () => {});
-      child.stdin.end(invocation.stdin);
+      child.stdin.end(invocation.promptFile ? undefined : invocation.stdin);
     });
   }
+}
+
+function inspectLines(executable: string, args: readonly string[], cwd: string): string {
+  const output = execFileSync(executable, args, { cwd, encoding: "utf8", timeout: 5_000, maxBuffer: 512 * 1024, stdio: ["ignore", "pipe", "ignore"] });
+  return output;
+}
+
+function uniqueModels(models: readonly string[], reasoningLevels: readonly string[], preferred: string): RouteModelOption[] {
+  return [...new Set(models.filter((model) => model && model.length <= 256))].map((model) => ({ model, label: model === "*" || model === "default" ? "Agent default" : model, reasoningLevels, defaultReasoning: reasoningLevels.includes(preferred) ? preferred : reasoningLevels[0] }));
+}
+
+function opencodeReasoning(provider: string): readonly string[] {
+  if (provider === "openai") return ["default", "none", "minimal", "low", "medium", "high", "xhigh"];
+  if (provider === "anthropic") return ["default", "high", "max"];
+  if (provider === "google") return ["default", "low", "high"];
+  return ["default"];
 }
 
 function text(value: unknown): string | undefined { return typeof value === "string" && value.length > 0 && value.length <= 256 ? value : undefined; }

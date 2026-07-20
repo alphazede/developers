@@ -198,11 +198,13 @@ describe("GET / native page and fragment secrecy", () => {
     expect(r.body).toContain("input.disabled = !route.detected");
     expect(r.body).toContain("input.required = true");
     expect(r.body).toContain('input.addEventListener("change"');
-    expect(r.body).toContain("selectedRoute = route");
+    expect(r.body).toContain("configureRoute(route)");
     expect(r.body).not.toContain("input.checked = true");
     expect(r.body).toContain('Codex CLI');
     expect(r.body).toContain('Claude Code');
-    expect(r.body).toContain('Grok Safe');
+    expect(r.body).toContain('Agy');
+    expect(r.body).toContain('Grok Build');
+    expect(r.body).toContain('OpenCode');
     expect(r.body).toContain('"pi": "Pi"');
     expect(r.body).toContain('statusText.textContent = route.detected ? "Agent detected" : "Agent unavailable"');
     expect(r.body).toContain("routeForm.reportValidity()");
@@ -247,8 +249,10 @@ describe("GET / native page and fragment secrecy", () => {
     expect(r.body).toContain("/api/v1/repository");
     expect(r.body).toContain("/api/v1/routes");
     expect(r.body).toContain('id="detected-routes"');
-    expect(r.body).toContain('current <code>/model</code> selection');
-    expect(r.body).not.toContain('id="reasoning"');
+    expect(r.body).toContain('Choose a discovered model and a reasoning level');
+    expect(r.body).toContain('id="model-choice"');
+    expect(r.body).toContain('id="reasoning-choice"');
+    expect(r.body).toContain('MVP support is currently limited to Claude Code, Codex, Agy, Grok Build, OpenCode, and Pi.');
     expect(r.body).toContain("detectedRoutes.textContent");
     expect(r.body).toContain('<span class="step">02 / LAUNCH</span>');
     expect(r.body).toContain('<button class="primary" id="launch-bearing" disabled>Launch</button>');

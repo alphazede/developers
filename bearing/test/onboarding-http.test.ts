@@ -136,14 +136,14 @@ describe("repository-first onboarding HTTP", () => {
     expect((await call(port, "GET", "/api/v1/routes")).status).toBe(401);
     const routes = await call(port, "GET", "/api/v1/routes", undefined, cookie);
     expect(routes.status).toBe(200);
-    expect(JSON.parse(routes.body).routes).toHaveLength(4);
-    expect(counts()).toEqual({ inspections: 4, verifications: 0 });
+    expect(JSON.parse(routes.body).routes).toHaveLength(6);
+    expect(counts()).toEqual({ inspections: 6, verifications: 0 });
 
     expect((await call(port, "POST", "/api/v1/readiness", { provider: "codex", model: "gpt-5.6-terra", reasoning: "medium" })).status).toBe(401);
     const readiness = await call(port, "POST", "/api/v1/readiness", { provider: "codex", model: "gpt-5.6-terra", reasoning: "medium" }, cookie);
     expect(readiness.status).toBe(200);
     expect(JSON.parse(readiness.body)).toMatchObject({ status: "detected", detected: true, verified: false });
-    expect(counts()).toEqual({ inspections: 5, verifications: 1 });
+    expect(counts()).toEqual({ inspections: 7, verifications: 1 });
     expect(readiness.body.length).toBeLessThan(16_384);
   });
 

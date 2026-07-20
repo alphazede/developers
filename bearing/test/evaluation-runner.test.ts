@@ -47,13 +47,13 @@ describe("EvaluationRunner", () => {
   it("passes complete native and exact eight-task panel matrices", () => {
     const native = runner.runSuite(nativeSuite, matrix(nativeSuite));
     expect(native.verdict).toBe("passed");
-    expect(native.compositeKeys).toHaveLength(2 * 2 * 4 * 3);
+    expect(native.compositeKeys).toHaveLength(2 * 2 * BUILTIN_ROUTES.length * 3);
     expect(native.routes.every(({ verdict, uplift }) => verdict === "passed" && uplift! > 0)).toBe(true);
     expect(native.macro).toEqual({ controlAverage: 0.5, treatmentAverage: 0.7000000000000001, uplift: 0.20000000000000007, passed: true });
 
     const panel = runner.runSuite(panelSuite, matrix(panelSuite));
     expect(panel.verdict).toBe("passed");
-    expect(panel.compositeKeys).toHaveLength(8 * 2 * 4 * 3);
+    expect(panel.compositeKeys).toHaveLength(8 * 2 * BUILTIN_ROUTES.length * 3);
     expect(panel.routes.map(({ route }) => route)).toEqual(BUILTIN_ROUTES.map(({ id }) => id));
   });
 

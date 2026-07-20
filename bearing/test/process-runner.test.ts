@@ -58,7 +58,14 @@ describe("production process runner", () => {
     expect(pi.calls[0]).toMatchObject({ executable: "pi", args: ["--mode", "json", "--print", "--model", "zai/glm-5.2", "--thinking", "medium", "--tools", "read,write", "--exclude-tools", "external-action", "--no-session", "--offline"] });
     const piV4 = await execute({ provider: "pi", model: "deepseek/deepseek-v4-pro", reasoning: "high" });
     expect(piV4.calls[0].args).toContain("deepseek/deepseek-v4-pro");
-    for (const result of [codex, grok, claude, pi, piV4]) {
+    const agy = await execute({ provider: "agy", model: "Gemini 3.5 Flash (Low)", reasoning: "low" }, { authority: { read: true, write: true, network: true, workspace: true, externalAction: false }, limits: { timeoutMs: 50, maxTurns: 2, maxTools: 2, maxRetries: 1, maxConcurrency: 1, maxDelegation: 1, tokenBudget: Number.MAX_SAFE_INTEGER } });
+    expect(agy.calls[0]).toMatchObject({ executable: "agy", stdin: "", args: expect.arrayContaining(["--sandbox", "--add-dir", expect.stringMatching(/^\/tmp\/bearing-prompt-/), "--mode", "accept-edits", "--model", "Gemini 3.5 Flash (Low)", "--print"]) });
+    expect(agy.calls[0].args).not.toContain("--dangerously-skip-permissions");
+    expect(agy.calls[0].args.at(-1)).toMatch(/^Read and follow the complete task in @\/tmp\/bearing-prompt-/);
+    const opencode = await execute({ provider: "opencode", model: "openai/gpt-5", reasoning: "high" });
+    expect(opencode.calls[0]).toMatchObject({ executable: "opencode", stdin: "", args: expect.arrayContaining(["run", "--format", "json", "--dir", repositoryPath, "--model", "openai/gpt-5", "--variant", "high", "--file"]) });
+    expect(JSON.parse((opencode.calls[0].options as { env: Record<string, string> }).env.OPENCODE_PERMISSION)).toMatchObject({ "*": "deny", read: "allow", edit: "allow", bash: "deny", task: "deny", webfetch: "deny", websearch: "deny", external_directory: "deny" });
+    for (const result of [codex, grok, claude, agy, opencode, pi, piV4]) {
       expect(result.calls[0].args.join(" ")).not.toMatch(/hunter2|private source/);
       expect(JSON.stringify(result.receipt)).not.toMatch(/hunter2|private source/);
     }
@@ -81,6 +88,9 @@ describe("production process runner", () => {
     const invalidReasoning = await execute({ provider: "pi", model: "zai/glm-5.2", reasoning: "unbounded" });
     expect(invalidReasoning.calls).toHaveLength(0);
     expect(invalidReasoning.receipt).toMatchObject({ status: "blocked", failure: "unsupported_policy" });
+    const boundedAgy = await execute({ provider: "agy", model: "Gemini 3.5 Flash (Low)", reasoning: "low" }, { authority: { read: true, write: true, network: true, workspace: true, externalAction: false } });
+    expect(boundedAgy.calls).toHaveLength(0);
+    expect(boundedAgy.receipt.warningCodes).toContain("agy_token_budget_unsupported");
   });
 
   it("honors Claude tool narrowing and lets Pi use its configured default model", async () => {
@@ -102,6 +112,22 @@ describe("production process runner", () => {
     expect(result).toMatchObject({ exitCode: 0, usage: { tokens: 5 }, events: [{ type: "message", data: { content: "ok" } }, { type: "complete" }] });
   });
 
+  it("parses OpenCode step-finish token usage", async () => {
+    const h = harness('{"type":"text","part":{"text":"BEARING_RESULT {\\"kind\\":\\"action\\",\\"summary\\":\\"done\\",\\"artifacts\\":[]}"}}\n{"type":"step_finish","part":{"tokens":{"input":2,"output":3,"reasoning":1}}}\n{"type":"step_finish","part":{"tokens":{"input":4,"output":2,"reasoning":0}}}\n');
+    expect(await h.runner.run({ routeId: "opencode", executable: "opencode", args: [], stdin: "x", cwd: repositoryPath, timeoutMs: 50, runId: "opencode-usage" })).toMatchObject({ exitCode: 0, usage: { tokens: 12 }, events: [{ type: "text", data: { content: expect.stringContaining("BEARING_RESULT") } }, { type: "step_finish" }, { type: "step_finish" }] });
+  });
+
+  it("resolves discovery commands through the safe executable boundary", () => {
+    const inspected: Array<{ executable: string; args: readonly string[]; cwd: string }> = [];
+    const runner = new NodeProcessRunner(undefined, () => true, (executable, cwd) => executable === "agy" ? { executable: "/usr/local/bin/agy", cwd } : undefined, (executable, args, cwd) => {
+      inspected.push({ executable, args, cwd });
+      return "Gemini 3.5 Flash (Medium)\n";
+    });
+    const route = { id: "agy", provider: "agy", model: "*", executable: "agy", capabilities: [], compatibleFallbacks: [], reasoningLevels: ["medium"] };
+    expect(runner.modelOptions(route, repositoryPath)).toEqual([{ model: "Gemini 3.5 Flash (Medium)", label: "Gemini 3.5 Flash (Medium)", reasoningLevels: ["medium"], defaultReasoning: "medium" }]);
+    expect(inspected).toEqual([{ executable: "/usr/local/bin/agy", args: ["models"], cwd: repositoryPath }]);
+  });
+
   it("reads Pi's selected model from its configured agent directory", async () => {
     const directory = await mkdtemp(join(tmpdir(), "bearing-pi-config-"));
     const previous = process.env.PI_CODING_AGENT_DIR;
@@ -109,7 +135,7 @@ describe("production process runner", () => {
       await writeFile(join(directory, "settings.json"), JSON.stringify({ defaultProvider: "zai", defaultModel: "glm-5.2", defaultThinkingLevel: "high" }));
       process.env.PI_CODING_AGENT_DIR = directory;
       const runner = new NodeProcessRunner(undefined, () => true);
-      expect(runner.currentSelection({ id: "pi", provider: "pi", model: "*", executable: "pi", capabilities: [], compatibleFallbacks: [] })).toEqual({ model: "zai/glm-5.2", reasoning: "high" });
+      expect(runner.currentSelection({ id: "pi", provider: "pi", model: "*", executable: "pi", capabilities: [], compatibleFallbacks: [], reasoningLevels: ["off", "minimal", "low", "medium", "high", "xhigh"] })).toEqual({ model: "zai/glm-5.2", reasoning: "high" });
     } finally {
       if (previous === undefined) delete process.env.PI_CODING_AGENT_DIR; else process.env.PI_CODING_AGENT_DIR = previous;
       await rm(directory, { recursive: true, force: true });

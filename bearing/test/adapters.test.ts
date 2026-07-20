@@ -15,7 +15,7 @@ const repositoryPath = "/tmp/bearing-repository";
 
 describe("provider-neutral adapters", () => {
   it("has the exact static routes and inspects without process initialization", () => {
-    expect(BUILTIN_ROUTES.map(({ id, provider, model, executable }) => [id, provider, model, executable])).toEqual([["codex", "codex", "*", "codex"], ["claude", "claude", "*", "claude"], ["grok-safe", "grok", "grok-build", "grok-safe"], ["pi", "pi", "*", "pi"]]);
+    expect(BUILTIN_ROUTES.map(({ id, provider, model, executable }) => [id, provider, model, executable])).toEqual([["codex", "codex", "*", "codex"], ["claude", "claude", "*", "claude"], ["agy", "agy", "*", "agy"], ["grok-build", "grok", "grok-build", "grok-safe"], ["opencode", "opencode", "*", "opencode"], ["pi", "pi", "*", "pi"]]);
     const runner = new SyntheticRunner(); expect(adapter(runner).inspect().available).toBe(true); expect(runner.calls).toEqual([]);
     expect(createAgentAdapter({ provider: "codex", model: "gpt-5.6-sol", reasoning: "medium" }, runner)).toBeDefined();
     expect(createAgentAdapter({ provider: "unknown", model: "nope", reasoning: "medium" }, runner)).toBeUndefined();
