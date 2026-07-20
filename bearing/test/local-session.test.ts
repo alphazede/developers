@@ -223,7 +223,8 @@ describe("GET / native page and fragment secrecy", () => {
     expect(r.body).not.toContain('for="repository-path"');
     expect(r.body).toContain('alt="A bear in sunglasses working at a tidy office desk."');
     expect(r.body).toContain('src="/assets/bearing-office.png"');
-    expect(r.body).toContain('class="signature-link" href="https://github.com/alphazede/developers/tree/main/bearing" target="_blank" rel="noopener noreferrer" aria-label="Open Bearing on GitHub"');
+    expect(r.body).toContain('class="signature-link" href="https://github.com/alphazede/developers/tree/main/bearing" target="_blank" rel="noopener noreferrer" aria-label="Open Bearing GitHub repository"');
+    expect(r.body).toContain("<figcaption>GitHub repo \u2197</figcaption>");
     expect(r.body).toContain("#repository-panel .signature-link{display:block;min-height:84px");
     expect(r.body).toContain('url("/assets/bearing-expedition.png")');
     expect(r.body).not.toContain('<img src="/assets/bearing-expedition.png"');
@@ -236,6 +237,7 @@ describe("GET / native page and fragment secrecy", () => {
     expect(r.body).toContain("#repository-panel .repo-grid,.route-options,.route-details{grid-template-columns:1fr}");
     expect(r.body).toContain("#repository-panel .signature-link{display:none}");
     expect(r.body).toContain("--canvas:#010102");
+    expect(r.body).toContain("html{zoom:1.2}");
     expect(r.body).toContain("padding:0 clamp(24px,4vw,72px)");
     expect(r.body).toContain("main{max-width:1180px;margin:0;padding:42px clamp(24px,4vw,72px) 72px}");
     expect(r.body).not.toContain("calc((100vw - 1180px)/2)");
@@ -265,13 +267,17 @@ describe("GET / native page and fragment secrecy", () => {
     expect(r.body).not.toContain('workItems: 1, maxCrewmatesPerExplorer: 3, perAgentTokenEstimate: 4000');
     expect(r.body).toContain('id="planning-panel" hidden');
     expect(r.body).toContain("You choose Explorer or Expedition after implementation.md is ready.");
-    expect(r.body).toContain("No execution mode was selected and no agent work was launched.");
+    expect(r.body).toContain("<h2>Journey started</h2>");
+    expect(r.body).toContain('<span class="step">SET BEARINGS</span>');
+    expect(r.body).toContain("First stop: Set Bearings");
+    expect(r.body).toContain("Are all source files in this workspace, or are there reference documents Bearing should use?");
+    expect(r.body).toContain('setStatus("Journey started. Set Bearings comes next.", false)');
     expect(r.body).toContain('<p class="hero-help">New to Bearing?<button class="demo-link" id="view-demo" type="button">See how it works</button></p>');
     expect(r.body).not.toContain('id="view-demo" type="button" hidden');
     expect(r.body).not.toContain("Live demo");
     expect(r.body).toContain('class="actions actions-end"><button class="primary">Launch</button>');
-    expect(r.body).toContain("Want a quick, token-free tour before you continue?");
-    expect(r.body).toContain('id="planning-demo" type="button">Start tutorial</button>');
+    expect(r.body).not.toContain("Want a quick, token-free tour before you continue?");
+    expect(r.body).not.toContain('id="planning-demo"');
     expect(r.body).toContain('id="demo-panel" hidden');
     expect(r.body).toContain("How Bearing works");
     expect(r.body).toContain("NO TOKENS");
