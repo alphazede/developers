@@ -76,7 +76,7 @@ Pass values as `--flag value` or `--flag=value`. Duplicate, unknown, credential-
 
 ## Deterministic demo workflows
 
-The included fictional B2B fixture provides three provider-disabled demonstrations. Selecting one displays a projection and does not execute external work.
+The included fictional B2B fixture provides three provider-disabled demonstrations. Their authenticated JSON and offline HTML report endpoints remain available for deterministic QA, but they are not presented as onboarding choices and never execute external work.
 
 1. **Engineering Import** models a feature/import flow with an owner role gate, input validation, dry run, duplicate handling, atomic customer/audit publication, and independent Survey.
 2. **Launch Readiness** turns repository facts into a marketing brief and infographic-input evidence. Survey blocks an unsupported 40% promise; an owner-approved correction removes it, then an independent Resurvey passes the corrected brief.

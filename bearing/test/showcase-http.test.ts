@@ -97,16 +97,17 @@ describe("native browser showcase HTTP", () => {
     expect(response.body).not.toMatch(/<script|(?:src|href)=["']https?:|\/home\/|file:\/\//i);
   });
 
-  it("exposes labeled native controls, landmarks, live status, focus, reduced motion, and text-only rendering", async () => {
+  it("keeps showcase endpoints available without putting demo choices in onboarding", async () => {
     const { port } = await launch(); const page = await call(port, "/");
     expect(page.body).toContain("<main>");
     expect(page.body).toContain('id="status" role="status" aria-live="polite"');
-    expect(page.body).toContain('aria-labelledby="showcase-heading"');
-    expect(page.body).toContain('label for="workflow-select"');
-    expect(page.body).toContain('aria-labelledby="workflow-name"');
+    expect(page.body).toContain('id="change-repository"');
+    expect(page.body).toContain('label for="work-goal"');
+    expect(page.body).not.toContain('id="workflow-select"');
+    expect(page.body).not.toContain('aria-labelledby="showcase-heading"');
     expect(page.body).toContain("focus-visible");
     expect(page.body).toContain("prefers-reduced-motion:reduce");
-    expect(page.body).toContain("textEquivalent");
+    expect(page.body).toContain("@keyframes panel-in");
     expect(page.body).toContain(".textContent =");
     expect(page.body).not.toMatch(/\.innerHTML\s*=|insertAdjacentHTML|document\.write/);
     expect(page.body).not.toContain("/launch");

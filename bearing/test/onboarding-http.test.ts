@@ -71,15 +71,15 @@ describe("repository-first onboarding HTTP", () => {
     expect(JSON.parse(response.body)).toEqual({ platform: "linux", linuxDistro: "Test Linux", current: { path: root, source: "cwd" }, browse: { available: false } });
   });
 
-  it("accepts exact current choice once and does not reinvoke selection", async () => {
+  it("accepts repository reselection without restarting onboarding", async () => {
     const root = await mkdtemp(join(tmpdir(), "bearing-current-")); roots.push(root); let resolutions = 0;
     const choice = { options: async () => ({ platform: "linux" as const, current: { path: root, source: "cwd" as const }, browse: { available: false } }), resolve: async () => { resolutions += 1; return { result: "selected" as const, candidate: root, source: "cwd" as const }; } };
     const { port, session } = await launchChoice(choice); const cookie = await authenticate(port, session);
     expect((await call(port, "POST", "/api/v1/repository", { choice: "current" }, cookie)).status).toBe(200);
     const repeated = await call(port, "POST", "/api/v1/repository", { choice: "browse" }, cookie);
-    expect(repeated.status).toBe(409);
-    expect(JSON.parse(repeated.body).code).toBe("repository_already_selected");
-    expect(resolutions).toBe(1);
+    expect(repeated.status).toBe(200);
+    expect(JSON.parse(repeated.body).status).toBe("resumed");
+    expect(resolutions).toBe(2);
   });
 
   it("returns stable recoverable picker outcomes without repository mutation", async () => {

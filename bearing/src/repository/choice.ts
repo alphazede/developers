@@ -3,7 +3,7 @@ import { accessSync, constants, realpathSync } from "node:fs";
 import { lstat, readFile, realpath } from "node:fs/promises";
 import { delimiter, dirname, isAbsolute, join, posix, win32 } from "node:path";
 
-const PICKER_TIMEOUT_MS = 10_000;
+const PICKER_TIMEOUT_MS = 300_000;
 const MAX_PICKER_OUTPUT = 4 * 1024;
 const MAX_DISTRO_FILE = 16 * 1024;
 const TERMINATION_GRACE_MS = 100;

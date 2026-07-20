@@ -54,7 +54,7 @@ describe("RepositoryChoiceService", () => {
       const output = platform === "win32" ? "C:\\work\\repo\r\n" : "/tmp/repository\n";
       const runner = new FakeRunner(available, { exitCode: 0, stdout: output });
       expect((await new RepositoryChoiceService({ launchCwd: cwd, platform, runner }).resolve("browse")).result).toBe("selected");
-      expect(runner.calls[0]).toMatchObject({ executable, timeoutMs: 10_000, maxOutputBytes: 4096 });
+      expect(runner.calls[0]).toMatchObject({ executable, timeoutMs: 300_000, maxOutputBytes: 4096 });
       expect(runner.calls[0].args).toEqual([...args]);
     }
   });
@@ -73,7 +73,7 @@ describe("RepositoryChoiceService", () => {
     const picker = diagnostics.at(-1) as { durationMs: number };
     expect(Number.isSafeInteger(picker.durationMs)).toBe(true);
     expect(picker.durationMs).toBeGreaterThanOrEqual(0);
-    expect(picker.durationMs).toBeLessThanOrEqual(10_500);
+    expect(picker.durationMs).toBeLessThanOrEqual(300_500);
     expect(JSON.stringify(diagnostics)).not.toMatch(/SECRET_PATH|SECRET_OUTPUT|SECRET_DISTRO|\/dev\/shm|stdout|stderr|command|candidate|linuxDistro/);
   });
 

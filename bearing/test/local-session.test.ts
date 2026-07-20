@@ -211,7 +211,7 @@ describe("GET / native page and fragment secrecy", () => {
     expect(r.body).toContain('var name = ownerName.value.trim()');
     expect(r.body).toContain('document.getElementById("owner-name").addEventListener("input", function () { this.setCustomValidity(""); })');
     expect(r.body).toContain('fetch("/api/v1/owner"');
-    expect(r.body).toContain('function revealWork(greeting) { routeForm.hidden = true; workForm.hidden = false; loadWorkflowCatalog(); status.textContent = greeting; }');
+    expect(r.body).toContain('function revealWork(greeting) { onboardingReady = true;');
     expect(r.body).toContain('revealWork(body.greeting)');
     expect(r.body).toContain('Your name could not be remembered. Try again.');
     expect(r.body).not.toContain('Ready, " + name + ". Your name could not be remembered.');
@@ -248,16 +248,26 @@ describe("GET / native page and fragment secrecy", () => {
     expect(r.body).not.toContain('<option selected>medium</option>');
     expect(r.body).toContain("detectedRoutes.textContent");
     expect(r.body).toContain('id="work-form" hidden');
-    expect(r.body).toContain('id="run-id" required maxlength="128" pattern="[A-Za-z0-9_\\-]+"');
-    expect(r.body).toContain('id="work-items" type="number" required min="1" max="64"');
-    expect(r.body).toContain('id="crew-limit" type="number" required min="1" max="16"');
-    expect(r.body).toContain('id="agent-tokens" type="number" required min="1" max="100000"');
-    expect(r.body).toContain("Recommended mode:");
-    expect(r.body).toContain("Estimated agents:");
+    expect(r.body).toContain('<h2>What are we working on?</h2>');
+    expect(r.body).toContain('id="work-goal" required maxlength="4096"');
+    expect(r.body).not.toContain('id="run-id"');
+    expect(r.body).not.toContain('id="work-items"');
+    expect(r.body).not.toContain('id="crew-limit"');
+    expect(r.body).not.toContain('id="agent-tokens"');
+    expect(r.body).not.toContain('id="work-title"');
+    expect(r.body).toContain('workItems: 1, maxCrewmatesPerExplorer: 3, perAgentTokenEstimate: 4000');
+    expect(r.body).toContain("Bearing suggests ");
     expect(r.body).toContain("Estimated token use:");
-    expect(r.body).toContain("Token-cost warning:");
     expect(r.body).toContain("Token tradeoff:");
     expect(r.body).toContain("Coordination tradeoff:");
+    expect(r.body).toContain('id="change-repository" type="button" hidden');
+    expect(r.body).toContain('function toggleRepositoryChooser()');
+    expect(r.body).toContain('changeRepository.textContent = "Keep current"');
+    expect(r.body).toContain('classList.toggle("busy"');
+    expect(r.body).toContain('@keyframes panel-in');
+    expect(r.body).toContain('@keyframes compass-spin');
+    expect(r.body).not.toContain('id="workflow-select"');
+    expect(r.body).not.toContain('id="showcase"');
     expect(r.body).toContain('"approveExecutionMode"');
     expect(r.body).toContain('"overrideExecutionMode"');
     expect(r.body).toContain('"/commands"');
@@ -391,10 +401,21 @@ describe("POST /api/v1/repository", () => {
       headers: sessionHeaders(port, { cookie }),
       body: JSON.stringify({ path: root }),
     });
-    expect(resumed.status).toBe(409);
-    expect(JSON.parse(resumed.body)).toMatchObject({ status: "blocked", code: "repository_already_selected" });
+    expect(resumed.status).toBe(200);
+    expect(JSON.parse(resumed.body)).toMatchObject({ status: "resumed", repositoryPath: root });
     expect(resumed.body).not.toContain(cookie);
     expect(resumed.body).not.toContain(cap);
+
+    const nextRoot = await tempRepo();
+    const switched = await call(port, {
+      method: "POST",
+      path: "/api/v1/repository",
+      headers: sessionHeaders(port, { cookie }),
+      body: JSON.stringify({ path: nextRoot }),
+    });
+    expect(switched.status).toBe(200);
+    expect(JSON.parse(switched.body)).toMatchObject({ status: "initialized", repositoryPath: nextRoot });
+    expect(await readFile(join(nextRoot, ".bearing", "workspace.json"), "utf8")).toContain(nextRoot);
   });
 
   it("rejects malformed, oversized, and invalid repository requests before mutation", async () => {
