@@ -69,8 +69,8 @@ describe("AccessibleTimeline", () => {
   it("renders one semantic full-day surface with compact written non-color state", async () => {
     const user = userEvent.setup();
     render(<AccessibleTimeline projection={projection()} commandId={commandId} proposalRevision={0} />);
-    expect(screen.getByRole("main", { name: "Today" })).toBeTruthy();
-    expect(screen.getByRole("heading", { name: "Personal rhythm" })).toBeTruthy();
+    expect(screen.getByRole("region", { name: "Today" })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Day plan" })).toBeTruthy();
     expect(screen.getByRole("region", { name: "Full day rhythm timeline" }).getAttribute("data-day-start")).toBe("2026-07-23T05:00:00Z");
     expect(screen.getAllByTestId("ruler-time")).toHaveLength(24);
     expect(screen.getAllByText("Capacity unknown").length).toBeGreaterThan(0);

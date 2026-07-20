@@ -199,11 +199,11 @@ export function AccessibleTimeline({ projection, commandId, proposalRevision, dr
   };
 
   return (
-    <main aria-label="Today" className="today-surface min-h-screen max-w-full bg-[var(--surface)] text-[var(--ink)]">
+    <section aria-label="Today" className="today-surface max-w-full bg-[var(--surface)] text-[var(--ink)]">
       <header className="day-summary">
         <div>
           <p className="eyebrow">Today · <time dateTime={projection.date}>{projection.date}</time></p>
-          <h1>Personal rhythm</h1>
+          <h1>Day plan</h1>
           <p>{projection.visualization.summary}</p>
         </div>
         <div className="gate-status" data-gate-state={projection.focusGate.state}>
@@ -289,6 +289,6 @@ export function AccessibleTimeline({ projection, commandId, proposalRevision, dr
       </DndContext>
 
       <p className="sr-only" role="status" aria-label="Placement updates" aria-live="polite" aria-atomic="true">{announcement}</p>
-    </main>
+    </section>
   );
 }

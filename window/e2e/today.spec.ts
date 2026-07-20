@@ -8,8 +8,31 @@ test("renders the deterministic Today surface and supports safe native placement
 
   await page.setViewportSize({ width: 1440, height: 3000 });
   await page.goto("/");
-  await expect(page.getByRole("main", { name: "Today" })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Personal rhythm" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Make room for the work that matters." })).toBeVisible();
+  const landingAccessibility = await new AxeBuilder({ page }).analyze();
+  expect(landingAccessibility.violations).toEqual([]);
+  const dashboardLink = page.getByRole("link", { name: /Open your dashboard/ });
+  await expect(dashboardLink).toHaveAttribute("href", "/dashboard");
+  await dashboardLink.focus();
+  await page.keyboard.press("Enter");
+  await expect(page).toHaveURL(/\/dashboard$/);
+  await expect(page.getByRole("main", { name: "Pennyworth calendar" })).toBeVisible();
+  await expect(page.getByTestId("calendar-workspace")).toBeVisible();
+  const fixtureDate = page.getByRole("button", { name: /Select Thursday, July 23/ });
+  await expect(fixtureDate).toHaveAttribute("aria-pressed", "true");
+  const july22 = page.getByRole("button", { name: /Select Wednesday, July 22/ });
+  await july22.hover();
+  const dateTooltip = page.getByRole("tooltip");
+  await expect(dateTooltip).toBeVisible();
+  await expect(dateTooltip).toContainText("Wednesday, July 22");
+  await expect(dateTooltip).toContainText("Deep-work block");
+  await july22.click();
+  await expect(july22).toHaveAttribute("aria-pressed", "true");
+  await expect(fixtureDate).toHaveAttribute("aria-pressed", "false");
+  await expect(page.getByTestId("calendar-rundown").getByRole("heading", { name: "Wednesday, July 22" })).toBeVisible();
+  await page.getByTestId("native-scheduling-details").locator(":scope > summary").click();
+  await expect(page.getByRole("region", { name: "Today" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Day plan" })).toBeVisible();
   await expect(page.getByRole("region", { name: "Full day rhythm timeline" })).toHaveAttribute("data-day-start", "2026-07-23T05:00:00Z");
   await expect(page.getByTestId("ruler-time")).toHaveCount(24);
   await expect(page.locator(".gate-status strong")).toHaveText("Focus Gate is open");
@@ -64,7 +87,16 @@ test.describe("responsive and motion preferences", () => {
 
   test("reflows at 320px and simulated 200% zoom without page overflow", async ({ page }) => {
     await page.goto("/");
-    await expect(page.getByRole("main", { name: "Today" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Make room for the work that matters." })).toBeVisible();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
+    await page.setViewportSize({ width: 640, height: 800 });
+    await page.evaluate(() => { document.documentElement.style.zoom = "2"; });
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
+    await page.evaluate(() => { document.documentElement.style.zoom = "1"; });
+    await page.setViewportSize({ width: 320, height: 800 });
+    await page.goto("/dashboard");
+    await expect(page.getByRole("main", { name: "Pennyworth calendar" })).toBeVisible();
+    await expect(page.getByTestId("calendar-workspace")).toBeVisible();
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
     await page.setViewportSize({ width: 640, height: 800 });
     await page.evaluate(() => { document.documentElement.style.zoom = "2"; });
@@ -72,4 +104,24 @@ test.describe("responsive and motion preferences", () => {
     const transitionDuration = await page.getByTestId("today-shell").evaluate((element) => getComputedStyle(element).transitionDuration);
     expect(Number.parseFloat(transitionDuration)).toBeLessThanOrEqual(0.01);
   });
+});
+
+test("follows the system light and dark color scheme", async ({ page }) => {
+  await page.emulateMedia({ colorScheme: "dark" });
+  await page.goto("/dashboard");
+  const dark = await page.evaluate(() => ({
+    page: getComputedStyle(document.body).backgroundColor,
+    day: getComputedStyle(document.querySelector<HTMLElement>(".calendar-rundown")!).backgroundColor,
+  }));
+  expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
+
+  await page.emulateMedia({ colorScheme: "light" });
+  const light = await page.evaluate(() => ({
+    page: getComputedStyle(document.body).backgroundColor,
+    day: getComputedStyle(document.querySelector<HTMLElement>(".calendar-rundown")!).backgroundColor,
+  }));
+  expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
+
+  expect(dark.page).not.toBe(light.page);
+  expect(dark.day).not.toBe(light.day);
 });

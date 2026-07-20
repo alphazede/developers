@@ -141,8 +141,9 @@ describe("release boundary", () => {
   it("keeps the packed runtime file contract exact", async () => {
     const { inspectPackContract, packManifest, packedFileAllowlist } = await import(publicCheckPath.href);
     expect(packedFileAllowlist).toEqual([...packedFileAllowlist].sort());
-    expect(packedFileAllowlist).toHaveLength(129);
+    expect(packedFileAllowlist).toHaveLength(133);
     expect(packedFileAllowlist).toContain("e2e/egress-guard.ts");
+    expect(packedFileAllowlist).toContain("src/app/dashboard/page.tsx");
     expect(packedFileAllowlist.some((path: string) => path.startsWith(".local/"))).toBe(false);
     expect(packedFileAllowlist).not.toContain("DESIGN.md");
     expect(packManifest(new URL("../..", import.meta.url).pathname)).toEqual(packedFileAllowlist);

@@ -21,11 +21,13 @@ test("@judge completes the fixed synthetic story accessibly without egress or so
   page.on("console", (message) => { if (message.type() === "error") errors.push(message.text()); });
   page.on("pageerror", (error) => errors.push(error.message));
   const interactionStarted = performance.now();
-  await page.goto("/");
-  await expect(page.getByRole("main", { name: "Today" })).toBeVisible();
+  await page.goto("/dashboard");
+  await expect(page.getByRole("main", { name: "Pennyworth calendar" })).toBeVisible();
+  await expect(page.getByTestId("calendar-workspace")).toBeVisible();
   const initialInteractionMs = performance.now() - interactionStarted;
   expect(initialInteractionMs).toBeLessThan(2_000);
 
+  await page.getByTestId("native-scheduling-details").locator(":scope > summary").click();
   await expect(page.getByRole("region", { name: "Full day rhythm timeline" })).toBeVisible();
   await expect(page.getByTestId("ruler-time")).toHaveCount(24);
   await page.getByTestId("rhythm-evidence-disclosure").click();
@@ -77,9 +79,10 @@ test("@judge completes the fixed synthetic story accessibly without egress or so
   });
   expect(placementP95).toBeLessThan(50);
   await expect(page.getByRole("heading", { name: "Local preview" })).toBeVisible();
-  await expect(page.getByText(/Recommendation evidence · score/)).toBeVisible();
 
+  await page.getByTestId("native-sources-details").locator(":scope > summary").click();
   const sources = page.getByTestId("sources-privacy");
+  await expect(sources.getByText(/Recommendation evidence · score/)).toBeVisible();
   await expect(sources.getByText("Normalized payload seam for a separately configured Workspace add-on current-message grant")).toBeVisible();
   await expect(sources.getByText("This route does not validate a Google-issued grant; normal Gmail OAuth and broad Gmail scopes are disabled.")).toBeVisible();
   await expect(sources.getByText("Apple-compatible calendar file path; no Apple credentials requested.")).toBeVisible();

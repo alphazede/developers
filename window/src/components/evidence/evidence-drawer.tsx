@@ -47,7 +47,7 @@ export function EvidenceDrawer({ point, onAction }: EvidenceDrawerProps) {
     <details ref={detailsRef} onKeyDown={onKeyDown} className="mt-3 rounded-lg border border-[var(--line)] bg-[var(--panel)] p-2">
       <summary ref={summaryRef} className="cursor-pointer font-semibold">Review evidence for {point.timeLabel}</summary>
       <div className="grid gap-3 p-2" aria-label={`Evidence details for ${point.timeLabel}`}>
-        <p>Source: Personal Rhythm estimator</p>
+        <p>Source: Capacity history</p>
         <p>This capacity estimate is a transparent weighted heuristic, not a medical, causal, stress, or diagnostic judgment.</p>
         <dl className="grid gap-1">
           <div><dt className="font-semibold">Status</dt><dd>{point.statusLabel}</dd></div>

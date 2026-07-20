@@ -5,7 +5,8 @@ test("shows truthful source and privacy controls with confirm-before-change", as
   const errors: string[] = [];
   page.on("console", (message) => { if (message.type() === "error") errors.push(message.text()); });
   page.on("pageerror", (error) => errors.push(error.message));
-  await page.goto("/");
+  await page.goto("/dashboard");
+  await page.getByTestId("native-sources-details").locator(":scope > summary").click();
 
   const section = page.getByTestId("sources-privacy");
   await expect(section.getByRole("heading", { name: "Sources & privacy" })).toBeVisible();
@@ -33,7 +34,8 @@ test("shows truthful source and privacy controls with confirm-before-change", as
 test.describe("privacy responsive layout", () => {
   test.use({ viewport: { width: 320, height: 800 }, contextOptions: { reducedMotion: "reduce" } });
   test("reflows at 320px and simulated 200% zoom", async ({ page }) => {
-    await page.goto("/");
+    await page.goto("/dashboard");
+    await page.getByTestId("native-sources-details").locator(":scope > summary").click();
     await expect(page.getByTestId("sources-privacy")).toBeVisible();
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
     await page.setViewportSize({ width: 640, height: 800 });

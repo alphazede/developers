@@ -10,7 +10,8 @@ const captureErrors = (page: import("@playwright/test").Page) => {
 
 test("loads the optional chart after authoritative text and supports keyboard evidence review", async ({ page }) => {
   const errors = captureErrors(page);
-  await page.goto("/");
+  await page.goto("/dashboard");
+  await page.getByTestId("native-scheduling-details").locator(":scope > summary").click();
 
   const heading = page.getByRole("heading", { name: "Rhythm fingerprint" });
   const disclosure = page.getByText(/Exact capacity evidence and complete table/);
@@ -40,7 +41,8 @@ test("loads the optional chart after authoritative text and supports keyboard ev
 
 test("previews all evidence controls with keyboard focus and truthful live feedback", async ({ page }) => {
   const errors = captureErrors(page);
-  await page.goto("/");
+  await page.goto("/dashboard");
+  await page.getByTestId("native-scheduling-details").locator(":scope > summary").click();
   await page.getByText(/Exact capacity evidence and complete table/).click();
   await page.getByText(/Review evidence for/).first().click();
 
@@ -66,7 +68,8 @@ test.describe("JavaScript-disabled fallback", () => {
   test.use({ javaScriptEnabled: false });
   test("keeps the complete semantic fallback when JavaScript enhancement is disabled", async ({ page }) => {
     const errors = captureErrors(page);
-    await page.goto("/");
+    await page.goto("/dashboard");
+    await page.getByTestId("native-scheduling-details").locator(":scope > summary").click();
     await expect(page.getByRole("heading", { name: "Rhythm fingerprint" })).toBeVisible();
     const disclosure = page.getByText(/Exact capacity evidence and complete table/);
     await disclosure.click();
@@ -81,7 +84,8 @@ test.describe("reduced motion and narrow zoom", () => {
 
   test("preserves content without horizontal overflow at narrow width and 200% zoom", async ({ page }) => {
     const errors = captureErrors(page);
-    await page.goto("/");
+    await page.goto("/dashboard");
+    await page.getByTestId("native-scheduling-details").locator(":scope > summary").click();
     await expect(page.getByRole("heading", { name: "Rhythm fingerprint" })).toBeVisible();
     expect(await page.evaluate(() => matchMedia("(prefers-reduced-motion: reduce)").matches)).toBe(true);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);

@@ -13,6 +13,7 @@ export type RhythmChartProps = Readonly<{
 export function RhythmChart({ visualization, capacityPoints }: RhythmChartProps) {
   const host = useRef<HTMLDivElement>(null);
   const [status, setStatus] = useState<"loading" | "ready" | "failed">("loading");
+  const accessibleLabel = `Optional capacity chart. ${visualization.summary}`;
 
   useEffect(() => {
     let chart: { dispose: () => void; resize: () => void } | undefined;
@@ -26,7 +27,7 @@ export function RhythmChart({ visualization, capacityPoints }: RhythmChartProps)
       const reduced = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
       instance.setOption({
         animation: !reduced,
-        aria: { enabled: true, decal: { show: true }, description: visualization.summary },
+        aria: { enabled: true, decal: { show: true }, description: accessibleLabel },
         color: ["#3b82f6", "#10b981", "#8b5cf6", "#6b7280"],
         textStyle: { color: "#374151", fontFamily: "Inter, ui-sans-serif, system-ui, sans-serif" },
         grid: { containLabel: true, left: 8, right: 8, top: 42, bottom: 28, borderColor: "#e5e7eb" },
@@ -75,7 +76,7 @@ export function RhythmChart({ visualization, capacityPoints }: RhythmChartProps)
         chart.dispose();
       }
     };
-  }, [capacityPoints, visualization]);
+  }, [accessibleLabel, capacityPoints, visualization]);
 
   return (
     <div className="rhythm-chart mt-4 min-w-0 max-w-full overflow-hidden" data-visualization-title={visualization.title}>
@@ -85,7 +86,7 @@ export function RhythmChart({ visualization, capacityPoints }: RhythmChartProps)
       <div
         ref={host}
         role="img"
-        aria-label={`Optional capacity chart. ${visualization.summary}`}
+        aria-label={accessibleLabel}
         className={`min-w-0 max-w-full overflow-hidden${status === "loading" ? " animate-pulse motion-reduce:animate-none" : ""}`}
         data-chart-status={status}
         style={{ width: "100%", height: "18rem", minWidth: 0, maxWidth: "100%", overflow: "hidden" }}

@@ -23,7 +23,7 @@ describe("EvidenceDrawer", () => {
     await user.click(summary);
     const details = summary.closest("details") as HTMLDetailsElement;
     expect(details.open).toBe(true);
-    expect(screen.getByText("Source: Personal Rhythm estimator")).toBeTruthy();
+    expect(screen.getByText("Source: Capacity history")).toBeTruthy();
     expect(screen.getByText(/transparent weighted heuristic/i).textContent).toMatch(/not a medical, causal, stress, or diagnostic judgment/i);
 
     const confirm = screen.getByRole("button", { name: "Preview confirm evidence" });

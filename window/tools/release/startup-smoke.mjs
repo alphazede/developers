@@ -33,11 +33,11 @@ try {
   for (let attempt = 0; attempt < 50; attempt += 1) {
     if (child.exitCode !== null) throw new Error(output || "startup process exited");
     try {
-      const response = await fetch(`http://127.0.0.1:${port}/`);
+      const response = await fetch(`http://127.0.0.1:${port}/dashboard`);
       const body = await response.text();
-      if (response.ok && body.includes("Personal rhythm")) {
+      if (response.ok && body.includes("Pennyworth")) {
         if (output.includes(sentinel)) throw new Error("startup emitted a sentinel");
-        console.log(`startup no-network receipt: loopback http://127.0.0.1:${port}/`);
+        console.log(`startup no-network receipt: loopback http://127.0.0.1:${port}/dashboard`);
         break;
       }
     } catch { /* server is still starting */ }

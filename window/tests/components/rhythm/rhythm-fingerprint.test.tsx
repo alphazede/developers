@@ -67,7 +67,9 @@ describe("RhythmFingerprint", () => {
     expect(screen.getByRole("table", { name: "Rhythm evidence table" }).textContent).toContain("Known capacity 70 of 100");
 
     await waitFor(() => expect(screen.getByRole("status", { name: "Optional chart status" }).textContent).toContain("ready"));
-    const option = chart.setOption.mock.calls[0]![0] as { series: Array<{ name: string; data: Array<[string, number | null]> }> };
+    const option = chart.setOption.mock.calls[0]![0] as { aria: { description: string }; series: Array<{ name: string; data: Array<[string, number | null]> }> };
+    expect(option.aria.description).toBe(`Optional capacity chart. ${visualization.summary}`);
+    expect(screen.getByRole("img", { name: `Optional capacity chart. ${visualization.summary}` })).toBeTruthy();
     expect(option.series[0]!.name).toBe(visualization.series[0]!.label);
     expect(option.series[0]!.data).toEqual(visualization.series[0]!.points.map(({ x, y }) => [x, y]));
     expect(option.series.some(({ name }) => name === "Confidence band (%)")).toBe(true);

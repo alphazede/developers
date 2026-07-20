@@ -58,8 +58,8 @@ try {
   for (let attempt = 0; attempt < 1_200; attempt += 1) {
     if (server.exitCode !== null) throw new Error("judge server exited before readiness");
     try {
-      const response = await fetch(`http://127.0.0.1:${port}/`);
-      if (response.ok && (await response.text()).includes("Personal rhythm")) break;
+      const response = await fetch(`http://127.0.0.1:${port}/dashboard`);
+      if (response.ok && (await response.text()).includes("Pennyworth")) break;
     } catch { /* production server is still starting */ }
     if (attempt === 1_199) throw new Error("judge server did not become ready");
     await new Promise((resolveWait) => setTimeout(resolveWait, 100));
