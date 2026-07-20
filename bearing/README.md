@@ -45,10 +45,13 @@ The main browser flow uses the selected, readiness-verified harness; it is not a
 1. **Set Bearings** starts the plan and returns validated plan artifacts.
 2. **Gather Supplies** asks one adaptive owner question at a time until the selected agent can proceed.
 3. **Map the Route** produces the design, SEIT, and self-contained review baseline, then Bearing drafts `implementation.md`.
-4. The owner chooses **Explorer** or **Expedition** plus Surveyor review cadence. Explorer uses fewer sessions; Expedition enables bounded subagents for parallel lanes.
-5. The selected harness executes the approved route. Bearing then invokes native review where supported, with a read-only Surveyor fallback, and presents cumulative validated artifacts. Generated HTML evidence opens through contained, authenticated links.
+4. **Review your route** verifies each slice's role, selected model route, and reasoning level. The regenerated review HTML embeds the complete planning package; every source artifact also opens through a contained authenticated link. The owner can request changes or approve the route, and implementation cannot start before approval.
+5. The owner chooses **Explorer** or **Expedition** plus Surveyor review cadence. Explorer uses fewer sessions; Expedition enables bounded subagents for parallel lanes.
+6. The selected harness executes the approved route. Bearing then invokes native review where supported, with a read-only Surveyor fallback, and presents cumulative validated artifacts.
 
 While a real agent call is pending, Bearing shows the stable public phase name, an indeterminate moving trail, honest helper text, elapsed time, and only artifacts already validated by completed results. It does not invent percentages, activity details, or an ETA. Failures remain retryable and do not become success claims.
+
+Execution can pause when the selected agent reaches a blocker or needs owner authorization. Bearing preserves the journey and reports what stopped, why, a recommended next step, and the decision it needs. Phone notifications and remote approval are not part of this MVP; a future authenticated notification hook could alert an owner and deep-link back to the saved blocker.
 
 ## Explorer and Expedition
 
@@ -100,7 +103,7 @@ Each demo exposes decision stops, expected artifacts, outcome classes, Survey/Re
 
 Bearing stores a workspace manifest plus per-run hash-linked JSONL ledgers and snapshots beneath the selected repository's `.bearing/` directory. Choosing the same repository on a later launch resumes it. The ledger is authoritative; a missing or stale snapshot can be rebuilt from valid events. Corrupt, truncated, future-schema, sequence-invalid, or hash-invalid state blocks writable resume instead of being silently reset.
 
-The real journey presents contained authenticated links for validated generated HTML artifacts; showcase reports remain self-contained HTML fixtures. There is not yet an in-app full-state export or delete control. To preserve all local state, stop Bearing and copy the repository's `.bearing/` directory to an owner-controlled backup. To retire it recoverably, stop Bearing, make that backup, and rename `.bearing/` to a repository-specific quarantine name; permanent deletion remains an explicit repository-owner action. Provider credentials are never part of `.bearing/`.
+The real journey presents contained authenticated links for validated planning Markdown and generated HTML artifacts; showcase reports remain self-contained HTML fixtures. There is not yet an in-app full-state export or delete control. To preserve all local state, stop Bearing and copy the repository's `.bearing/` directory to an owner-controlled backup. To retire it recoverably, stop Bearing, make that backup, and rename `.bearing/` to a repository-specific quarantine name; permanent deletion remains an explicit repository-owner action. Provider credentials are never part of `.bearing/`.
 
 ## Evaluation
 

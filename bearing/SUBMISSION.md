@@ -32,17 +32,18 @@ Use one real recorded journey. Honest time-compression may remove waiting, but c
 | 0:00-0:20 | State the Work & Productivity problem and show `node dist/cli.js start` opening the local browser. |
 | 0:20-0:40 | Choose the real target repository, verify one shared route/model/reasoning selection, and show the substantial-token warning. |
 | 0:40-1:05 | Enter the real request and Embark; show the honest moving Set Bearings loading state and one adaptive owner question. |
-| 1:05-1:30 | Answer it; show validated Set Bearings/Map Route artifacts and automatic `implementation.md` drafting. |
-| 1:30-2:05 | Compare the large Explorer/Expedition cards, choose review cadence, and start the selected execution path. |
-| 2:05-2:35 | Show real execution completing, native review or Surveyor fallback, and cumulative validated artifact links including generated HTML evidence. |
-| 2:35-2:58 | Distinguish the provider-disabled tutorial/showcases from the real run; close on local authority, token guidance, the optional owner budget, and pending submission evidence. |
+| 1:05-1:35 | Answer it; open **Review your route**, show the complete self-contained HTML plus separately clickable planning sources, slice roles/model/reasoning, and the request-changes/approval stop. |
+| 1:35-2:05 | Approve the route, compare the large Explorer/Expedition cards, choose review cadence, and start the selected execution path. |
+| 2:05-2:38 | Show real execution, a persisted blocker or authorization pause with its recommended next step, then native review or Surveyor fallback and validated evidence links. |
+| 2:38-2:58 | Close on the honest boundary: today Bearing saves blockers in the control room; a future authenticated notification hook could send a phone alert and scoped approval request. Mention Hermes only as a candidate integration, not an MVP capability. |
 
 ## Local evidence
 
 | Evidence | Current local result |
 |---|---|
 | `pnpm typecheck` | PASS. |
-| `pnpm test` | PASS: 25 files, 254 tests. |
+| `pnpm test` | PASS: 25 files, 267 tests. |
+| `pnpm test:integration` | PASS: 5 files, 57 tests. |
 | `pnpm build` | PASS. |
 | `npm pack --dry-run --json` | PASS: 57 files, limited to allowlisted content plus npm-required `package.json`; no TypeScript source, tests, private plans, transcripts, secrets, or unintended generated files observed. |
 | `pnpm eval:native` | PASS: 336 synthetic cells created and cleaned; machinery validation only, not provider evidence. |

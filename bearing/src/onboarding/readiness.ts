@@ -14,6 +14,7 @@ export const REASONING_LEVELS = ["low", "medium", "high", "xhigh"] as const;
 
 export interface RouteInspectionPort {
   executableAvailable(executable: string): boolean;
+  currentSelection?(route: RouteDescriptor): { readonly model: string; readonly reasoning: string };
 }
 
 export interface VerificationPort {
@@ -36,6 +37,7 @@ export interface RouteInspection {
   readonly model: string;
   readonly detected: boolean;
   readonly capabilities: readonly string[];
+  readonly reasoning: string;
 }
 
 export type ReadinessResult =
@@ -89,13 +91,17 @@ export class ReadinessService {
   ) {}
 
   inspect(): readonly RouteInspection[] {
-    return BUILTIN_ROUTES.slice(0, 16).map((route) => ({
-      id: route.id,
-      provider: route.provider,
-      model: route.model,
-      detected: this.inspection.executableAvailable(route.executable),
-      capabilities: route.capabilities.slice(0, 16),
-    }));
+    return BUILTIN_ROUTES.slice(0, 16).map((route) => {
+      const current = this.inspection.currentSelection?.(route);
+      return {
+        id: route.id,
+        provider: route.provider,
+        model: current?.model ?? route.model,
+        reasoning: current && (REASONING_LEVELS as readonly string[]).includes(current.reasoning) ? current.reasoning : "medium",
+        detected: this.inspection.executableAvailable(route.executable),
+        capabilities: route.capabilities.slice(0, 16),
+      };
+    });
   }
 
   async check(selection: Selection, repositoryPath = process.cwd()): Promise<ReadinessResult> {

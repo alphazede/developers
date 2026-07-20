@@ -15,7 +15,7 @@ const repositoryPath = "/tmp/bearing-repository";
 
 describe("provider-neutral adapters", () => {
   it("has the exact static routes and inspects without process initialization", () => {
-    expect(BUILTIN_ROUTES.map(({ id, provider, model, executable }) => [id, provider, model, executable])).toEqual([["codex", "codex", "*", "codex"], ["grok-safe", "grok", "grok-build", "grok-safe"], ["pi-zai-glm-5.2", "pi", "zai/glm-5.2", "pi"], ["pi-deepseek-deepseek-v4-pro", "pi", "deepseek/deepseek-v4-pro", "pi"]]);
+    expect(BUILTIN_ROUTES.map(({ id, provider, model, executable }) => [id, provider, model, executable])).toEqual([["codex", "codex", "*", "codex"], ["claude", "claude", "*", "claude"], ["grok-safe", "grok", "grok-build", "grok-safe"], ["pi", "pi", "*", "pi"]]);
     const runner = new SyntheticRunner(); expect(adapter(runner).inspect().available).toBe(true); expect(runner.calls).toEqual([]);
     expect(createAgentAdapter({ provider: "codex", model: "gpt-5.6-sol", reasoning: "medium" }, runner)).toBeDefined();
     expect(createAgentAdapter({ provider: "unknown", model: "nope", reasoning: "medium" }, runner)).toBeUndefined();
@@ -75,14 +75,9 @@ describe("provider-neutral adapters", () => {
     expect((await adapter().execute({ runId: "c", repositoryPath, role: role({ isolation: "off" }), task: { prompt: "x" } })).isolation).toBe("off");
   });
 
-  it("requires explicit enabled compatible fallback and retains requested identity", async () => {
+  it("keeps configured routes fail-closed without silent model fallback", async () => {
     const unavailable = new SyntheticRunner(new Set<string>());
-    expect(await adapter(unavailable).execute({ runId: "x", repositoryPath, role: role(), task: { prompt: "x" }, fallbackRoute: "pi-deepseek-deepseek-v4-pro" })).toMatchObject({ status: "blocked", failure: "unavailable", requestedRoute: "pi-zai-glm-5.2", effectiveRoute: "pi-zai-glm-5.2" });
-    const withFallback = role({ fallbackEnabled: true });
-    const runner = Object.assign(new SyntheticRunner(new Set(["pi"])), { verify: async (route: { model: string }) => route.model !== "zai/glm-5.2" });
-    const receipt = await adapter(runner).execute({ runId: "y", repositoryPath, role: withFallback, task: { prompt: "x" }, fallbackRoute: "pi-deepseek-deepseek-v4-pro" });
-    expect(receipt).toMatchObject({ status: "completed", requestedRoute: "pi-zai-glm-5.2", effectiveRoute: "pi-deepseek-deepseek-v4-pro" });
-    expect(runner.calls[0]?.args).toContain("deepseek/deepseek-v4-pro");
+    expect(await adapter(unavailable).execute({ runId: "x", repositoryPath, role: role(), task: { prompt: "x" } })).toMatchObject({ status: "blocked", failure: "unavailable", requestedRoute: "pi", effectiveRoute: "pi" });
     const failedVerification = Object.assign(new SyntheticRunner(), { verify: async () => false });
     expect(await adapter(failedVerification).execute({ runId: "verify", repositoryPath, role: role(), task: { prompt: "x" } })).toMatchObject({ status: "completed" });
     expect(await adapter(new SyntheticRunner()).verify()).toMatchObject({ ok: false, failure: "verification_failed" });

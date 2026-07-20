@@ -126,6 +126,12 @@ describe("durability boundaries", () => {
 });
 
 describe("restart and serialization", () => {
+  it("lists durable work requests for local session history", async () => {
+    const dir = await root();
+    await acceptedCreate(dir);
+    expect(await store(dir).list()).toEqual([expect.objectContaining({ runId: RUN, title: "Title", goal: "Goal", updatedAt: "2026-07-19T12:00:00.000Z" })]);
+  });
+
   it("restores idempotency, conflicts, and pending decisions", async () => {
     const dir = await root();
     const first = store(dir);

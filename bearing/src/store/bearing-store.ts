@@ -1,5 +1,6 @@
 import { createHash, randomUUID } from "node:crypto";
-import { mkdir, open, readFile, rename } from "node:fs/promises";
+import type { Dirent } from "node:fs";
+import { mkdir, open, readFile, readdir, rename, stat } from "node:fs/promises";
 import { join, resolve } from "node:path";
 
 import {
@@ -69,6 +70,16 @@ export interface SnapshotWarning {
   readonly boundary: FaultBoundary;
 }
 
+export interface StoredRunSummary {
+  readonly runId: string;
+  readonly title: string;
+  readonly goal: string;
+  readonly updatedAt: string;
+  readonly pendingQuestion?: string;
+  readonly checkpointAnswer?: string;
+  readonly checkpoint?: NonNullable<RunState["journeyCheckpoint"]>;
+}
+
 export type StoreApplyResult =
   | {
       readonly ok: true;
@@ -90,6 +101,7 @@ interface SnapshotBody {
   readonly workRequestCreated: boolean;
   readonly executionRecommendation: RunState["executionRecommendation"];
   readonly executionApproval: RunState["executionApproval"];
+  readonly journeyCheckpoint?: RunState["journeyCheckpoint"];
 }
 
 interface Snapshot extends SnapshotBody {
@@ -124,6 +136,25 @@ export class BearingStore {
       return { ok: false, reason, state: initialRunState("") };
     }
     return await this.serialized(parsed.value.runId, () => this.applyUnlocked(parsed.value));
+  }
+
+  async list(limit = 20): Promise<readonly StoredRunSummary[]> {
+    let entries: Dirent[];
+    try { entries = await readdir(this.runsRoot, { withFileTypes: true }); }
+    catch (error) { if (isMissing(error)) return []; throw error; }
+    const candidates = await Promise.all(entries.filter((entry) => entry.isDirectory() && RUN_ID_RE.test(entry.name)).map(async (entry) => {
+      try { return { entry, modified: (await stat(join(this.runsRoot, entry.name, "events.jsonl"))).mtimeMs }; }
+      catch { return { entry, modified: -1 }; }
+    }));
+    candidates.sort((a, b) => b.modified - a.modified || a.entry.name.localeCompare(b.entry.name));
+    const summaries = await Promise.all(candidates.slice(0, 100).map(async ({ entry }) => {
+      const state = await this.load(entry.name);
+      const created = state.events.find((event) => event.type === "workRequestCreated");
+      if (!created || typeof created.payload.title !== "string" || typeof created.payload.goal !== "string") return undefined;
+      const answered = state.journeyCheckpoint?.questionDecisionId === undefined ? undefined : [...state.events].reverse().find((event) => event.type === "ownerAnswered" && event.payload.decisionId === state.journeyCheckpoint?.questionDecisionId && typeof event.payload.answer === "string");
+      return { runId: entry.name, title: created.payload.title, goal: created.payload.goal, updatedAt: state.events.at(-1)?.recordedAt ?? created.recordedAt, ...(state.pendingDecision ? { pendingQuestion: state.pendingDecision.question } : {}), ...(answered ? { checkpointAnswer: answered.payload.answer as string } : {}), ...(state.journeyCheckpoint ? { checkpoint: state.journeyCheckpoint } : {}) } satisfies StoredRunSummary;
+    }));
+    return summaries.filter((entry): entry is StoredRunSummary => entry !== undefined).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)).slice(0, Math.max(0, Math.min(limit, 50)));
   }
 
   private async applyUnlocked(command: CommandEnvelopeV1): Promise<StoreApplyResult> {
@@ -385,6 +416,7 @@ function snapshotBody(state: RunState): SnapshotBody {
     workRequestCreated: state.workRequestCreated,
     executionRecommendation: state.executionRecommendation,
     executionApproval: state.executionApproval,
+    ...(state.journeyCheckpoint ? { journeyCheckpoint: state.journeyCheckpoint } : {}),
   };
 }
 
@@ -401,6 +433,7 @@ function validSnapshotShape(value: Snapshot): boolean {
     typeof value.workRequestCreated === "boolean" &&
     (value.executionRecommendation === null || isObject(value.executionRecommendation)) &&
     (value.executionApproval === null || isObject(value.executionApproval)) &&
+    (value.journeyCheckpoint === undefined || value.journeyCheckpoint === null || isObject(value.journeyCheckpoint)) &&
     (value.pendingDecision === null ||
       (isObject(value.pendingDecision) && typeof value.pendingDecision.decisionId === "string" &&
         typeof value.pendingDecision.question === "string")) &&

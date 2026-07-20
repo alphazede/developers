@@ -34,7 +34,41 @@ function completed(text: string, tokens = 5): ProcessResult {
   return { exitCode: 0, events: [{ type: "item.completed", data: { content: text } }], usage: { tokens } };
 }
 
+async function writePlanningPackage(root: string, directory = "docs/plans/import"): Promise<void> {
+  const plan = "# Plan\n", design = "# Design\n", seit = "# SEIT\n";
+  const implementation = "# Implementation\n\n## Phase 1 — Build\n\n### Slice 1.1 — Import\n\n**Implementation role.** Backend Engineer\n\n**Agent model route.** Codex agent default\n\n**Agent reasoning level.** medium\n\n**Ponytail mode.** full\n\n**Review path.** native review\n\n**Required lint/static-analysis.** pnpm test\n";
+  const escape = (value: string) => value.trim().replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;");
+  await mkdir(join(root, directory), { recursive: true });
+  await Promise.all([["plan-spec.md", plan], ["design.md", design], ["seit.md", seit], ["implementation.md", implementation], ["review.html", `<html><body>${[plan, design, seit, implementation].map((value) => `<pre>${escape(value)}</pre>`).join("")}</body></html>`]].map(([name, content]) => writeFile(join(root, directory, name), content)));
+}
+
 describe("JourneyService", () => {
+  it("latches cancellation before asynchronous validation and permits a later retry", async () => {
+    const input = await request();
+    const runner = new StubRunner(completed('BEARING_RESULT {"kind":"question","question":"Continue?"}'));
+    const service = new JourneyService(runner);
+    const pending = service.execute(input);
+    service.cancel(input.runId);
+    expect(await pending).toEqual({ status: "failure", code: "cancelled", tokens: 0 });
+    expect(runner.calls).toHaveLength(0);
+    expect((await service.execute(input)).status).toBe("question");
+  });
+
+  it("honors cancellation latched while the runner is returning", async () => {
+    const input = await request();
+    let service!: JourneyService;
+    const runner: ProcessRunner = {
+      executableAvailable: () => true,
+      run: async () => {
+        await service.cancel(input.runId);
+        return completed('BEARING_RESULT {"kind":"question","question":"Continue?"}');
+      },
+      cancel: async () => undefined,
+    };
+    service = new JourneyService(runner);
+    expect(await service.execute(input)).toEqual({ status: "failure", code: "cancelled", tokens: 5 });
+  });
+
   it("returns one owner question and builds the skill-specific bounded prompt", async () => {
     const runner = new StubRunner(completed('Working notes\nBEARING_RESULT {"kind":"question","question":"Should duplicate emails be skipped or rejected?"}', 149_937));
     const result = await new JourneyService(runner).execute(await request());
@@ -96,11 +130,19 @@ describe("JourneyService", () => {
 
   it("returns a completed action only for contained existing artifacts", async () => {
     const input = await request({ stage: "draft-implementation", planDirectory: "docs/plans/import" });
-    await mkdir(join(input.repositoryPath, "docs/plans/import"), { recursive: true });
-    await writeFile(join(input.repositoryPath, "docs/plans/import/implementation.md"), "# Plan\n");
-    const runner = new StubRunner(completed('BEARING_RESULT {"kind":"action","summary":"Implementation plan drafted.","artifacts":["docs/plans/import/implementation.md"]}', 11));
-    expect(await new JourneyService(runner).execute(input)).toEqual({ status: "action", summary: "Implementation plan drafted.", artifacts: ["docs/plans/import/implementation.md"], tokens: 11 });
+    await writePlanningPackage(input.repositoryPath);
+    const runner = new StubRunner(completed('BEARING_RESULT {"kind":"action","summary":"Implementation plan drafted.","artifacts":["docs/plans/import/implementation.md","docs/plans/import/review.html"]}', 11));
+    expect(await new JourneyService(runner).execute(input)).toEqual({ status: "action", summary: "Implementation plan drafted.", artifacts: ["docs/plans/import/implementation.md", "docs/plans/import/review.html"], tokens: 11, planningReview: { phases: 1, slices: 1, assignments: [{ slice: "Slice 1.1 — Import", role: "Backend Engineer", model: "Codex agent default", reasoning: "medium" }] } });
     expect(runner.calls[0].stdin).toContain("docs/plans/import");
+    expect(runner.calls[0].stdin).toMatch(/Regenerate the existing review HTML.*implementation\.md/);
+  });
+
+  it("rejects an implementation package that omits assignments or the complete embedded sources", async () => {
+    const input = await request({ stage: "draft-implementation", planDirectory: "docs/plans/import" });
+    await writePlanningPackage(input.repositoryPath);
+    await writeFile(join(input.repositoryPath, "docs/plans/import/implementation.md"), "# Implementation\n\n### Slice 1.1 — Missing staff\n");
+    const runner = new StubRunner(completed('BEARING_RESULT {"kind":"action","summary":"Drafted.","artifacts":["docs/plans/import/implementation.md","docs/plans/import/review.html"]}', 12));
+    expect(await new JourneyService(runner).execute(input)).toEqual({ status: "failure", code: "artifact_invalid", tokens: 12 });
   });
 
   it("requires each planning action to prove its stage artifacts", async () => {

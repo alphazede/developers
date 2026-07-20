@@ -1,5 +1,8 @@
 import { EventEmitter } from "node:events";
 import { PassThrough } from "node:stream";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import type { ChildProcessWithoutNullStreams } from "node:child_process";
 import { describe, expect, it, vi } from "vitest";
 import { NodeProcessRunner } from "../src/adapters/process-runner.js";
@@ -49,11 +52,13 @@ describe("production process runner", () => {
     const grok = await execute({ provider: "grok", model: "grok-build", reasoning: "medium" });
     expect(grok.calls[0].executable).toBe("grok-safe");
     expect(grok.calls[0].args).toEqual(["--", "--output-format", "streaming-json", "--prompt-file", "/dev/stdin", "--cwd", repositoryPath, "--model", "grok-build", "--reasoning-effort", "medium", "--max-turns", "2", "--tools", "read,write", "--disallowed-tools", "external-action", "--sandbox", "strict", "--permission-mode", "dontAsk", "--no-memory", "--no-subagents", "--disable-web-search"]);
+    const claude = await execute({ provider: "claude", model: "sonnet", reasoning: "high" });
+    expect(claude.calls[0]).toMatchObject({ executable: "claude", args: ["--print", "--output-format", "stream-json", "--verbose", "--model", "sonnet", "--effort", "high", "--permission-mode", "dontAsk", "--allowedTools", "Read,Edit,Write", "--no-session-persistence"], stdin: "private source password=hunter2" });
     const pi = await execute({ provider: "pi", model: "zai/glm-5.2", reasoning: "medium" }, {}, { noSession: true });
     expect(pi.calls[0]).toMatchObject({ executable: "pi", args: ["--mode", "json", "--print", "--model", "zai/glm-5.2", "--thinking", "medium", "--tools", "read,write", "--exclude-tools", "external-action", "--no-session", "--offline"] });
     const piV4 = await execute({ provider: "pi", model: "deepseek/deepseek-v4-pro", reasoning: "high" });
     expect(piV4.calls[0].args).toContain("deepseek/deepseek-v4-pro");
-    for (const result of [codex, grok, pi, piV4]) {
+    for (const result of [codex, grok, claude, pi, piV4]) {
       expect(result.calls[0].args.join(" ")).not.toMatch(/hunter2|private source/);
       expect(JSON.stringify(result.receipt)).not.toMatch(/hunter2|private source/);
     }
@@ -78,6 +83,14 @@ describe("production process runner", () => {
     expect(invalidReasoning.receipt).toMatchObject({ status: "blocked", failure: "unsupported_policy" });
   });
 
+  it("honors Claude tool narrowing and lets Pi use its configured default model", async () => {
+    const claude = await execute({ provider: "claude", model: "sonnet", reasoning: "medium" }, {}, { tools: ["read"] });
+    expect(claude.calls[0].args).toEqual(expect.arrayContaining(["--allowedTools", "Read"]));
+    expect(claude.calls[0].args.join(",")).not.toMatch(/Edit|Write|Glob|Grep/);
+    const pi = await execute({ provider: "pi", model: "*", reasoning: "medium" });
+    expect(pi.calls[0].args).not.toContain("--model");
+  });
+
   it("inspects passively and parses JSON and JSONL without retaining stderr", async () => {
     let inspected = 0;
     const h = harness('{"type":"message","data":"ok"}\n{"event":"complete","usage":{"input_tokens":2,"output_tokens":3}}\n');
@@ -87,6 +100,20 @@ describe("production process runner", () => {
     expect(h.calls).toHaveLength(0);
     const result = await h.runner.run({ routeId: "codex", executable: "codex", args: [], stdin: "x", cwd: repositoryPath, timeoutMs: 50, runId: "jsonl" });
     expect(result).toMatchObject({ exitCode: 0, usage: { tokens: 5 }, events: [{ type: "message", data: { content: "ok" } }, { type: "complete" }] });
+  });
+
+  it("reads Pi's selected model from its configured agent directory", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "bearing-pi-config-"));
+    const previous = process.env.PI_CODING_AGENT_DIR;
+    try {
+      await writeFile(join(directory, "settings.json"), JSON.stringify({ defaultProvider: "zai", defaultModel: "glm-5.2", defaultThinkingLevel: "high" }));
+      process.env.PI_CODING_AGENT_DIR = directory;
+      const runner = new NodeProcessRunner(undefined, () => true);
+      expect(runner.currentSelection({ id: "pi", provider: "pi", model: "*", executable: "pi", capabilities: [], compatibleFallbacks: [] })).toEqual({ model: "zai/glm-5.2", reasoning: "high" });
+    } finally {
+      if (previous === undefined) delete process.env.PI_CODING_AGENT_DIR; else process.env.PI_CODING_AGENT_DIR = previous;
+      await rm(directory, { recursive: true, force: true });
+    }
   });
 
   it("retains bounded response text and redacts secret patterns", async () => {

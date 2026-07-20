@@ -1,7 +1,8 @@
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
-import { accessSync, constants, realpathSync, statSync } from "node:fs";
+import { accessSync, constants, readFileSync, realpathSync, statSync } from "node:fs";
+import { homedir } from "node:os";
 import { delimiter, isAbsolute, join, relative } from "node:path";
-import type { ProcessInvocation, ProcessResult, ProcessRunner } from "./adapters.js";
+import type { ProcessInvocation, ProcessResult, ProcessRunner, RouteDescriptor } from "./adapters.js";
 
 const MAX_STDOUT = 1024 * 1024;
 const MAX_STDERR = 64 * 1024;
@@ -92,7 +93,7 @@ function normalize(stdout: string): { events: readonly unknown[]; usage: { token
     const type = typeof record.type === "string" ? record.type : typeof record.event === "string" ? record.event : "message";
     const item = typeof record.item === "object" && record.item !== null && !Array.isArray(record.item) ? record.item as Record<string, unknown> : undefined;
     const agentMessage = type === "item.completed" && item?.type === "agent_message" && typeof item.text === "string" ? item.text : undefined;
-    const data = agentMessage ?? record.data ?? record.message ?? record.text ?? record.content ?? record.status;
+    const data = agentMessage ?? record.data ?? record.message ?? record.text ?? record.content ?? record.result ?? record.status;
     return { type, ...(data === undefined ? {} : { data: typeof data === "object" && data !== null && !Array.isArray(data) ? safe(data) : { content: safe(data) } }) };
   });
   return tokens === undefined ? undefined : { events, usage: { tokens } };
@@ -110,6 +111,27 @@ export class NodeProcessRunner implements ProcessRunner {
   constructor(private readonly spawnProcess: SpawnPort = spawn, private readonly inspectExecutable: (executable: string) => boolean = available, private readonly resolveExecutable: ResolvePort = resolveSpawn) {}
 
   executableAvailable(executable: string): boolean { return this.inspectExecutable(executable); }
+
+  currentSelection(route: RouteDescriptor): { model: string; reasoning: string } {
+    try {
+      if (route.provider === "codex") {
+        const head = readFileSync(join(homedir(), ".codex", "config.toml"), "utf8").split(/^\[/m, 1)[0] ?? "";
+        return { model: tomlString(head, "model") ?? "*", reasoning: tomlString(head, "model_reasoning_effort") ?? "medium" };
+      }
+      if (route.provider === "claude") {
+        const settings = jsonObject(join(homedir(), ".claude", "settings.json"));
+        return { model: text(settings.model) ?? "*", reasoning: text(settings.effortLevel) ?? "medium" };
+      }
+      if (route.provider === "pi") {
+        const configured = text(process.env.PI_CODING_AGENT_DIR);
+        const settingsRoot = configured && isAbsolute(configured) ? configured : join(homedir(), ".pi", "agent");
+        const settings = jsonObject(join(settingsRoot, "settings.json"));
+        const provider = text(settings.defaultProvider), model = text(settings.defaultModel);
+        return { model: provider && model ? `${provider}/${model}` : "*", reasoning: text(settings.defaultThinkingLevel) ?? "medium" };
+      }
+    } catch { /* use the route default */ }
+    return { model: route.model, reasoning: "medium" };
+  }
 
   cancel(runId: string): void {
     if (this.cancelled.has(runId)) return;
@@ -171,3 +193,7 @@ export class NodeProcessRunner implements ProcessRunner {
     });
   }
 }
+
+function text(value: unknown): string | undefined { return typeof value === "string" && value.length > 0 && value.length <= 256 ? value : undefined; }
+function jsonObject(path: string): Record<string, unknown> { const value = JSON.parse(readFileSync(path, "utf8")) as unknown; return typeof value === "object" && value !== null && !Array.isArray(value) ? value as Record<string, unknown> : {}; }
+function tomlString(source: string, key: string): string | undefined { const match = new RegExp(`^${key}\\s*=\\s*"([^"]{1,256})"\\s*$`, "m").exec(source); return match ? match[1] : undefined; }

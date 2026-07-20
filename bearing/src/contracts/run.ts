@@ -55,6 +55,21 @@ export interface OverrideExecutionModePayload {
   readonly selectedMode: "explorer" | "expedition";
 }
 
+export interface RecordJourneyCheckpointPayload {
+  readonly stage: "set-bearings" | "gather-supplies" | "map-route" | "draft-implementation" | "execute-explorer" | "execute-expedition" | "review";
+  readonly status: "running" | "waiting" | "stopped" | "failed" | "complete";
+  readonly artifacts: readonly string[];
+  readonly planDirectory?: string;
+  readonly question?: string;
+  readonly questionDecisionId?: string;
+  readonly reviewBaselineRevision?: number;
+  readonly lastResultJson?: string;
+  readonly qaJson?: string;
+  readonly selectionProvider?: string;
+  readonly selectionModel?: string;
+  readonly selectionReasoning?: string;
+}
+
 // --- Command envelope (discriminated by `type`) ----------------------------
 
 interface CommandEnvelopeBase {
@@ -96,19 +111,25 @@ export interface OverrideExecutionModeCommand extends CommandEnvelopeBase {
   readonly payload: OverrideExecutionModePayload;
 }
 
+export interface RecordJourneyCheckpointCommand extends CommandEnvelopeBase {
+  readonly type: "recordJourneyCheckpoint";
+  readonly payload: RecordJourneyCheckpointPayload;
+}
+
 export type CommandEnvelopeV1 =
   | CreateWorkRequestCommand
   | RequireDecisionCommand
   | RecordOwnerAnswerCommand
   | RecommendExecutionModeCommand
   | ApproveExecutionModeCommand
-  | OverrideExecutionModeCommand;
+  | OverrideExecutionModeCommand
+  | RecordJourneyCheckpointCommand;
 
 export type CommandType = CommandEnvelopeV1["type"];
 
 // --- Event envelope ---------------------------------------------------------
 
-export type EventType = "workRequestCreated" | "decisionRequired" | "ownerAnswered" | "executionModeRecommended" | "executionModeApproved" | "executionModeOverridden";
+export type EventType = "workRequestCreated" | "decisionRequired" | "ownerAnswered" | "executionModeRecommended" | "executionModeApproved" | "executionModeOverridden" | "journeyCheckpointRecorded";
 
 export interface EventEnvelopeV1 {
   readonly schemaVersion: typeof EVENT_SCHEMA_VERSION;
@@ -214,6 +235,9 @@ export function parseCommandEnvelope(v: unknown): ParseResult<CommandEnvelopeV1>
     case "overrideExecutionMode":
       if (!isOverrideExecutionModePayload(v.payload)) return { ok: false, reason: "malformed" };
       break;
+    case "recordJourneyCheckpoint":
+      if (!isRecordJourneyCheckpointPayload(v.payload)) return { ok: false, reason: "malformed" };
+      break;
     default:
       return { ok: false, reason: "malformed" };
   }
@@ -256,6 +280,18 @@ function isApproveExecutionModePayload(v: unknown): v is ApproveExecutionModePay
 
 function isOverrideExecutionModePayload(v: unknown): v is OverrideExecutionModePayload {
   return hasExactKeys(v, ["recommendationEventId", "selectedMode"]) && isId(v.recommendationEventId) && (v.selectedMode === "explorer" || v.selectedMode === "expedition");
+}
+
+function isRecordJourneyCheckpointPayload(v: unknown): v is RecordJourneyCheckpointPayload {
+  if (!isObject(v) || !["stage", "status", "artifacts"].every((key) => key in v) || Object.keys(v).some((key) => !["stage", "status", "artifacts", "planDirectory", "question", "questionDecisionId", "reviewBaselineRevision", "lastResultJson", "qaJson", "selectionProvider", "selectionModel", "selectionReasoning"].includes(key))) return false;
+  const stages = ["set-bearings", "gather-supplies", "map-route", "draft-implementation", "execute-explorer", "execute-expedition", "review"];
+  const statuses = ["running", "waiting", "stopped", "failed", "complete"];
+  const selectionValues = [v.selectionProvider, v.selectionModel, v.selectionReasoning];
+  const selectionValid = selectionValues.every((value) => value === undefined) || selectionValues.every((value) => isNonEmptyString(value, 256));
+  return stages.includes(v.stage as string) && statuses.includes(v.status as string) && Array.isArray(v.artifacts) && v.artifacts.length <= 256 && v.artifacts.every((path) => isNonEmptyString(path)) &&
+    (v.planDirectory === undefined || isNonEmptyString(v.planDirectory)) && (v.question === undefined || isNonEmptyString(v.question)) && (v.questionDecisionId === undefined || (isId(v.questionDecisionId) && v.question !== undefined)) &&
+    (v.reviewBaselineRevision === undefined || isNonNegativeInt(v.reviewBaselineRevision)) && (v.lastResultJson === undefined || isNonEmptyString(v.lastResultJson, 65_536)) &&
+    (v.qaJson === undefined || isNonEmptyString(v.qaJson, 65_536)) && selectionValid;
 }
 
 function hasExactKeys(v: unknown, keys: readonly string[]): v is Record<string, unknown> {
@@ -306,6 +342,9 @@ export function parseEventEnvelope(v: unknown): ParseResult<EventEnvelopeV1> {
       break;
     case "executionModeOverridden":
       if (!isExecutionModeApprovalPayload(v.payload, true)) return { ok: false, reason: "malformed" };
+      break;
+    case "journeyCheckpointRecorded":
+      if (!isRecordJourneyCheckpointPayload(v.payload)) return { ok: false, reason: "malformed" };
       break;
     default:
       return { ok: false, reason: "malformed" };

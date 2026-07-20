@@ -10,6 +10,7 @@ import {
   type CommandEnvelopeV1,
   type EventEnvelopeV1,
   type EventType,
+  type RecordJourneyCheckpointPayload,
   hashCommand,
   hashEvent,
 } from "../contracts/run.js";
@@ -79,6 +80,7 @@ export interface RunState {
   readonly workRequestCreated: boolean;
   readonly executionRecommendation: (ModeRecommendation & { readonly eventId: string }) | null;
   readonly executionApproval: { readonly eventId: string; readonly kind: DurableOwnerEvidence["kind"]; readonly selectedMode: "explorer" | "expedition" } | null;
+  readonly journeyCheckpoint: (RecordJourneyCheckpointPayload & { readonly eventId: string }) | null;
 }
 
 /** Injected pure suppliers so the reducer stays deterministic and side-effect free. */
@@ -129,6 +131,7 @@ export function initialRunState(runId: string): RunState {
     workRequestCreated: false,
     executionRecommendation: null,
     executionApproval: null,
+    journeyCheckpoint: null,
   });
 }
 
@@ -150,6 +153,7 @@ function applyEvent(state: RunState, event: EventEnvelopeV1): RunState {
   let workRequestCreated = state.workRequestCreated;
   let executionRecommendation = state.executionRecommendation;
   let executionApproval = state.executionApproval;
+  let journeyCheckpoint = state.journeyCheckpoint;
   switch (event.type) {
     case "workRequestCreated":
       workRequestCreated = true;
@@ -170,6 +174,12 @@ function applyEvent(state: RunState, event: EventEnvelopeV1): RunState {
     case "executionModeOverridden":
       executionApproval = { eventId: event.eventId, kind: event.type === "executionModeApproved" ? "owner-approval" : "owner-override", selectedMode: event.payload.selectedMode as "explorer" | "expedition" };
       break;
+    case "journeyCheckpointRecorded":
+      journeyCheckpoint = { ...event.payload as unknown as RecordJourneyCheckpointPayload, eventId: event.eventId };
+      if (typeof event.payload.question === "string" && typeof event.payload.questionDecisionId === "string") {
+        pendingDecision = { decisionId: event.payload.questionDecisionId, question: event.payload.question };
+      }
+      break;
   }
 
   return issueRunState({
@@ -181,6 +191,7 @@ function applyEvent(state: RunState, event: EventEnvelopeV1): RunState {
     workRequestCreated,
     executionRecommendation,
     executionApproval,
+    journeyCheckpoint,
   });
 }
 
@@ -228,6 +239,10 @@ function validateReplayEvent(state: RunState, event: EventEnvelopeV1): void {
       if (event.payload.recommendationEventId !== state.executionRecommendation.eventId) throw new ReplayError("execution approval has a mismatched recommendation");
       if (event.type === "executionModeApproved" && (event.payload.selectedMode !== state.executionRecommendation.selectedMode || event.payload.overridden !== false)) throw new ReplayError("approval does not select recommended mode");
       if (event.type === "executionModeOverridden" && (event.payload.selectedMode === state.executionRecommendation.selectedMode || event.payload.overridden !== true)) throw new ReplayError("override does not select alternate mode");
+      return;
+    case "journeyCheckpointRecorded":
+      if (!state.workRequestCreated || event.actor !== "bearing") throw new ReplayError("invalid journey checkpoint during replay");
+      if (event.payload.questionDecisionId !== undefined && (state.pendingDecision !== null || typeof event.payload.question !== "string")) throw new ReplayError("invalid journey question checkpoint during replay");
       return;
   }
 }
@@ -302,6 +317,9 @@ export function decide(
       if (command.payload.recommendationEventId !== state.executionRecommendation.eventId) return fail(state, "recommendation_mismatch");
       if (command.payload.selectedMode === state.executionRecommendation.recommendedMode) return fail(state, "illegal_transition");
       return succeed(state, command, contentHash, deps, "executionModeOverridden", { recommendationEventId: command.payload.recommendationEventId, selectedMode: command.payload.selectedMode, overridden: true });
+    case "recordJourneyCheckpoint":
+      if (!state.workRequestCreated || command.session.actor !== "bearing") return fail(state, "illegal_transition");
+      return succeed(state, command, contentHash, deps, "journeyCheckpointRecorded", cmdPayload(command));
   }
 }
 

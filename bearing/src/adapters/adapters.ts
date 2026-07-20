@@ -17,9 +17,9 @@ export interface RouteDescriptor {
 /** Exact built-ins; only these routes can be selected without a custom registry. */
 export const BUILTIN_ROUTES: readonly RouteDescriptor[] = [
   { id: "codex", provider: "codex", model: "*", executable: "codex", capabilities: ["structured-events"], compatibleFallbacks: [] },
+  { id: "claude", provider: "claude", model: "*", executable: "claude", capabilities: ["structured-events"], compatibleFallbacks: [] },
   { id: "grok-safe", provider: "grok", model: "grok-build", executable: "grok-safe", capabilities: ["structured-events"], compatibleFallbacks: [] },
-  { id: "pi-zai-glm-5.2", provider: "pi", model: "zai/glm-5.2", executable: "pi", capabilities: ["structured-events"], compatibleFallbacks: ["pi-deepseek-deepseek-v4-pro"] },
-  { id: "pi-deepseek-deepseek-v4-pro", provider: "pi", model: "deepseek/deepseek-v4-pro", executable: "pi", capabilities: ["structured-events"], compatibleFallbacks: ["pi-zai-glm-5.2"] },
+  { id: "pi", provider: "pi", model: "*", executable: "pi", capabilities: ["structured-events"], compatibleFallbacks: [] },
 ];
 
 export interface IsolationAttestation { readonly isolated: boolean; readonly evidence: string; }
@@ -169,9 +169,18 @@ function buildInvocation(route: RouteDescriptor, selection: Selection, request: 
     const args = [...(request.allowSubagents === true ? ["--allow-subagents"] : []), "--", "--output-format", "streaming-json", "--prompt-file", "/dev/stdin", "--cwd", request.repositoryPath, "--model", selection.model, "--reasoning-effort", selection.reasoning, "--max-turns", String(role.limits.maxTurns), "--tools", role.toolAllow.join(","), "--disallowed-tools", role.toolDeny.join(","), "--sandbox", "strict", "--permission-mode", "dontAsk", "--no-memory", ...(request.allowSubagents === true ? [] : ["--no-subagents"]), ...(!role.authority.network ? ["--disable-web-search"] : [])];
     return { ok: true, value: { ...common, args }, warnings: [] };
   }
+  if (route.provider === "claude") {
+    if (role.sessionId !== null || role.authority.network || role.authority.externalAction) return { ok: false, warnings: ["claude_policy_unsupported"] };
+    const modelArgs = selection.model === "*" ? [] : ["--model", selection.model];
+    const requestedTools = new Set(role.toolAllow.map((tool) => tool.toLowerCase()));
+    if ([...requestedTools].some((tool) => !["read", "search", "edit", "write"].includes(tool))) return { ok: false, warnings: ["claude_tool_policy_unsupported"] };
+    const allowedTools = [requestedTools.has("read") ? "Read" : "", ...(requestedTools.has("search") ? ["Glob", "Grep"] : []), ...(requestedTools.has("edit") || requestedTools.has("write") ? ["Edit"] : []), requestedTools.has("write") ? "Write" : ""].filter(Boolean).join(",");
+    return { ok: true, value: { ...common, args: ["--print", "--output-format", "stream-json", "--verbose", ...modelArgs, "--effort", selection.reasoning, "--permission-mode", "dontAsk", "--allowedTools", allowedTools, "--no-session-persistence"] }, warnings: [] };
+  }
   if (route.provider === "pi") {
     if (role.sessionId !== null) return { ok: false, warnings: ["pi_session_policy_unsupported"] };
-    const args = ["--mode", "json", "--print", "--model", selection.model, "--thinking", selection.reasoning, "--tools", role.toolAllow.join(","), "--exclude-tools", role.toolDeny.join(","), "--no-session", ...(!role.authority.network ? ["--offline"] : [])];
+    const modelArgs = selection.model === "*" ? [] : ["--model", selection.model];
+    const args = ["--mode", "json", "--print", ...modelArgs, "--thinking", selection.reasoning, "--tools", role.toolAllow.join(","), "--exclude-tools", role.toolDeny.join(","), "--no-session", ...(!role.authority.network ? ["--offline"] : [])];
     return { ok: true, value: { ...common, args }, warnings: [] };
   }
   return { ok: false, warnings: ["route_unsupported"] };
