@@ -33,8 +33,9 @@ coverage:
     - docs/okf/tags.md
   canonical_docs:
     - AGENTS.md
-  legacy_docs:
     - README.md
+    - bran/README.md
+  legacy_docs:
     - az-sports-dev/AGENTS.md
     - az-sports-dev/CLAUDE.md
     - az-sports-dev/README.md

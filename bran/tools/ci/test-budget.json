@@ -1,0 +1,273 @@
+{
+  "schema_version": 1,
+  "plan_ceiling": 25,
+  "phase_ceilings": {
+    "1": 6,
+    "2": 6,
+    "3": 7,
+    "4": 2,
+    "5": 4,
+    "6": 0
+  },
+  "slice_ceilings": {
+    "1.1": 3,
+    "1.2": 3,
+    "2.1": 2,
+    "2.2": 2,
+    "2.3": 2,
+    "3.1": 2,
+    "3.2": 2,
+    "3.3": 1,
+    "3.4": 2,
+    "4.1": 1,
+    "4.2": 1,
+    "5.1": 1,
+    "5.2": 1,
+    "5.3": 0,
+    "5.4": 2,
+    "6.1": 0
+  },
+  "journeys": [
+    {
+      "stable_id": "P1-CLI",
+      "phase": 1,
+      "slice": "1.1",
+      "runner": "rust",
+      "name": "p1_cli",
+      "category": "unit",
+      "classification": "new",
+      "source": "crates/bran-cli/src/main.rs",
+      "support_fixtures": []
+    },
+    {
+      "stable_id": "P1-RELEASE",
+      "phase": 1,
+      "slice": "1.1",
+      "runner": "python",
+      "name": "tools/ci/release_contract_check.py",
+      "category": "contract",
+      "classification": "new",
+      "source": "tools/ci/release_contract_check.py",
+      "support_fixtures": [
+        "fixtures/release/valid-exact-release-manifest.json"
+      ]
+    },
+    {
+      "stable_id": "P1-PUBLIC-BOUNDARY",
+      "phase": 1,
+      "slice": "1.1",
+      "runner": "python",
+      "name": "tools/ci/public_boundary_check.py",
+      "category": "security",
+      "classification": "new",
+      "source": "tools/ci/public_boundary_check.py",
+      "support_fixtures": [
+        "fixtures/public-boundary/public-safe/neutral-product-text.txt",
+        "fixtures/public-boundary/rejected/synthetic-canaries.txt"
+      ]
+    },
+    {
+      "stable_id": "P1-BUNDLE",
+      "phase": 1,
+      "slice": "1.2",
+      "runner": "rust",
+      "name": "p1_bundle",
+      "category": "unit",
+      "classification": "new",
+      "source": "crates/bran-core/src/bundle.rs",
+      "support_fixtures": []
+    },
+    {
+      "stable_id": "P1-PROFILES",
+      "phase": 1,
+      "slice": "1.2",
+      "runner": "rust",
+      "name": "p1_profiles",
+      "category": "contract",
+      "classification": "new",
+      "source": "crates/bran-core/src/profile.rs",
+      "support_fixtures": []
+    },
+    {
+      "stable_id": "P1-CONFORMANCE",
+      "phase": 1,
+      "slice": "1.2",
+      "runner": "rust",
+      "name": "p1_conformance",
+      "category": "conformance",
+      "classification": "new",
+      "source": "crates/bran-core/src/profile.rs",
+      "support_fixtures": [
+        "fixtures/conformance/strict-gap-strict-selected.fixture"
+      ]
+    },
+    {
+      "stable_id": "P2-METADATA",
+      "phase": 2,
+      "slice": "2.1",
+      "runner": "rust",
+      "name": "p2_metadata",
+      "category": "unit",
+      "classification": "new",
+      "source": "crates/bran-core/src/metadata/mod.rs",
+      "support_fixtures": [
+        "fixtures/source-metadata/metadata-report-v1.json"
+      ]
+    },
+    {
+      "stable_id": "P2-SCANNER",
+      "phase": 2,
+      "slice": "2.1",
+      "runner": "rust",
+      "name": "p2_scanner",
+      "category": "unit",
+      "classification": "new",
+      "source": "crates/bran-core/src/scan/mod.rs",
+      "support_fixtures": [
+        "fixtures/scanner/scan-snapshot-v1.json"
+      ]
+    },
+    {
+      "stable_id": "P2-GRAPH",
+      "phase": 2,
+      "slice": "2.2",
+      "runner": "rust",
+      "name": "p2_graph",
+      "category": "unit",
+      "classification": "new",
+      "source": "crates/bran-core/src/graph/mod.rs",
+      "support_fixtures": [
+        "fixtures/graph/knowledge-graph-v1.json"
+      ]
+    },
+    {
+      "stable_id": "P2-QUERIES",
+      "phase": 2,
+      "slice": "2.2",
+      "runner": "rust",
+      "name": "p2_queries",
+      "category": "unit",
+      "classification": "new",
+      "source": "crates/bran-core/src/graph/mod.rs",
+      "support_fixtures": [
+        "fixtures/queries/query-result-v1.json"
+      ]
+    },
+    {
+      "stable_id": "P2-PACKET-SQZ",
+      "phase": 2,
+      "slice": "2.3",
+      "runner": "rust",
+      "name": "p2_packet_sqz",
+      "category": "integration",
+      "classification": "new",
+      "source": "crates/bran-core/src/packet/mod.rs",
+      "support_fixtures": [
+        "fixtures/packets/context-packet-sqz-v1.json"
+      ]
+    },
+    {
+      "stable_id": "P2-VIEW",
+      "phase": 2,
+      "slice": "2.3",
+      "runner": "rust",
+      "name": "p2_view",
+      "category": "unit",
+      "classification": "new",
+      "source": "crates/bran-core/src/view/mod.rs",
+      "support_fixtures": [
+        "fixtures/views/compiled-view-v1.json"
+      ]
+    },
+    {
+      "stable_id": "P3-CLI-MAINTAINER",
+      "phase": 3,
+      "slice": "3.1",
+      "runner": "rust",
+      "name": "p3_cli_maintainer",
+      "category": "unit",
+      "classification": "new",
+      "source": "crates/bran-core/src/repair/mod.rs",
+      "support_fixtures": []
+    },
+    {
+      "stable_id": "P3-HEADLESS-CLI",
+      "phase" : 3,
+      "slice": "3.1",
+      "runner": "rust",
+      "name": "p3_headless_cli",
+      "category": "unit",
+      "classification": "new",
+      "source": "crates/bran-cli/src/main.rs",
+      "support_fixtures": []
+    },
+    {
+      "stable_id": "P3-TUI-ONBOARDING-DIAGNOSTICS",
+      "phase": 3,
+      "slice": "3.2",
+      "runner": "rust",
+      "name": "p3_tui_onboarding_diagnostics",
+      "category": "integration",
+      "classification": "new",
+      "source": "crates/bran-tui/src/lib.rs",
+      "support_fixtures": []
+    },
+    {
+      "stable_id": "P3-TUI-SURFACE",
+      "phase": 3,
+      "slice": "3.2",
+      "runner": "rust",
+      "name": "p3_tui_surface",
+      "category": "integration",
+      "classification": "new",
+      "source": "crates/bran-tui/src/lib.rs",
+      "support_fixtures": []
+    },
+    {
+      "stable_id": "P3-OBSIDIAN-EXPORT",
+      "phase": 3,
+      "slice": "3.3",
+      "runner": "rust",
+      "name": "p3_obsidian_export",
+      "category": "unit",
+      "classification": "new",
+      "source": "crates/bran-core/src/export/mod.rs",
+      "support_fixtures": [
+        "fixtures/obsidian/p3-body.txt"
+      ]
+    },
+    {
+      "stable_id": "P3-AGENT-PROFILE",
+      "phase": 3,
+      "slice": "3.4",
+      "runner": "rust",
+      "name": "p3_agent_profile_contract",
+      "category": "contract",
+      "classification": "new",
+      "source": "crates/bran-core/src/agent/mod.rs",
+      "support_fixtures": []
+    },
+    {
+      "stable_id": "P3-AGENT-RUNTIME",
+      "phase": 3,
+      "slice": "3.4",
+      "runner": "rust",
+      "name": "p3_agent_runtime",
+      "category": "integration",
+      "classification": "new",
+      "source": "crates/bran-core/src/agent/coordinator.rs",
+      "support_fixtures": []
+    },
+    {
+      "stable_id": "P4-SEALED-RELEASE",
+      "phase": 4,
+      "slice": "4.2",
+      "runner": "python",
+      "name": "test_p4_sealed_release",
+      "category": "contract",
+      "classification": "new",
+      "source": "tools/ci/release_seal.py",
+      "support_fixtures": []
+    }
+  ]
+}
