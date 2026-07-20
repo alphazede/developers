@@ -247,19 +247,44 @@ describe("GET / native page and fragment secrecy", () => {
     expect(r.body).toContain('value="" selected disabled>Choose reasoning');
     expect(r.body).not.toContain('<option selected>medium</option>');
     expect(r.body).toContain("detectedRoutes.textContent");
+    expect(r.body).toContain('<span class="step">02 / LAUNCH</span>');
+    expect(r.body).toContain('<button class="primary">Launch</button>');
+    expect(r.body).toContain('setStatus("Launching Bearing...", true)');
     expect(r.body).toContain('id="work-form" hidden');
     expect(r.body).toContain('<h2>What are we working on?</h2>');
+    expect(r.body).toContain('id="work-back" type="button">\u2190 Back</button>');
+    expect(r.body).toContain('class="primary">Embark</button>');
+    expect(r.body).toContain('workBack.addEventListener("click"');
+    expect(r.body).toContain('.compact-back{min-height:32px');
     expect(r.body).toContain('id="work-goal" required maxlength="4096"');
     expect(r.body).not.toContain('id="run-id"');
     expect(r.body).not.toContain('id="work-items"');
     expect(r.body).not.toContain('id="crew-limit"');
     expect(r.body).not.toContain('id="agent-tokens"');
     expect(r.body).not.toContain('id="work-title"');
-    expect(r.body).toContain('workItems: 1, maxCrewmatesPerExplorer: 3, perAgentTokenEstimate: 4000');
-    expect(r.body).toContain("Bearing suggests ");
-    expect(r.body).toContain("Estimated token use:");
-    expect(r.body).toContain("Token tradeoff:");
-    expect(r.body).toContain("Coordination tradeoff:");
+    expect(r.body).not.toContain('workItems: 1, maxCrewmatesPerExplorer: 3, perAgentTokenEstimate: 4000');
+    expect(r.body).toContain('id="planning-panel" hidden');
+    expect(r.body).toContain("You choose Explorer or Expedition after implementation.md is ready.");
+    expect(r.body).toContain("No execution mode was selected and no agent work was launched.");
+    expect(r.body).toContain('Bearing <button class="demo-link" id="view-demo" type="button" hidden>Live demo</button>');
+    expect(r.body).toContain('class="actions actions-end"><button class="primary">Launch</button>');
+    expect(r.body).toContain("Would you like a live demo of the complete workflow?");
+    expect(r.body).toContain('id="planning-demo" type="button">Start live demo</button>');
+    expect(r.body).toContain('id="demo-panel" hidden');
+    expect(r.body).toContain("How Bearing works");
+    expect(r.body).toContain("NO TOKENS");
+    expect(r.body).toContain('id="demo-explorer" type="button" aria-pressed="false"');
+    expect(r.body).toContain('src="/assets/bearing-explorer-card.png"');
+    expect(r.body).toContain('id="demo-expedition" type="button" aria-pressed="false"');
+    expect(r.body).toContain('src="/assets/bearing-expedition-card.png"');
+    expect(r.body).toContain("<b>Use when:</b>");
+    expect(r.body).toContain("<b>Pros:</b>");
+    expect(r.body).toContain("<b>Tradeoff:</b>");
+    expect(r.body).toContain(".mode-grid{display:grid");
+    expect(r.body).toContain("function chooseDemoMode(mode)");
+    expect(r.body).not.toContain('"recommendExecutionMode"');
+    expect(r.body).not.toContain('"approveExecutionMode"');
+    expect(r.body).not.toContain('"overrideExecutionMode"');
     expect(r.body).toContain('id="change-repository" type="button" hidden');
     expect(r.body).toContain('function toggleRepositoryChooser()');
     expect(r.body).toContain('changeRepository.textContent = "Keep current"');
@@ -268,8 +293,6 @@ describe("GET / native page and fragment secrecy", () => {
     expect(r.body).toContain('@keyframes compass-spin');
     expect(r.body).not.toContain('id="workflow-select"');
     expect(r.body).not.toContain('id="showcase"');
-    expect(r.body).toContain('"approveExecutionMode"');
-    expect(r.body).toContain('"overrideExecutionMode"');
     expect(r.body).toContain('"/commands"');
     expect(r.body).not.toContain('/launch');
     expect(r.body).not.toContain(cap);
@@ -289,6 +312,14 @@ describe("GET / native page and fragment secrecy", () => {
     expect(Number(background.headers["content-length"])).toBeGreaterThan(2_000_000);
     expect(background.headers["cache-control"]).toBe("no-cache");
     expect(background.headers["x-content-type-options"]).toBe("nosniff");
+    for (const path of ["/assets/bearing-explorer-card.png", "/assets/bearing-expedition-card.png"]) {
+      const card = await call(port, { method: "GET", path });
+      expect(card.status).toBe(200);
+      expect(card.headers["content-type"]).toBe("image/png");
+      expect(Number(card.headers["content-length"])).toBeGreaterThan(1_000_000);
+      expect(card.headers["cache-control"]).toBe("no-cache");
+      expect(card.headers["x-content-type-options"]).toBe("nosniff");
+    }
   });
 
   it("returns 404 for unknown routes under a valid Host", async () => {
