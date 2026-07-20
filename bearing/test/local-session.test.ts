@@ -291,8 +291,8 @@ describe("GET / native page and fragment secrecy", () => {
     expect(r.body).toContain("<b>Pros:</b>");
     expect(r.body).toContain("<b>Tradeoff:</b>");
     expect(r.body).toContain(".mode-grid{display:grid");
-    expect(r.body).toContain(".demo-panel{background:rgba(15,16,17,.68)");
-    expect(r.body).toContain("backdrop-filter:blur(10px)");
+    expect(r.body).toContain(".demo-panel{background:rgba(15,16,17,.35)");
+    expect(r.body).toContain("backdrop-filter:blur(6px)");
     expect(r.body).toContain("function chooseDemoMode(mode)");
     expect(r.body).toContain('if (demoStage === 2 && !demoMode) { chooseDemoMode("explorer")');
     expect(r.body).toContain("Explorer highlighted as the lower-token example. In a real run, you choose Explorer or Expedition.");
