@@ -6,6 +6,7 @@ import type { ProcessInvocation, ProcessResult, ProcessRunner, RouteDescriptor, 
 
 const MAX_STDOUT = 1024 * 1024;
 const MAX_STDERR = 64 * 1024;
+const MAX_EVENT_TEXT = 512 * 1024;
 
 type SpawnPort = (executable: string, args: readonly string[], options: {
   readonly cwd: string;
@@ -71,7 +72,7 @@ const SECRET = /(?:\b(?:api[_ -]?key|secret|token|password|authorization)\s*[=:]
 const EVENT_DATA_KEYS = new Set(["id", "name", "message", "text", "content", "status", "summary", "detail", "result", "tool"]);
 function safe(value: unknown, depth = 0): unknown {
   if (depth > 4) return "[truncated]";
-  if (typeof value === "string") return value.replace(SECRET, "[redacted]").slice(0, 16_384);
+  if (typeof value === "string") return value.replace(SECRET, "[redacted]").slice(0, MAX_EVENT_TEXT);
   if (Array.isArray(value)) return value.slice(0, 64).map((entry) => safe(entry, depth + 1));
   if (typeof value !== "object" || value === null) return value;
   return Object.fromEntries(Object.entries(value).slice(0, 64).flatMap(([key, entry]) => EVENT_DATA_KEYS.has(key) && !/key|secret|token|credential|authorization|password/i.test(key) ? [[key, safe(entry, depth + 1)]] : []));

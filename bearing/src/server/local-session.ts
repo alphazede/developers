@@ -27,7 +27,7 @@ const MAX_OWNER_BODY = 512;
 const MAX_JOURNEY_BODY = 16 * 1024;
 const MAX_CONTROL_BODY = 8 * 1024;
 const MAX_JOURNEYS = 16;
-const MAX_QA_JSON_BYTES = 60 * 1024;
+const MAX_QA_JSON_BYTES = 640 * 1024;
 const MAX_JOURNEY_ARTIFACT = 2 * 1024 * 1024;
 const PLAN_REVIEW_QUESTION = "Approve the complete planning package before implementation?";
 const PLAN_REVIEW_APPROVAL = "Approved for execution-mode selection";
@@ -183,6 +183,7 @@ const NATIVE_HTML =
   '  var historyList = document.getElementById("history-list");\n' +
   '  var planningAnswerForm = document.getElementById("planning-answer-form");\n' +
   '  var planningAnswer = document.getElementById("planning-answer");\n' +
+  '  var planningSubmit = planningAnswerForm.querySelector("button[type=submit]");\n' +
   '  var demoPanel = document.getElementById("demo-panel");\n' +
   '  var viewDemo = document.getElementById("view-demo");\n' +
   '  var changeRepository = document.getElementById("change-repository");\n' +
@@ -197,7 +198,7 @@ const NATIVE_HTML =
   '  var rememberedGreeting = "";\n' +
   '  var onboardingReady = false;\n' +
   '  var returnPanel = null;\n' +
-  '  var currentGoal = ""; var currentStage = "set-bearings"; var journeyMode = ""; var elapsedTimer = null; var statusTimer = null; var elapsedStarted = 0; var historyReturnPanel = null;\n' +
+  '  var currentGoal = ""; var currentStage = "set-bearings"; var journeyMode = ""; var pendingQuestionCount = 0; var elapsedTimer = null; var statusTimer = null; var elapsedStarted = 0; var historyReturnPanel = null;\n' +
   '  function setStatus(message, busy) { status.textContent = message; status.classList.toggle("busy", !!busy); }\n' +
   '  function fail(msg) { setStatus("Session could not start: " + msg, false); }\n' +
   '  function requestError(label, r) { throw new Error(label + " (" + r.status + "). Refresh the run state and try again."); }\n' +
@@ -214,9 +215,9 @@ const NATIVE_HTML =
   '  function renderArtifacts(body) { renderArtifactList(document.getElementById("artifact-checklist"), body); }\n' +
   '  function recordPlanReview(answer) { var question = "Approve the complete planning package before implementation?"; return readRun(currentRunId).then(function (state) { if (state.pendingDecision && state.pendingDecision.question !== question) throw new Error("Resolve the current owner decision before reviewing the route."); var save = state.pendingDecision ? Promise.resolve(state) : postCommand(currentRunId, state, "requireDecision", { decisionId: "plan-review-" + crypto.randomUUID(), question: question, consequential: true }).then(function () { return readRun(currentRunId); }); return save; }).then(function (state) { if (!state.pendingDecision || state.pendingDecision.question !== question) throw new Error("Planning approval could not be recorded."); return postCommand(currentRunId, state, "recordOwnerAnswer", { decisionId: state.pendingDecision.decisionId, answer: answer }); }); }\n' +
   '  function renderPlanReview(body) { var review = body.planningReview; if (!review) { renderFailure({ code: "artifact_invalid" }); return; } planningPanel.hidden = true; planReviewPanel.hidden = false; document.getElementById("plan-review-summary").textContent = body.summary; document.getElementById("review-phase-count").textContent = String(review.phases); document.getElementById("review-slice-count").textContent = String(review.slices); document.getElementById("review-route").textContent = selectedRoute ? (selectedRoute.model === "*" ? selectedRoute.provider + " default" : selectedRoute.model) + " / " + selectedRoute.reasoning : "Selected route"; renderArtifactList(document.getElementById("review-artifacts"), body); var target = document.getElementById("review-assignments"); target.replaceChildren(); review.assignments.forEach(function (assignment) { var row = document.createElement("tr"); [assignment.slice, assignment.role, assignment.model, assignment.reasoning].forEach(function (value) { var cell = document.createElement("td"); cell.textContent = value; row.appendChild(cell); }); target.appendChild(row); }); document.getElementById("review-change").value = ""; setStatus("Review every artifact, request changes, or approve the route.", false); }\n' +
-  '  function renderFailure(body) { hideWait(); planningAnswerForm.hidden = true; document.getElementById("journey-action").hidden = true; document.getElementById("mode-choice").hidden = true; document.getElementById("journey-complete").hidden = false; document.getElementById("completion-summary").textContent = body.code === "cancelled" ? "You stopped " + phaseNames[currentStage] + ". Any Git changes remain visible and the phase can be retried." : body.code === "interrupted" ? "Bearing stopped while " + phaseNames[currentStage] + " was running. Inspect the Git changes before deciding whether to retry the saved phase." : body.code === "token_budget" ? "This run reached its token budget before the phase completed. Retry after lowering reasoning with /model or raise the CLI budget." : "The agent could not complete " + phaseNames[currentStage] + ": " + (body.code || "request_failed") + ". No success was recorded."; document.getElementById("completion-artifacts").replaceChildren(); document.getElementById("journey-retry").hidden = false; document.getElementById("new-journey").hidden = true; setStatus(body.code === "cancelled" ? "Journey stopped by owner." : body.code === "interrupted" ? "Journey interrupted. Inspect changes before retrying." : "Journey blocked. Retry is available.", false); }\n' +
-  '  function renderJourney(body) { hideWait(); renderArtifacts(body); document.getElementById("journey-phase").textContent = phaseNames[currentStage].toUpperCase(); document.getElementById("journey-heading").textContent = phaseNames[currentStage]; document.getElementById("journey-summary").textContent = body.status === "action" ? body.summary : "The selected agent needs an owner answer before it can continue."; document.getElementById("journey-complete").hidden = true; document.getElementById("mode-choice").hidden = true; document.getElementById("journey-action").hidden = true; if (body.status === "failure") { renderFailure(body); return; } if (body.status === "question") { document.getElementById("journey-question-box").hidden = false; document.getElementById("planning-question").textContent = body.question; planningAnswerForm.hidden = false; planningAnswer.value = ""; planningAnswer.focus(); setStatus(phaseNames[currentStage] + " needs your answer.", false); return; } document.getElementById("journey-question-box").hidden = true; planningAnswerForm.hidden = true; if (currentStage === "map-route") { invokeJourney("draft-implementation"); return; } if (currentStage === "draft-implementation") { renderPlanReview(body); return; } if (currentStage === "execute-explorer" || currentStage === "execute-expedition") { invokeJourney("review"); return; } if (currentStage === "review") { document.getElementById("journey-complete").hidden = false; document.getElementById("completion-summary").textContent = body.summary; renderArtifactList(document.getElementById("completion-artifacts"), body); document.getElementById("journey-retry").hidden = true; document.getElementById("new-journey").hidden = false; setStatus("Journey complete. Review the validated evidence.", false); return; } var next = document.getElementById("journey-next"); next.textContent = currentStage === "set-bearings" ? "Gather Supplies" : "Map the Route"; document.getElementById("journey-action").hidden = false; setStatus(phaseNames[currentStage] + " complete. Owner handoff required.", false); }\n' +
-  '  function invokeJourney(stage, extra) { currentStage = stage; showWait(stage); var payload = Object.assign({ runId: currentRunId, stage: stage, workGoal: currentGoal }, extra || {}); fetch("/api/v1/journey", { method: "POST", headers: { "Content-Type": "application/json" }, credentials: "same-origin", body: JSON.stringify(payload) }).then(function (r) { return r.json().catch(function () { return { status: "failure", code: "request_failed" }; }).then(function (body) { if (!r.ok && body.status !== "failure") return { status: "failure", code: "request_failed" }; return body; }); }).then(function (body) { return body.status === "question" ? persistAgentQuestion(body.question).then(function () { return body; }) : body; }).then(renderJourney, function () { renderFailure({ code: "network_error" }); }); }\n' +
+  '  function renderFailure(body) { hideWait(); planningSubmit.disabled = false; planningAnswerForm.hidden = true; document.getElementById("journey-action").hidden = true; document.getElementById("mode-choice").hidden = true; document.getElementById("journey-complete").hidden = false; document.getElementById("completion-summary").textContent = body.code === "cancelled" ? "You stopped " + phaseNames[currentStage] + ". Any Git changes remain visible and the phase can be retried." : body.code === "interrupted" ? "Bearing stopped while " + phaseNames[currentStage] + " was running. Inspect the Git changes before deciding whether to retry the saved phase." : body.code === "token_budget" ? "This run reached its token budget before the phase completed. Retry after lowering reasoning with /model or raise the CLI budget." : "The agent could not complete " + phaseNames[currentStage] + ": " + (body.code || "request_failed") + ". No success was recorded."; document.getElementById("completion-artifacts").replaceChildren(); document.getElementById("journey-retry").hidden = false; document.getElementById("new-journey").hidden = true; setStatus(body.code === "cancelled" ? "Journey stopped by owner." : body.code === "interrupted" ? "Journey interrupted. Inspect changes before retrying." : "Journey blocked. Retry is available.", false); }\n' +
+  '  function renderJourney(body) { hideWait(); planningSubmit.disabled = false; renderArtifacts(body); pendingQuestionCount = body.status === "question" && Array.isArray(body.questions) ? Math.max(0, body.questions.length - 1) : 0; document.getElementById("journey-phase").textContent = phaseNames[currentStage].toUpperCase(); document.getElementById("journey-heading").textContent = phaseNames[currentStage]; document.getElementById("journey-summary").textContent = body.status === "action" ? body.summary : currentStage === "gather-supplies" ? "Answer the planning questions before the route map is written." : "The selected agent needs an owner answer before it can continue."; document.getElementById("journey-complete").hidden = true; document.getElementById("mode-choice").hidden = true; document.getElementById("journey-action").hidden = true; if (body.status === "failure") { renderFailure(body); return; } if (body.status === "question") { document.getElementById("journey-question-box").hidden = false; document.getElementById("planning-question").textContent = body.question; planningAnswerForm.hidden = false; planningAnswer.value = ""; planningAnswer.focus(); setStatus(currentStage === "gather-supplies" && pendingQuestionCount ? "Question saved locally. " + pendingQuestionCount + " remaining." : phaseNames[currentStage] + " needs your answer.", false); return; } document.getElementById("journey-question-box").hidden = true; planningAnswerForm.hidden = true; if (currentStage === "map-route") { invokeJourney("draft-implementation"); return; } if (currentStage === "draft-implementation") { renderPlanReview(body); return; } if (currentStage === "execute-explorer" || currentStage === "execute-expedition") { invokeJourney("review"); return; } if (currentStage === "review") { document.getElementById("journey-complete").hidden = false; document.getElementById("completion-summary").textContent = body.summary; renderArtifactList(document.getElementById("completion-artifacts"), body); document.getElementById("journey-retry").hidden = true; document.getElementById("new-journey").hidden = false; setStatus("Journey complete. Review the validated evidence.", false); return; } var next = document.getElementById("journey-next"); next.textContent = currentStage === "set-bearings" ? "Gather Supplies" : "Map the Route"; document.getElementById("journey-action").hidden = false; setStatus(phaseNames[currentStage] + " complete. Owner handoff required.", false); }\n' +
+  '  function invokeJourney(stage, extra, quiet) { currentStage = stage; if (!quiet) showWait(stage); var payload = Object.assign({ runId: currentRunId, stage: stage, workGoal: currentGoal }, extra || {}); fetch("/api/v1/journey", { method: "POST", headers: { "Content-Type": "application/json" }, credentials: "same-origin", body: JSON.stringify(payload) }).then(function (r) { return r.json().catch(function () { return { status: "failure", code: "request_failed" }; }).then(function (body) { if (!r.ok && body.status !== "failure") return { status: "failure", code: "request_failed" }; return body; }); }).then(function (body) { return body.status === "question" ? persistAgentQuestion(body.question).then(function () { return body; }) : body; }).then(renderJourney, function () { renderFailure({ code: "network_error" }); }); }\n' +
   '  function showError(error) { setStatus(error instanceof Error ? error.message : "Request failed.", false); }\n' +
   '  function showDemoStage(next) { var stages = document.querySelectorAll("[data-demo-stage]"); var progress = document.querySelectorAll(".demo-progress li"); demoStage = Math.max(0, Math.min(stages.length - 1, next)); stages.forEach(function (stage, index) { stage.hidden = index !== demoStage; }); progress.forEach(function (step, index) { if (index === demoStage) step.setAttribute("aria-current", "step"); else step.removeAttribute("aria-current"); }); document.getElementById("demo-step").textContent = "Step " + (demoStage + 1) + " of " + stages.length; document.getElementById("demo-prev").disabled = demoStage === 0; document.getElementById("demo-next").textContent = demoStage === stages.length - 1 ? (currentRunId ? "Back to journey" : "Start journey") : "Next \\u2192"; }\n' +
   '  function chooseDemoMode(mode) { demoMode = mode; ["explorer", "expedition"].forEach(function (name) { var card = document.getElementById("demo-" + name); var selected = name === mode; card.classList.toggle("selected", selected); card.setAttribute("aria-pressed", String(selected)); }); if (!mode) { document.getElementById("demo-mode-status").textContent = "Choose a card to continue the tutorial."; document.getElementById("demo-selected-mode").textContent = "Your selected execution mode appears here."; return; } document.getElementById("demo-mode-status").textContent = (mode === "explorer" ? "Explorer selected: focused execution with fewer agent sessions." : "Expedition selected: parallel execution with more coordination.") + " Tutorial only; nothing was launched."; document.getElementById("demo-selected-mode").textContent = "Tutorial selection: " + (mode === "explorer" ? "Explorer" : "Expedition") + ". In a real run, Bearing records owner approval before execution."; }\n' +
@@ -288,7 +289,7 @@ const NATIVE_HTML =
   '    ev.preventDefault(); if (!workForm.reportValidity()) return; currentGoal = document.getElementById("work-goal").value.trim(); if (!currentGoal) return; currentRunId = "browser-" + crypto.randomUUID(); setStatus("Saving the work request...", true); readRun(currentRunId).then(function (state) { return state.workRequestCreated ? state : postCommand(currentRunId, state, "createWorkRequest", { title: currentGoal.split(/\\r?\\n/, 1)[0].slice(0, 160), goal: currentGoal }).then(function () { return readRun(currentRunId); }); }).then(function () { workForm.hidden = true; planningPanel.hidden = false; invokeJourney("set-bearings"); }, showError);\n' +
   "  });\n" +
   '  planningAnswerForm.addEventListener("submit", function (ev) {\n' +
-  '    ev.preventDefault(); if (!planningAnswerForm.reportValidity()) return; var answer = planningAnswer.value.trim(); if (!answer) return; setStatus("Saving your answer...", true); readRun(currentRunId).then(function (state) { if (!state.pendingDecision) throw new Error("No owner decision is pending."); return postCommand(currentRunId, state, "recordOwnerAnswer", { decisionId: state.pendingDecision.decisionId, answer: answer }); }).then(function () { invokeJourney(currentStage, { answer: answer }); }, showError);\n' +
+  '    ev.preventDefault(); if (!planningAnswerForm.reportValidity()) return; var answer = planningAnswer.value.trim(); if (!answer) return; var localNext = currentStage === "gather-supplies" && pendingQuestionCount > 0; planningSubmit.disabled = true; setStatus(localNext ? "Saving your answer..." : "Preparing the route map...", true); readRun(currentRunId).then(function (state) { if (!state.pendingDecision) throw new Error("No owner decision is pending."); return postCommand(currentRunId, state, "recordOwnerAnswer", { decisionId: state.pendingDecision.decisionId, answer: answer }); }).then(function () { invokeJourney(currentStage, { answer: answer }, localNext); }, function (error) { planningSubmit.disabled = false; showError(error); });\n' +
   "  });\n" +
   "})();\n" +
   "</script>\n" +
@@ -703,6 +704,8 @@ interface BrowserJourney {
   busy: boolean;
   readonly qa: { question: string; answer: string }[];
   readonly artifacts: string[];
+  pendingQuestions: string[];
+  gatherQuestionsDiscovered: boolean;
   readonly selection?: Selection;
 }
 
@@ -752,6 +755,7 @@ async function persistJourneyCheckpoint(store: BearingStore, runId: string, stat
     ...(state.reviewBaselineRevision === undefined ? {} : { reviewBaselineRevision: state.reviewBaselineRevision }),
     ...(state.lastResult ? { lastResultJson: JSON.stringify(state.lastResult) } : {}),
     qaJson: JSON.stringify(state.qa),
+    gatherQuestionsDiscovered: state.gatherQuestionsDiscovered,
     ...(state.selection ? { selectionProvider: state.selection.provider, selectionModel: state.selection.model, selectionReasoning: state.selection.reasoning } : {}),
   };
   const command = { schemaVersion: 1, commandId: id, runId, expectedRevision: durable.revision, session: { sessionId: "local-runtime", actor: "bearing" }, correlationId: id, type: "recordJourneyCheckpoint", payload } as CommandEnvelopeV1;
@@ -775,6 +779,9 @@ function restoreJourney(entry: { goal: string; updatedAt: string; pendingQuestio
   const qa = parseCheckpointJson<{ question: string; answer: string }[]>(checkpoint.qaJson, []);
   if (answeredQuestion && !qa.some((item) => item.question === checkpoint.question && item.answer === entry.checkpointAnswer)) qa.push({ question: checkpoint.question!, answer: entry.checkpointAnswer! });
   while (qa.length > 1 && Buffer.byteLength(JSON.stringify(qa)) > MAX_QA_JSON_BYTES) qa.shift();
+  const savedLastResult = parseCheckpointJson<JourneyResult | undefined>(checkpoint.lastResultJson, undefined);
+  const lastResult = interrupted || staleQuestion ? { status: "failure", code: "interrupted", tokens: 0 } as const : savedLastResult;
+  const pendingQuestions = questionPending && lastResult?.status === "question" && Array.isArray(lastResult.questions) && lastResult.questions[0] === checkpoint.question ? [...lastResult.questions.slice(1)] : [];
   return {
     goal: entry.goal,
     updatedAt: entry.updatedAt,
@@ -784,10 +791,12 @@ function restoreJourney(entry: { goal: string; updatedAt: string; pendingQuestio
     ...(questionPending && checkpoint.questionDecisionId ? { questionDecisionId: checkpoint.questionDecisionId } : {}),
     ...(checkpoint.planDirectory ? { planDirectory: checkpoint.planDirectory } : {}),
     ...(checkpoint.reviewBaselineRevision === undefined ? {} : { reviewBaselineRevision: checkpoint.reviewBaselineRevision }),
-    lastResult: interrupted || staleQuestion ? { status: "failure", code: "interrupted", tokens: 0 } : parseCheckpointJson<JourneyResult | undefined>(checkpoint.lastResultJson, undefined),
+    lastResult,
     busy: false,
     qa,
     artifacts: [...checkpoint.artifacts],
+    pendingQuestions,
+    gatherQuestionsDiscovered: checkpoint.gatherQuestionsDiscovered === true && !(checkpoint.stage === "gather-supplies" && staleQuestion),
     ...(checkpoint.selectionProvider && checkpoint.selectionModel && checkpoint.selectionReasoning ? { selection: { provider: checkpoint.selectionProvider, model: checkpoint.selectionModel, reasoning: checkpoint.selectionReasoning } } : {}),
   };
 }
@@ -814,7 +823,7 @@ function handleJourneyPost(req: IncomingMessage, res: ServerResponse, service: L
     let state = selected.journeys.get(value.runId);
     if (!state) {
       if (!value.workGoal || !ensureJourneyCapacity(selected.journeys)) { writeRejection(res, 409); return; }
-      state = { goal: value.workGoal, updatedAt: new Date().toISOString(), stage: value.stage, status: "waiting", qa: [], artifacts: [], busy: false, selection };
+      state = { goal: value.workGoal, updatedAt: new Date().toISOString(), stage: value.stage, status: "waiting", qa: [], artifacts: [], pendingQuestions: [], gatherQuestionsDiscovered: false, busy: false, selection };
       selected.journeys.set(value.runId, state);
     } else if (value.workGoal && value.workGoal !== state.goal) { writeRejection(res, 409); return; }
     if (!sameSelection(state.selection, selection)) { writeRejection(res, 409); return; }
@@ -838,6 +847,21 @@ function handleJourneyPost(req: IncomingMessage, res: ServerResponse, service: L
       state.question = undefined;
       state.questionStage = undefined;
       state.questionDecisionId = undefined;
+      if (value.stage === "gather-supplies" && state.pendingQuestions.length) {
+        const question = state.pendingQuestions.shift()!;
+        const tokens = state.lastResult?.status === "question" ? state.lastResult.tokens : 0;
+        const result: JourneyResult = { status: "question", question, questions: [question, ...state.pendingQuestions], tokens };
+        state.question = question;
+        state.questionStage = value.stage;
+        state.questionDecisionId = `journey-${randomToken(12)}`;
+        state.lastResult = result;
+        state.updatedAt = new Date().toISOString();
+        state.status = "waiting";
+        try { await persistJourneyCheckpoint(selected.store, value.runId, state); }
+        catch { writeRejection(res, 503); return; }
+        writeShowcaseJson(res, { ...result, artifacts: state.artifacts, artifactLinks: state.artifacts.flatMap((path, index) => /\.(?:html|md)$/i.test(path) ? [{ path, url: `/api/v1/journey/${encodeURIComponent(value.runId)}/artifacts/${index}` }] : []) });
+        return;
+      }
     }
     if (value.reviewChange) {
       if (!state.planDirectory || state.question || state.stage !== "draft-implementation") { writeRejection(res, 409); return; }
@@ -851,7 +875,8 @@ function handleJourneyPost(req: IncomingMessage, res: ServerResponse, service: L
     try { await persistJourneyCheckpoint(selected.store, value.runId, state); }
     catch { state.busy = false; state.status = "failed"; writeRejection(res, 503); return; }
     let result: JourneyResult;
-    const execute = () => journey.execute({ selection, run, repositoryPath, runId: value.runId, workGoal: state!.goal, stage: value.stage, priorOwnerQa: state!.qa, planDirectory: state!.planDirectory });
+    const gatherMode = value.stage === "gather-supplies" ? value.answer || value.reviewChange || state.gatherQuestionsDiscovered ? "apply" as const : "questions" as const : undefined;
+    const execute = () => journey.execute({ selection, run, repositoryPath, runId: value.runId, workGoal: state!.goal, stage: value.stage, priorOwnerQa: state!.qa, planDirectory: state!.planDirectory, ...(gatherMode ? { gatherMode } : {}) });
     try {
       result = await execute();
       const control = state.control;
@@ -865,7 +890,7 @@ function handleJourneyPost(req: IncomingMessage, res: ServerResponse, service: L
     } catch {
       result = { status: "failure" as const, code: "adapter_failed" as const, tokens: 0 };
     } finally { state.busy = false; }
-    if (result.status === "question") { state.question = result.question; state.questionStage = value.stage; state.questionDecisionId = `journey-${randomToken(12)}`; }
+    if (result.status === "question") { state.question = result.question; state.questionStage = value.stage; state.questionDecisionId = `journey-${randomToken(12)}`; state.pendingQuestions = result.questions ? [...result.questions.slice(1)] : []; if (value.stage === "gather-supplies" && gatherMode === "questions") state.gatherQuestionsDiscovered = true; }
     if (result.status === "action") {
       for (const artifact of result.artifacts) if (!state.artifacts.includes(artifact)) state.artifacts.push(artifact);
       if (value.stage === "set-bearings" && !state.planDirectory) {

@@ -86,7 +86,7 @@ const MAX_EVENTS = 1024;
 const MAX_EVENT_TYPE = 128;
 const MAX_VALUE_DEPTH = 8;
 const MAX_COLLECTION_SIZE = 256;
-const MAX_STRING_LENGTH = 16_384;
+const MAX_STRING_LENGTH = 512 * 1024;
 function events(value: unknown): readonly { readonly type: string; readonly data?: Readonly<Record<string, unknown>> }[] | undefined {
   if (!Array.isArray(value) || value.length > MAX_EVENTS) return undefined;
   if (!value.every((event) => typeof event === "object" && event !== null && !Array.isArray(event) && typeof (event as { type?: unknown }).type === "string" && (event as { type: string }).type.length > 0 && (event as { type: string }).type.length <= MAX_EVENT_TYPE)) return undefined;

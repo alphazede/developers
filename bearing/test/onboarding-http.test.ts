@@ -198,7 +198,7 @@ describe("repository-first onboarding HTTP", () => {
     const runner = new SyntheticRunner(undefined, [
       complete(action("Bearings set", ["plans/demo/prompts/context.md", "plans/demo/plan-spec.md"])),
       complete("agent output without a Bearing envelope"),
-      complete('BEARING_RESULT {"kind":"question","question":"Which acceptance risk matters most?"}'),
+      complete('BEARING_RESULT {"kind":"questions","questions":["Which acceptance risk matters most?"]}'),
       complete(action("Supplies gathered", ["plans/demo/plan-spec.md"])),
       complete(action("Route mapped", ["plans/demo/design.md", "plans/demo/seit.md", "plans/demo/review.html"])),
       complete(action("Implementation drafted", ["plans/demo/implementation.md", "plans/demo/review.html"])),
@@ -227,7 +227,10 @@ describe("repository-first onboarding HTTP", () => {
     const planningQuestion = JSON.parse((await call(port, "GET", `/api/v1/runs/${runId}`, undefined, cookie)).body).pendingDecision;
     expect(planningQuestion).toMatchObject({ question: "Which acceptance risk matters most?" });
     await postOwnerCommand(port, cookie, runId, "recordOwnerAnswer", { decisionId: planningQuestion.decisionId, answer: "Data loss" });
-    expect(JSON.parse((await journey("gather-supplies", { answer: "Data loss" })).body)).toMatchObject({ status: "action" });
+    expect(JSON.parse((await journey("gather-supplies", { answer: "Data loss" })).body)).toMatchObject({ status: "question", question: "Anything else?" });
+    const finalPlanningQuestion = JSON.parse((await call(port, "GET", `/api/v1/runs/${runId}`, undefined, cookie)).body).pendingDecision;
+    await postOwnerCommand(port, cookie, runId, "recordOwnerAnswer", { decisionId: finalPlanningQuestion.decisionId, answer: "No" });
+    expect(JSON.parse((await journey("gather-supplies", { answer: "No" })).body)).toMatchObject({ status: "action" });
     expect(JSON.parse((await journey("map-route")).body)).toMatchObject({ status: "action" });
     expect(JSON.parse((await journey("draft-implementation")).body)).toMatchObject({ status: "action", planningReview: { phases: 1, slices: 1, assignments: [{ slice: "Slice 1.1 — Deliver", role: "Backend Engineer", model: "Codex agent default", reasoning: "low" }] } });
     expect(JSON.parse((await journey("gather-supplies", { reviewChange: "Add a rollback acceptance check" })).body)).toMatchObject({ status: "action", summary: "Review changes gathered" });
@@ -257,6 +260,51 @@ describe("repository-first onboarding HTTP", () => {
     expect(runner.calls.map((invocation) => invocation.stdin).join("\n")).toContain("Add a rollback acceptance check");
     expect(runner.calls.slice(0, -1).every((invocation) => invocation.args.includes('model_reasoning_effort="low"'))).toBe(true);
     expect(runner.calls.at(-1)?.args).toContain('sandbox_mode="read-only"');
+  });
+
+  it("collects a batch of grilling answers without restarting the agent between questions", async () => {
+    const root = await mkdtemp(join(tmpdir(), "bearing-batched-grill-")); roots.push(root);
+    await mkdir(join(root, "plans", "batch"), { recursive: true });
+    await writeFile(join(root, "plans", "batch", "plan-spec.md"), "# Plan\n");
+    const result = (content: string) => ({ exitCode: 0, events: [{ type: "complete", data: { content } }], usage: { tokens: 1 } });
+    const questions = Array.from({ length: 16 }, (_, index) => `${index}: Planning question ${index + 1}`.padEnd(4095, "q") + "?");
+    const runner = new SyntheticRunner(undefined, [
+      result('BEARING_RESULT {"kind":"question","question":"Which repository boundary applies?"}'),
+      result('BEARING_RESULT {"kind":"action","summary":"Bearings set","artifacts":["plans/batch/plan-spec.md"]}'),
+      result(`BEARING_RESULT ${JSON.stringify({ kind: "questions", questions })}`),
+      result('BEARING_RESULT {"kind":"action","summary":"Route map written","artifacts":["plans/batch/plan-spec.md"]}'),
+    ]);
+    const server = createServer(); await new Promise<void>((resolve) => server.listen({ host: "127.0.0.1", port: 0 }, resolve)); servers.push(server);
+    const address = server.address(); if (!address || typeof address === "string") throw new Error("missing address");
+    const port = String(address.port), session = new LocalSessionService(`127.0.0.1:${port}`), cookie = await authenticate(port, session);
+    server.on("request", createRequestHandler(session, undefined, { processRunner: runner, verification: { verify: async () => true } }));
+    const runId = "browser-batch", goal = "Plan without per-answer lag";
+    await call(port, "POST", "/api/v1/repository", { path: root }, cookie);
+    await call(port, "POST", "/api/v1/readiness", { provider: "codex", model: "*", reasoning: "medium" }, cookie);
+    await postOwnerCommand(port, cookie, runId, "createWorkRequest", { title: goal, goal });
+    const journey = (extra: Record<string, unknown> = {}) => call(port, "POST", "/api/v1/journey", { runId, stage: "gather-supplies", workGoal: goal, ...extra }, cookie);
+    expect(JSON.parse((await call(port, "POST", "/api/v1/journey", { runId, stage: "set-bearings", workGoal: goal }, cookie)).body)).toMatchObject({ status: "question", question: "Which repository boundary applies?" });
+    const setPending = JSON.parse((await call(port, "GET", `/api/v1/runs/${runId}`, undefined, cookie)).body).pendingDecision;
+    await postOwnerCommand(port, cookie, runId, "recordOwnerAnswer", { decisionId: setPending.decisionId, answer: "Only this repository" });
+    expect(JSON.parse((await call(port, "POST", "/api/v1/journey", { runId, stage: "set-bearings", workGoal: goal, answer: "Only this repository" }, cookie)).body)).toMatchObject({ status: "action" });
+
+    let response = JSON.parse((await journey()).body);
+    expect(response).toMatchObject({ status: "question", question: questions[0] });
+    expect(response.questions).toEqual([...questions, "Anything else?"]);
+    expect(runner.calls).toHaveLength(3);
+    const answers = [...questions.map((_, index) => `${index}:`.padEnd(4096, "x")), "No"];
+    for (const answer of answers) {
+      const pending = JSON.parse((await call(port, "GET", `/api/v1/runs/${runId}`, undefined, cookie)).body).pendingDecision;
+      await postOwnerCommand(port, cookie, runId, "recordOwnerAnswer", { decisionId: pending.decisionId, answer });
+      response = JSON.parse((await journey({ answer })).body);
+      if (answer !== "No") expect(runner.calls).toHaveLength(3);
+    }
+    expect(response).toMatchObject({ status: "action", summary: "Route map written" });
+    expect(runner.calls).toHaveLength(4);
+    expect(runner.calls[3].stdin).toContain('"question":"Anything else?","answer":"No"');
+    expect(runner.calls[3].stdin).toContain(`"question":"${questions[0]}","answer":"${answers[0]}"`);
+    expect(runner.calls[3].stdin).toContain('"question":"Which repository boundary applies?","answer":"Only this repository"');
+    expect(runner.calls[3].stdin).toMatch(/All grilling questions are answered/i);
   });
 
   it("refuses repository changes while a real journey call is in flight", async () => {
@@ -310,7 +358,7 @@ describe("repository-first onboarding HTTP", () => {
     await mkdir(join(root, "plans", "resume"), { recursive: true });
     await writeFile(join(root, "plans", "resume", "plan-spec.md"), "# Resume plan");
     const complete = (summary: string) => ({ exitCode: 0, events: [{ type: "complete", data: { content: `BEARING_RESULT ${JSON.stringify({ kind: "action", summary, artifacts: ["plans/resume/plan-spec.md"] })}` } }], usage: { tokens: 1 } });
-    const runner = new SyntheticRunner(undefined, [complete("Bearings saved"), complete("Supplies resumed")]);
+    const runner = new SyntheticRunner(undefined, [complete("Bearings saved"), { exitCode: 0, events: [{ type: "complete", data: { content: 'BEARING_RESULT {"kind":"questions","questions":[]}' } }], usage: { tokens: 1 } }]);
     const server = createServer(); await new Promise<void>((resolve) => server.listen({ host: "127.0.0.1", port: 0 }, resolve)); servers.push(server);
     const address = server.address(); if (!address || typeof address === "string") throw new Error("missing address");
     const port = String(address.port), session = new LocalSessionService(`127.0.0.1:${port}`);
@@ -324,7 +372,7 @@ describe("repository-first onboarding HTTP", () => {
     const history = JSON.parse((await call(port, "GET", "/api/v1/history", undefined, cookie)).body);
     expect(history.history).toEqual([expect.objectContaining({ runId, stage: "set-bearings", status: "waiting", busy: false, artifacts: ["plans/resume/plan-spec.md"], lastResult: expect.objectContaining({ status: "action", summary: "Bearings saved" }) })]);
     await call(port, "POST", "/api/v1/readiness", { provider: "codex", model: "*", reasoning: "medium" }, cookie);
-    expect(JSON.parse((await call(port, "POST", "/api/v1/journey", { runId, stage: "gather-supplies", workGoal: goal }, cookie)).body)).toMatchObject({ status: "action", summary: "Supplies resumed" });
+    expect(JSON.parse((await call(port, "POST", "/api/v1/journey", { runId, stage: "gather-supplies", workGoal: goal }, cookie)).body)).toMatchObject({ status: "question", question: "Anything else?" });
   });
 
   it("reconciles an answered checkpoint question before resuming", async () => {
@@ -334,8 +382,8 @@ describe("repository-first onboarding HTTP", () => {
     const result = (content: string) => ({ exitCode: 0, events: [{ type: "complete", data: { content } }], usage: { tokens: 1 } });
     const runner = new SyntheticRunner(undefined, [
       result('BEARING_RESULT {"kind":"action","summary":"Bearings saved","artifacts":["plans/answer/plan-spec.md"]}'),
-      result('BEARING_RESULT {"kind":"question","question":"Which boundary matters?"}'),
-      result('BEARING_RESULT {"kind":"action","summary":"Answer resumed","artifacts":["plans/answer/plan-spec.md"]}'),
+      result('BEARING_RESULT {"kind":"questions","questions":["Which boundary matters?","Which fallback is acceptable?"]}'),
+      result('BEARING_RESULT {"kind":"questions","questions":[]}'),
     ]);
     const server = createServer(); await new Promise<void>((resolve) => server.listen({ host: "127.0.0.1", port: 0 }, resolve)); servers.push(server);
     const address = server.address(); if (!address || typeof address === "string") throw new Error("missing address");
@@ -353,8 +401,40 @@ describe("repository-first onboarding HTTP", () => {
     const history = JSON.parse((await call(port, "GET", "/api/v1/history", undefined, cookie)).body);
     expect(history.history).toEqual([expect.objectContaining({ runId, status: "failed", lastResult: { status: "failure", code: "interrupted", tokens: 0 } })]);
     await call(port, "POST", "/api/v1/readiness", { provider: "codex", model: "*", reasoning: "medium" }, cookie);
-    expect(JSON.parse((await call(port, "POST", "/api/v1/journey", { runId, stage: "gather-supplies", workGoal: goal }, cookie)).body)).toMatchObject({ status: "action", summary: "Answer resumed" });
+    expect(JSON.parse((await call(port, "POST", "/api/v1/journey", { runId, stage: "gather-supplies", workGoal: goal }, cookie)).body)).toMatchObject({ status: "question", question: "Anything else?" });
     expect(runner.calls.at(-1)?.stdin).toContain("The public API");
+    expect(runner.calls.at(-1)?.stdin).toMatch(/return every important unresolved owner question together/i);
+  });
+
+  it("restores an unanswered question batch without losing its in-memory queue", async () => {
+    const root = await mkdtemp(join(tmpdir(), "bearing-unanswered-resume-")); roots.push(root);
+    await mkdir(join(root, "plans", "unanswered"), { recursive: true });
+    await writeFile(join(root, "plans", "unanswered", "plan-spec.md"), "# Unanswered plan\n");
+    const result = (content: string) => ({ exitCode: 0, events: [{ type: "complete", data: { content } }], usage: { tokens: 1 } });
+    const runner = new SyntheticRunner(undefined, [
+      result('BEARING_RESULT {"kind":"action","summary":"Bearings saved","artifacts":["plans/unanswered/plan-spec.md"]}'),
+      result('BEARING_RESULT {"kind":"questions","questions":["First decision?","Second decision?"]}'),
+    ]);
+    const server = createServer(); await new Promise<void>((resolve) => server.listen({ host: "127.0.0.1", port: 0 }, resolve)); servers.push(server);
+    const address = server.address(); if (!address || typeof address === "string") throw new Error("missing address");
+    const port = String(address.port), session = new LocalSessionService(`127.0.0.1:${port}`);
+    server.on("request", createRequestHandler(session, undefined, { processRunner: runner, verification: { verify: async () => true } }));
+    const cookie = await authenticate(port, session), runId = "browser-unanswered-resume", goal = "Resume an unanswered batch";
+    await call(port, "POST", "/api/v1/repository", { path: root }, cookie);
+    await call(port, "POST", "/api/v1/readiness", { provider: "codex", model: "*", reasoning: "medium" }, cookie);
+    await postOwnerCommand(port, cookie, runId, "createWorkRequest", { title: goal, goal });
+    await call(port, "POST", "/api/v1/journey", { runId, stage: "set-bearings", workGoal: goal }, cookie);
+    expect(JSON.parse((await call(port, "POST", "/api/v1/journey", { runId, stage: "gather-supplies", workGoal: goal }, cookie)).body)).toMatchObject({ status: "question", question: "First decision?" });
+    await call(port, "POST", "/api/v1/repository", { path: root }, cookie);
+    const history = JSON.parse((await call(port, "GET", "/api/v1/history", undefined, cookie)).body);
+    expect(history.history).toEqual([expect.objectContaining({ runId, status: "waiting", lastResult: expect.objectContaining({ status: "question", question: "First decision?" }) })]);
+    await call(port, "POST", "/api/v1/readiness", { provider: "codex", model: "*", reasoning: "medium" }, cookie);
+    const pending = JSON.parse((await call(port, "GET", `/api/v1/runs/${runId}`, undefined, cookie)).body).pendingDecision;
+    await postOwnerCommand(port, cookie, runId, "recordOwnerAnswer", { decisionId: pending.decisionId, answer: "First answer" });
+    const resumed = await call(port, "POST", "/api/v1/journey", { runId, stage: "gather-supplies", workGoal: goal, answer: "First answer" }, cookie);
+    expect(resumed.status, resumed.body).toBe(200);
+    expect(JSON.parse(resumed.body)).toMatchObject({ status: "question", question: "Second decision?" });
+    expect(runner.calls).toHaveLength(2);
   });
 
   it("rejects a restored journey when the newly selected model route differs", async () => {

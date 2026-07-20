@@ -43,7 +43,7 @@ Keep that terminal running while using the control room. The URL contains a one-
 The main browser flow uses the selected, readiness-verified harness; it is not a canned workflow projection:
 
 1. **Set Bearings** starts the plan and returns validated plan artifacts.
-2. **Gather Supplies** asks one adaptive owner question at a time until the selected agent can proceed.
+2. **Gather Supplies** asks the selected agent to inspect the repository once and return all important owner questions. Bearing presents them one at a time without another model call, appends **Anything else?**, then sends the complete answer set back in one writing call.
 3. **Map the Route** produces the design, SEIT, and self-contained review baseline, then Bearing drafts `implementation.md`.
 4. **Review your route** verifies each slice's role, selected model route, and reasoning level. The regenerated review HTML embeds the complete planning package; every source artifact also opens through a contained authenticated link. The owner can request changes or approve the route, and implementation cannot start before approval.
 5. The owner chooses **Explorer** or **Expedition** plus Surveyor review cadence. Explorer uses fewer sessions; Expedition enables bounded subagents for parallel lanes.
@@ -67,7 +67,7 @@ Real skill-driven planning and execution can use substantial tokens, especially 
 - **Crewmate** performs a bounded implementation task within the allowed tools, workspace, and limits.
 - **Surveyor** independently reviews evidence, has no execution ancestry, and cannot certify its own execution.
 
-The local Node server—not the browser—owns durable workflow state, command validation, approval checks, adapter invocation, and evidence projection. The browser never receives provider credentials. Recommendations never authorize execution; material actions require durable owner evidence. Fallback is disabled by default, unsupported authority combinations fail closed, and isolation is reported as attested, local, off, or blocked rather than assumed.
+The local Node server—not the browser—owns durable workflow state, batched owner answers, command validation, approval checks, adapter invocation, and evidence projection. The browser never receives provider credentials. Recommendations never authorize execution; material actions require durable owner evidence. Fallback is disabled by default, unsupported authority combinations fail closed, and isolation is reported as attested, local, off, or blocked rather than assumed.
 
 ## Safe start flags
 

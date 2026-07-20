@@ -13,6 +13,8 @@ import { createHash } from "node:crypto";
 
 export const COMMAND_SCHEMA_VERSION = 1 as const;
 export const EVENT_SCHEMA_VERSION = 1 as const;
+const MAX_QA_JSON_BYTES = 640 * 1024;
+const MAX_JOURNEY_RESULT_JSON = 640 * 1024;
 
 /** Local browser session reference. `actor` is the authority role. */
 export interface SessionRef {
@@ -65,6 +67,7 @@ export interface RecordJourneyCheckpointPayload {
   readonly reviewBaselineRevision?: number;
   readonly lastResultJson?: string;
   readonly qaJson?: string;
+  readonly gatherQuestionsDiscovered?: boolean;
   readonly selectionProvider?: string;
   readonly selectionModel?: string;
   readonly selectionReasoning?: string;
@@ -283,15 +286,15 @@ function isOverrideExecutionModePayload(v: unknown): v is OverrideExecutionModeP
 }
 
 function isRecordJourneyCheckpointPayload(v: unknown): v is RecordJourneyCheckpointPayload {
-  if (!isObject(v) || !["stage", "status", "artifacts"].every((key) => key in v) || Object.keys(v).some((key) => !["stage", "status", "artifacts", "planDirectory", "question", "questionDecisionId", "reviewBaselineRevision", "lastResultJson", "qaJson", "selectionProvider", "selectionModel", "selectionReasoning"].includes(key))) return false;
+  if (!isObject(v) || !["stage", "status", "artifacts"].every((key) => key in v) || Object.keys(v).some((key) => !["stage", "status", "artifacts", "planDirectory", "question", "questionDecisionId", "reviewBaselineRevision", "lastResultJson", "qaJson", "gatherQuestionsDiscovered", "selectionProvider", "selectionModel", "selectionReasoning"].includes(key))) return false;
   const stages = ["set-bearings", "gather-supplies", "map-route", "draft-implementation", "execute-explorer", "execute-expedition", "review"];
   const statuses = ["running", "waiting", "stopped", "failed", "complete"];
   const selectionValues = [v.selectionProvider, v.selectionModel, v.selectionReasoning];
   const selectionValid = selectionValues.every((value) => value === undefined) || selectionValues.every((value) => isNonEmptyString(value, 256));
   return stages.includes(v.stage as string) && statuses.includes(v.status as string) && Array.isArray(v.artifacts) && v.artifacts.length <= 256 && v.artifacts.every((path) => isNonEmptyString(path)) &&
     (v.planDirectory === undefined || isNonEmptyString(v.planDirectory)) && (v.question === undefined || isNonEmptyString(v.question)) && (v.questionDecisionId === undefined || (isId(v.questionDecisionId) && v.question !== undefined)) &&
-    (v.reviewBaselineRevision === undefined || isNonNegativeInt(v.reviewBaselineRevision)) && (v.lastResultJson === undefined || isNonEmptyString(v.lastResultJson, 65_536)) &&
-    (v.qaJson === undefined || isNonEmptyString(v.qaJson, 65_536)) && selectionValid;
+    (v.reviewBaselineRevision === undefined || isNonNegativeInt(v.reviewBaselineRevision)) && (v.lastResultJson === undefined || isNonEmptyString(v.lastResultJson, MAX_JOURNEY_RESULT_JSON)) &&
+    (v.qaJson === undefined || isNonEmptyString(v.qaJson, MAX_QA_JSON_BYTES)) && (v.gatherQuestionsDiscovered === undefined || typeof v.gatherQuestionsDiscovered === "boolean") && selectionValid;
 }
 
 function hasExactKeys(v: unknown, keys: readonly string[]): v is Record<string, unknown> {

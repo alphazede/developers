@@ -14,6 +14,7 @@ export interface JourneyRequest {
   readonly workGoal: string;
   readonly stage: JourneyStage;
   readonly priorOwnerQa: readonly OwnerAnswer[];
+  readonly gatherMode?: "questions" | "apply";
   readonly planDirectory?: string;
   readonly reviewPrompt?: string;
 }
@@ -30,7 +31,7 @@ export interface PlanningReview {
   readonly assignments: readonly PlanningAssignment[];
 }
 export type JourneyResult =
-  | { readonly status: "question"; readonly question: string; readonly tokens: number }
+  | { readonly status: "question"; readonly question: string; readonly questions?: readonly string[]; readonly tokens: number }
   | { readonly status: "action"; readonly summary: string; readonly artifacts: readonly string[]; readonly tokens: number; readonly planningReview?: PlanningReview }
   | { readonly status: "failure"; readonly code: JourneyFailureCode; readonly tokens: number };
 
@@ -45,7 +46,7 @@ const STAGE_COMMAND: Readonly<Record<JourneyStage, string>> = {
 };
 const STAGE_BOUNDARY: Readonly<Record<JourneyStage, string>> = {
   "set-bearings": "Create or resume only the plan directory, plan-spec.md stub, and prompts directory. Do not grill, design, draft implementation.md, or implement the work. A successful action receipt must include the relative plan-spec.md path.",
-  "gather-supplies": "Ask unresolved owner questions one at a time and update only the validated plan specification. Do not run design, draft implementation.md, or implement the work. When no questions remain, return an action receipt whose artifacts include the validated plan-spec.md path.",
+  "gather-supplies": "Use the complete owner Q&A and update only the validated plan specification. Do not run design, draft implementation.md, or implement the work. Return an action receipt whose artifacts include the validated plan-spec.md path.",
   "map-route": "Create only design.md, seit.md, and the generated review HTML in the validated plan directory. Do not draft implementation.md or implement the work. A successful action receipt must include all three relative paths.",
   "draft-implementation": "Draft implementation.md without executing any slice. Every slice must name its Implementation role, the exact onboarding Agent model route, its Agent reasoning level, Ponytail mode, Required lint/static-analysis, and Review path. Regenerate the existing review HTML so it embeds the complete route map or plan specification, design.md, seit.md, and implementation.md. A successful action receipt must include both implementation.md and the regenerated review HTML.",
   "execute-explorer": "Execute the approved implementation plan with Explorer and honor the recorded review cadence. Return only paths that actually exist.",
@@ -54,8 +55,9 @@ const STAGE_BOUNDARY: Readonly<Record<JourneyStage, string>> = {
 };
 const MAX_TEXT = 4096;
 const MAX_QA = 64;
+const RESERVED_POST_PLAN_QA = 2;
 const MAX_ARTIFACTS = 32;
-const MAX_ENVELOPE = 16_384;
+const MAX_ENVELOPE_BYTES = 512 * 1024;
 
 function text(value: unknown, max = MAX_TEXT): value is string {
   return typeof value === "string" && value.length > 0 && value.length <= max && value === value.trim() && !/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/.test(value);
@@ -84,16 +86,25 @@ async function containedPath(root: string, value: string, directoryOnly = false)
 function validRequest(request: JourneyRequest): boolean {
   if (!isAbsolute(request.repositoryPath) || !/^[A-Za-z0-9_-]{1,128}$/.test(request.runId) || !text(request.workGoal)) return false;
   if (!(request.stage in STAGE_COMMAND) || !Array.isArray(request.priorOwnerQa) || request.priorOwnerQa.length > MAX_QA) return false;
-  return (request.reviewPrompt === undefined || text(request.reviewPrompt)) && request.priorOwnerQa.every((entry) => typeof entry === "object" && entry !== null && text(entry.question) && text(entry.answer));
+  if (request.gatherMode === "questions" && request.priorOwnerQa.length >= MAX_QA - RESERVED_POST_PLAN_QA) return false;
+  return (request.gatherMode === undefined || request.stage === "gather-supplies") &&
+    (request.reviewPrompt === undefined || text(request.reviewPrompt)) && request.priorOwnerQa.every((entry) => typeof entry === "object" && entry !== null && text(entry.question) && text(entry.answer));
 }
 
 function prompt(request: JourneyRequest, planDirectory: string | undefined): string {
-  const grilling = request.stage === "gather-supplies" ? " Ask exactly one owner question at a time; use prior answers and do not repeat resolved questions." : " Ask one owner question only when a decision blocks honest progress.";
+  const gatheringQuestions = request.stage === "gather-supplies" && request.gatherMode === "questions";
+  const availableQuestions = Math.max(0, MAX_QA - RESERVED_POST_PLAN_QA - request.priorOwnerQa.length - 1);
+  const grilling = gatheringQuestions
+    ? ` Inspect the repository once and return every important unresolved owner question together, in a useful order. Return at most ${availableQuestions} questions; group closely related decisions if needed. Do not include the final Anything else question; Bearing adds it.`
+    : request.stage === "gather-supplies"
+      ? " All grilling questions are answered. Apply the complete owner Q&A without asking another question; record reasonable assumptions or blockers in the plan specification."
+      : " Ask one owner question only when a decision blocks honest progress.";
+  const boundary = gatheringQuestions ? "Read and inspect only. Do not create or modify files during question discovery." : STAGE_BOUNDARY[request.stage];
   const reviewCadence = request.stage === "execute-explorer" || request.stage === "execute-expedition" ? ["Read the prior owner Q&A for the recorded Review cadence (each slice, each phase, or end) and enforce that cadence during execution. Use the harness-native reviewer when available and the read-only Surveyor fallback only when no native reviewer is available."] : [];
   return [
     "You are a bounded Bearing journey agent. Work only inside the supplied repository and existing authority.",
     `Stage: ${request.stage}. Explicitly invoke ${STAGE_COMMAND[request.stage]} for this stage.${grilling}`,
-    `Stage boundary: ${STAGE_BOUNDARY[request.stage]}`,
+    `Stage boundary: ${boundary}`,
     `Work goal: ${JSON.stringify(request.workGoal)}`,
     `The onboarding selection ${JSON.stringify(request.selection)} applies to every role and child. Do not substitute a different provider, model, or reasoning route.`,
     `Prior owner Q&A: ${JSON.stringify(request.priorOwnerQa)}`,
@@ -101,22 +112,27 @@ function prompt(request: JourneyRequest, planDirectory: string | undefined): str
     `Validated plan directory: ${planDirectory ? JSON.stringify(planDirectory) : "none"}`,
     ...(request.reviewPrompt ? [`Review guidance: ${JSON.stringify(request.reviewPrompt)}`] : []),
     "Do not claim completion without actual work and evidence in this agent receipt. Do not invent artifacts, routes, sessions, or authority.",
-    'End the final assistant message with exactly one single-line envelope: BEARING_RESULT {"kind":"question","question":"one question"} or BEARING_RESULT {"kind":"action","summary":"what actually happened","artifacts":["relative/existing/path"]}.',
+    gatheringQuestions
+      ? 'End the final assistant message with exactly one single-line envelope: BEARING_RESULT {"kind":"questions","questions":["first question","second question"]}. Use an empty array when no owner decisions are needed.'
+      : request.stage === "gather-supplies" && request.gatherMode === "apply"
+        ? 'End the final assistant message with exactly one single-line envelope: BEARING_RESULT {"kind":"action","summary":"what actually happened","artifacts":["relative/existing/path"]}.'
+        : 'End the final assistant message with exactly one single-line envelope: BEARING_RESULT {"kind":"question","question":"one blocking question"} or BEARING_RESULT {"kind":"action","summary":"what actually happened","artifacts":["relative/existing/path"]}.',
   ].join("\n");
 }
 
-type Envelope = { readonly kind: "question"; readonly question: string } | { readonly kind: "action"; readonly summary: string; readonly artifacts: readonly string[] };
-function envelope(value: string): Envelope | "missing" | "malformed" {
+type Envelope = { readonly kind: "question"; readonly question: string } | { readonly kind: "questions"; readonly questions: readonly string[] } | { readonly kind: "action"; readonly summary: string; readonly artifacts: readonly string[] };
+function envelope(value: string, maxQuestions = MAX_QA - 1): Envelope | "missing" | "malformed" {
   const line = value.trim().split(/\r?\n/).at(-1) ?? "";
   const prefix = "BEARING_RESULT ";
   if (!line.startsWith(prefix)) return "missing";
   const body = line.slice(prefix.length);
-  if (!body || body.length > MAX_ENVELOPE) return "malformed";
+  if (!body || Buffer.byteLength(body) > MAX_ENVELOPE_BYTES) return "malformed";
   try {
     const parsed = JSON.parse(body) as unknown;
     if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) return "malformed";
     const record = parsed as Record<string, unknown>;
     if (record.kind === "question" && Object.keys(record).length === 2 && text(record.question)) return { kind: "question", question: record.question };
+    if (record.kind === "questions" && Object.keys(record).length === 2 && Array.isArray(record.questions) && record.questions.length <= maxQuestions && record.questions.every((question) => text(question)) && new Set(record.questions).size === record.questions.length) return { kind: "questions", questions: record.questions as string[] };
     if (record.kind === "action" && Object.keys(record).length === 3 && text(record.summary) && Array.isArray(record.artifacts) && record.artifacts.length > 0 && record.artifacts.length <= MAX_ARTIFACTS && record.artifacts.every(pathText) && new Set(record.artifacts).size === record.artifacts.length) return { kind: "action", summary: record.summary, artifacts: record.artifacts as string[] };
     return "malformed";
   } catch { return "malformed"; }
@@ -211,7 +227,8 @@ export class JourneyService {
       const adapter = createAgentAdapter(request.selection, this.runner);
       if (!adapter) return { status: "failure", code: "crewmate_unavailable", tokens: 0 };
       let receipt;
-      try { receipt = await adapter.execute({ runId: processRunId, repositoryPath, role: { ...projected, sessionId: null, authority: { ...projected.authority, network: request.selection.provider === "agy", externalAction: false } }, task: { prompt: taskPrompt }, ...(request.stage === "execute-expedition" ? { allowSubagents: true } : {}) }); }
+      const questionDiscovery = request.stage === "gather-supplies" && request.gatherMode === "questions";
+      try { receipt = await adapter.execute({ runId: processRunId, repositoryPath, role: { ...projected, sessionId: null, authority: { ...projected.authority, write: questionDiscovery ? false : projected.authority.write, network: request.selection.provider === "agy", externalAction: false }, toolAllow: questionDiscovery ? projected.toolAllow.filter((tool) => !/write|edit/i.test(tool)) : projected.toolAllow }, task: { prompt: taskPrompt }, ...(request.stage === "execute-expedition" ? { allowSubagents: true } : {}) }); }
       catch { return { status: "failure", code: "adapter_failed", tokens: 0 }; }
       if (receipt.status !== "completed") return { status: "failure", code: receipt.failure === "token_budget" ? "token_budget" : receipt.failure === "cancelled" ? "cancelled" : "adapter_failed", tokens: receipt.usage.tokens };
       tokens = receipt.usage.tokens;
@@ -224,10 +241,17 @@ export class JourneyService {
       const summary = assistantText.trim().slice(0, MAX_TEXT).trim();
       return this.cancelled.has(request.runId) ? { status: "failure", code: "cancelled", tokens } : text(summary) ? { status: "action", summary, artifacts: [], tokens } : { status: "failure", code: "result_malformed", tokens };
     }
-    const parsed = envelope(assistantText);
+    const availableQuestions = request.stage === "gather-supplies" && request.gatherMode === "questions" ? MAX_QA - RESERVED_POST_PLAN_QA - request.priorOwnerQa.length - 1 : MAX_QA - 1;
+    const parsed = envelope(assistantText, availableQuestions);
     if (parsed === "missing") return { status: "failure", code: "result_missing", tokens };
     if (parsed === "malformed") return { status: "failure", code: "result_malformed", tokens };
-    if (parsed.kind === "question") return this.cancelled.has(request.runId) ? { status: "failure", code: "cancelled", tokens } : { status: "question", question: parsed.question, tokens };
+    if (parsed.kind === "questions") {
+      if (request.stage !== "gather-supplies" || request.gatherMode !== "questions") return { status: "failure", code: "result_malformed", tokens };
+      const questions = [...parsed.questions.filter((question) => question.toLowerCase() !== "anything else?"), "Anything else?"];
+      return { status: "question", question: questions[0], questions, tokens };
+    }
+    if (parsed.kind === "question") return request.stage === "gather-supplies" && request.gatherMode !== undefined ? { status: "failure", code: "result_malformed", tokens } : this.cancelled.has(request.runId) ? { status: "failure", code: "cancelled", tokens } : { status: "question", question: parsed.question, tokens };
+    if (request.stage === "gather-supplies" && request.gatherMode === "questions") return { status: "failure", code: "result_malformed", tokens };
     for (const artifact of parsed.artifacts) {
       if (!await containedPath(repositoryPath, artifact)) return { status: "failure", code: "artifact_invalid", tokens };
       if (this.cancelled.has(request.runId)) return { status: "failure", code: "cancelled", tokens };

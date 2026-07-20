@@ -34,6 +34,7 @@ coverage:
   canonical_docs:
     - AGENTS.md
     - README.md
+    - bearing/README.md
     - bran/README.md
   legacy_docs:
     - az-sports-dev/AGENTS.md

@@ -83,6 +83,35 @@ describe("JourneyService", () => {
     expect(runner.calls[0].stdin).toContain("Do not substitute a different provider, model, or reasoning route.");
   });
 
+  it("discovers every grilling question in one read-only call and appends the final check", async () => {
+    const runner = new StubRunner(completed('BEARING_RESULT {"kind":"questions","questions":["Are all source files in this workspace?","Are there reference documents I should use?"]}', 21));
+    const result = await new JourneyService(runner).execute(await request({ priorOwnerQa: [], gatherMode: "questions" }));
+    expect(result).toEqual({ status: "question", question: "Are all source files in this workspace?", questions: ["Are all source files in this workspace?", "Are there reference documents I should use?", "Anything else?"], tokens: 21 });
+    expect(runner.calls).toHaveLength(1);
+    expect(runner.calls[0].args).toContain("read-only");
+    expect(runner.calls[0].args).not.toContain("workspace-write");
+    expect(runner.calls[0].stdin).toMatch(/return every important unresolved owner question together/i);
+    expect(runner.calls[0].stdin).toMatch(/Do not create or modify files during question discovery/i);
+  });
+
+  it("accepts a large valid question batch and reserves capacity for prior answers and the final check", async () => {
+    const longQuestions = Array.from({ length: 4 }, (_, index) => `${index}:`.padEnd(4095, "x") + "?");
+    const runner = new StubRunner(completed(`BEARING_RESULT ${JSON.stringify({ kind: "questions", questions: longQuestions })}`));
+    const result = await new JourneyService(runner).execute(await request({ gatherMode: "questions" }));
+    expect(result).toMatchObject({ status: "question", questions: [...longQuestions, "Anything else?"] });
+    expect(runner.calls[0].stdin).toContain("Return at most 60 questions");
+
+    const overCapacity = Array.from({ length: 61 }, (_, index) => `Question ${index}?`);
+    const rejected = new StubRunner(completed(`BEARING_RESULT ${JSON.stringify({ kind: "questions", questions: overCapacity })}`));
+    expect(await new JourneyService(rejected).execute(await request({ gatherMode: "questions" }))).toEqual({ status: "failure", code: "result_malformed", tokens: 5 });
+  });
+
+  it("does not restart grilling after the complete answer set is submitted", async () => {
+    const runner = new StubRunner(completed('BEARING_RESULT {"kind":"question","question":"One more thing?"}'));
+    expect(await new JourneyService(runner).execute(await request({ gatherMode: "apply" }))).toEqual({ status: "failure", code: "result_malformed", tokens: 5 });
+    expect(runner.calls[0].stdin).toMatch(/All grilling questions are answered/i);
+  });
+
   it("enables Grok subagents for Expedition only", async () => {
     const selection = { provider: "grok", model: "grok-build", reasoning: "medium" };
     const expeditionRunner = new StubRunner(completed('BEARING_RESULT {"kind":"question","question":"Proceed with both lanes?"}'));
