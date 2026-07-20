@@ -194,7 +194,7 @@ describe("command gateway", () => {
 
     const response = await call(port, "GET", "/api/v1/runs/run", authenticated);
     expect(response.status).toBe(200);
-    expect(JSON.parse(response.body)).toEqual({ runId: "run", revision: 0, workRequestCreated: false, recommendation: null, approval: null });
+    expect(JSON.parse(response.body)).toEqual({ runId: "run", revision: 0, workRequestCreated: false, pendingDecision: null, answersRecorded: 0, recommendation: null, approval: null });
     expect(response.body).not.toContain(cookie);
     expect(response.body).not.toContain("capability");
     expect(response.body).not.toContain("provider");
@@ -219,6 +219,14 @@ describe("command gateway", () => {
       type,
       payload,
     });
+
+    expect((await post("decision-run", envelope("decision-run", "create-decision", 0, "createWorkRequest", { title: "Browser work", goal: "Answer questions" }))).status).toBe(200);
+    expect((await post("decision-run", envelope("decision-run", "ask", 1, "requireDecision", { decisionId: "docs", question: "Any reference docs?", consequential: true }))).status).toBe(200);
+    let decisionState = JSON.parse((await call(port, "GET", "/api/v1/runs/decision-run", authenticated)).body);
+    expect(decisionState).toMatchObject({ revision: 2, pendingDecision: { decisionId: "docs", question: "Any reference docs?" }, answersRecorded: 0 });
+    expect((await post("decision-run", envelope("decision-run", "answer", 2, "recordOwnerAnswer", { decisionId: "docs", answer: "None" }))).status).toBe(200);
+    decisionState = JSON.parse((await call(port, "GET", "/api/v1/runs/decision-run", authenticated)).body);
+    expect(decisionState).toMatchObject({ revision: 3, pendingDecision: null, answersRecorded: 1 });
 
     expect((await post("approve-run", envelope("approve-run", "create-approve", 0, "createWorkRequest", { title: "Browser work", goal: "Recommend a mode" }))).status).toBe(200);
     expect((await post("approve-run", envelope("approve-run", "recommend-approve", 1, "recommendExecutionMode", { workItems: 2, maxCrewmatesPerExplorer: 3, perAgentTokenEstimate: 1000 }))).status).toBe(200);

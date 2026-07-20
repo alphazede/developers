@@ -237,7 +237,7 @@ describe("GET / native page and fragment secrecy", () => {
     expect(r.body).toContain("#repository-panel .repo-grid,.route-options,.route-details{grid-template-columns:1fr}");
     expect(r.body).toContain("#repository-panel .signature-link{display:none}");
     expect(r.body).toContain("--canvas:#010102");
-    expect(r.body).toContain("html{zoom:1.2}");
+    expect(r.body).toContain("html{zoom:1.2}.panel,#repository-panel{background:rgba(15,16,17,.35)");
     expect(r.body).toContain("padding:0 clamp(24px,4vw,72px)");
     expect(r.body).toContain("main{max-width:1180px;margin:0;padding:42px clamp(24px,4vw,72px) 72px}");
     expect(r.body).not.toContain("calc((100vw - 1180px)/2)");
@@ -271,6 +271,12 @@ describe("GET / native page and fragment secrecy", () => {
     expect(r.body).toContain('<span class="step">SET BEARINGS</span>');
     expect(r.body).toContain("First stop: Set Bearings");
     expect(r.body).toContain("Are all source files in this workspace, or are there reference documents Bearing should use?");
+    expect(r.body).toContain('id="planning-answer-form"');
+    expect(r.body).toContain('<label for="planning-answer">Your answer</label>');
+    expect(r.body).toContain('placeholder="Type your answer here…"');
+    expect(r.body).toContain('postCommand(currentRunId, state, "requireDecision"');
+    expect(r.body).toContain('postCommand(currentRunId, state, "recordOwnerAnswer"');
+    expect(r.body).toContain('question: "Anything else?"');
     expect(r.body).toContain('setStatus("Journey started. Set Bearings comes next.", false)');
     expect(r.body).toContain('<p class="hero-help">New to Bearing?<button class="demo-link" id="view-demo" type="button">See how it works</button></p>');
     expect(r.body).not.toContain('id="view-demo" type="button" hidden');
@@ -297,7 +303,7 @@ describe("GET / native page and fragment secrecy", () => {
     expect(r.body).toContain("<b>Pros:</b>");
     expect(r.body).toContain("<b>Tradeoff:</b>");
     expect(r.body).toContain(".mode-grid{display:grid");
-    expect(r.body).toContain(".demo-panel{background:rgba(15,16,17,.35)");
+    expect(r.body).toContain(".panel,#repository-panel{background:rgba(15,16,17,.35)");
     expect(r.body).toContain("backdrop-filter:blur(6px)");
     expect(r.body).toContain("function chooseDemoMode(mode)");
     expect(r.body).toContain('if (demoStage === 2 && !demoMode) { chooseDemoMode("explorer")');

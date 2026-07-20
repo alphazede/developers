@@ -22,6 +22,8 @@ export class CommandGateway {
         runId: state.runId,
         revision: state.revision,
         workRequestCreated: state.workRequestCreated,
+        pendingDecision: state.pendingDecision,
+        answersRecorded: state.events.filter((event) => event.type === "ownerAnswered").length,
         recommendation: state.executionRecommendation,
         approval: state.executionApproval,
       }));
