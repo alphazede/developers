@@ -1,0 +1,7 @@
+import { GMAIL_ADDON_SELECTED_SCOPE } from "../../../../../../server/oauth";
+import { getLiveConnectorRuntime } from "../../../../../../server/connectors/live-runtime";
+import { hasExactKeys, readBoundedJsonObject, RequestBoundaryError } from "../../../request-boundary";
+
+const reply=(code:string,status:number)=>Response.json({error:{code}},{status,headers:{"cache-control":"private, no-store"}});
+/** Normalized payload seam only; the separately configured Workspace add-on must verify Google's temporary grant before forwarding. */
+export const POST=async(request:Request)=>{const runtime=await getLiveConnectorRuntime();if(!runtime?.config.gmailAddon)return reply("GMAIL_ADDON_DISABLED",503);const command=await runtime.authorizeMutation(request);if(!command)return reply("UNAUTHORIZED",401);if(request.headers.get("x-gmail-addon-scope")!==GMAIL_ADDON_SELECTED_SCOPE)return reply("GMAIL_SCOPE_DENIED",403);try{const body=await readBoundedJsonObject(request,1_048_576);if(!hasExactKeys(body,["actions","consentRevision","fetchedAt"])||!Array.isArray(body.actions))return reply("GMAIL_SELECTION_REJECTED",400);return Response.json(await runtime.importSelectedGmail(body.actions as never,body as {consentRevision:number;fetchedAt:string},command),{headers:{"cache-control":"private, no-store"}});}catch(error){if(error instanceof RequestBoundaryError)return reply(error.status===413?"PAYLOAD_TOO_LARGE":"GMAIL_SELECTION_REJECTED",error.status);return reply("GMAIL_SELECTION_REJECTED",400);}};

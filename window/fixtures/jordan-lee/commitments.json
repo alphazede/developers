@@ -1,0 +1,515 @@
+[
+  {
+    "schemaVersion": 1,
+    "id": "b2000000-0000-4000-8000-000000000001",
+    "kind": "calendar-event",
+    "title": "Demanding recurring meeting",
+    "startAt": "2026-07-09T16:00:00Z",
+    "endAt": "2026-07-09T17:00:00Z",
+    "deadlineAt": null,
+    "hard": true,
+    "protected": false,
+    "recurringSeriesRef": "series-demanding-sync",
+    "participantSetKey": "0eb768080a293a429e1d1b382a6a6aa6cb76123ca5e38e98ccb9b3ca8792234a",
+    "provenance": {
+      "schemaVersion": 1,
+      "source": "google-calendar",
+      "sourceEntityId": "google-calendar-commitment-01",
+      "consentRevision": 1,
+      "freshness": {
+        "schemaVersion": 1,
+        "fetchedAt": "2026-07-23T15:00:00Z",
+        "sourceUpdatedAt": "2026-07-09T13:00:00Z",
+        "expiresAt": null,
+        "state": "fixture"
+      },
+      "importedAt": "2026-07-23T15:00:00Z"
+    }
+  },
+  {
+    "schemaVersion": 1,
+    "id": "b2000000-0000-4000-8000-000000000002",
+    "kind": "selected-email-commitment",
+    "title": "Send requested summary",
+    "startAt": null,
+    "endAt": null,
+    "deadlineAt": "2026-07-10T20:00:00Z",
+    "hard": true,
+    "protected": false,
+    "recurringSeriesRef": null,
+    "participantSetKey": null,
+    "provenance": {
+      "schemaVersion": 1,
+      "source": "gmail",
+      "sourceEntityId": "gmail-commitment-02",
+      "consentRevision": 1,
+      "freshness": {
+        "schemaVersion": 1,
+        "fetchedAt": "2026-07-23T15:00:00Z",
+        "sourceUpdatedAt": "2026-07-10T13:00:00Z",
+        "expiresAt": null,
+        "state": "fixture"
+      },
+      "importedAt": "2026-07-23T15:00:00Z"
+    }
+  },
+  {
+    "schemaVersion": 1,
+    "id": "b2000000-0000-4000-8000-000000000003",
+    "kind": "protected-time",
+    "title": "Protected workout",
+    "startAt": "2026-07-11T21:00:00Z",
+    "endAt": "2026-07-11T22:00:00Z",
+    "deadlineAt": null,
+    "hard": true,
+    "protected": true,
+    "recurringSeriesRef": null,
+    "participantSetKey": null,
+    "provenance": {
+      "schemaVersion": 1,
+      "source": "ics",
+      "sourceEntityId": "ics-commitment-03",
+      "consentRevision": 1,
+      "freshness": {
+        "schemaVersion": 1,
+        "fetchedAt": "2026-07-23T15:00:00Z",
+        "sourceUpdatedAt": "2026-07-11T13:00:00Z",
+        "expiresAt": null,
+        "state": "fixture"
+      },
+      "importedAt": "2026-07-23T15:00:00Z"
+    }
+  },
+  {
+    "schemaVersion": 1,
+    "id": "b2000000-0000-4000-8000-000000000004",
+    "kind": "protected-time",
+    "title": "Protected partner time",
+    "startAt": "2026-07-12T23:00:00Z",
+    "endAt": "2026-07-12T23:45:00Z",
+    "deadlineAt": null,
+    "hard": true,
+    "protected": true,
+    "recurringSeriesRef": "series-partner-time",
+    "participantSetKey": "87dd6808866ac176e0f9fedb9dc2c0f1d22f2f7ea444a674bcede9e4276678e2",
+    "provenance": {
+      "schemaVersion": 1,
+      "source": "local",
+      "sourceEntityId": "local-commitment-04",
+      "consentRevision": 1,
+      "freshness": {
+        "schemaVersion": 1,
+        "fetchedAt": "2026-07-23T15:00:00Z",
+        "sourceUpdatedAt": "2026-07-12T13:00:00Z",
+        "expiresAt": null,
+        "state": "fixture"
+      },
+      "importedAt": "2026-07-23T15:00:00Z"
+    }
+  },
+  {
+    "schemaVersion": 1,
+    "id": "b2000000-0000-4000-8000-000000000005",
+    "kind": "protected-time",
+    "title": "Protected focus block",
+    "startAt": "2026-07-13T14:00:00Z",
+    "endAt": "2026-07-13T15:00:00Z",
+    "deadlineAt": null,
+    "hard": true,
+    "protected": true,
+    "recurringSeriesRef": null,
+    "participantSetKey": null,
+    "provenance": {
+      "schemaVersion": 1,
+      "source": "fixture",
+      "sourceEntityId": "fixture-commitment-05",
+      "consentRevision": 1,
+      "freshness": {
+        "schemaVersion": 1,
+        "fetchedAt": "2026-07-23T15:00:00Z",
+        "sourceUpdatedAt": "2026-07-13T13:00:00Z",
+        "expiresAt": null,
+        "state": "fixture"
+      },
+      "importedAt": "2026-07-23T15:00:00Z"
+    }
+  },
+  {
+    "schemaVersion": 1,
+    "id": "b2000000-0000-4000-8000-000000000006",
+    "kind": "calendar-event",
+    "title": "Demanding recurring meeting",
+    "startAt": "2026-07-14T16:00:00Z",
+    "endAt": "2026-07-14T17:00:00Z",
+    "deadlineAt": null,
+    "hard": true,
+    "protected": false,
+    "recurringSeriesRef": "series-demanding-sync",
+    "participantSetKey": "0eb768080a293a429e1d1b382a6a6aa6cb76123ca5e38e98ccb9b3ca8792234a",
+    "provenance": {
+      "schemaVersion": 1,
+      "source": "google-calendar",
+      "sourceEntityId": "google-calendar-commitment-06",
+      "consentRevision": 1,
+      "freshness": {
+        "schemaVersion": 1,
+        "fetchedAt": "2026-07-23T15:00:00Z",
+        "sourceUpdatedAt": "2026-07-14T13:00:00Z",
+        "expiresAt": null,
+        "state": "fixture"
+      },
+      "importedAt": "2026-07-23T15:00:00Z"
+    }
+  },
+  {
+    "schemaVersion": 1,
+    "id": "b2000000-0000-4000-8000-000000000007",
+    "kind": "selected-email-commitment",
+    "title": "Reply with planning notes",
+    "startAt": null,
+    "endAt": null,
+    "deadlineAt": "2026-07-15T21:00:00Z",
+    "hard": true,
+    "protected": false,
+    "recurringSeriesRef": null,
+    "participantSetKey": null,
+    "provenance": {
+      "schemaVersion": 1,
+      "source": "gmail",
+      "sourceEntityId": "gmail-commitment-07",
+      "consentRevision": 1,
+      "freshness": {
+        "schemaVersion": 1,
+        "fetchedAt": "2026-07-23T15:00:00Z",
+        "sourceUpdatedAt": "2026-07-15T13:00:00Z",
+        "expiresAt": null,
+        "state": "fixture"
+      },
+      "importedAt": "2026-07-23T15:00:00Z"
+    }
+  },
+  {
+    "schemaVersion": 1,
+    "id": "b2000000-0000-4000-8000-000000000008",
+    "kind": "calendar-event",
+    "title": "Planning review",
+    "startAt": "2026-07-16T18:00:00Z",
+    "endAt": "2026-07-16T18:45:00Z",
+    "deadlineAt": null,
+    "hard": true,
+    "protected": false,
+    "recurringSeriesRef": null,
+    "participantSetKey": "69208ab2f8e5fa27914b6f45e4dbcfa8e86f16270156ec40b77747d755b026fe",
+    "provenance": {
+      "schemaVersion": 1,
+      "source": "microsoft",
+      "sourceEntityId": "microsoft-commitment-08",
+      "consentRevision": 1,
+      "freshness": {
+        "schemaVersion": 1,
+        "fetchedAt": "2026-07-23T15:00:00Z",
+        "sourceUpdatedAt": "2026-07-16T13:00:00Z",
+        "expiresAt": null,
+        "state": "fixture"
+      },
+      "importedAt": "2026-07-23T15:00:00Z"
+    }
+  },
+  {
+    "schemaVersion": 1,
+    "id": "b2000000-0000-4000-8000-000000000009",
+    "kind": "protected-time",
+    "title": "Protected workout",
+    "startAt": "2026-07-17T21:00:00Z",
+    "endAt": "2026-07-17T22:00:00Z",
+    "deadlineAt": null,
+    "hard": true,
+    "protected": true,
+    "recurringSeriesRef": "series-workout",
+    "participantSetKey": null,
+    "provenance": {
+      "schemaVersion": 1,
+      "source": "ics",
+      "sourceEntityId": "ics-commitment-09",
+      "consentRevision": 1,
+      "freshness": {
+        "schemaVersion": 1,
+        "fetchedAt": "2026-07-23T15:00:00Z",
+        "sourceUpdatedAt": "2026-07-17T13:00:00Z",
+        "expiresAt": null,
+        "state": "fixture"
+      },
+      "importedAt": "2026-07-23T15:00:00Z"
+    }
+  },
+  {
+    "schemaVersion": 1,
+    "id": "b2000000-0000-4000-8000-000000000010",
+    "kind": "protected-time",
+    "title": "Protected partner time",
+    "startAt": "2026-07-18T23:00:00Z",
+    "endAt": "2026-07-18T23:45:00Z",
+    "deadlineAt": null,
+    "hard": true,
+    "protected": true,
+    "recurringSeriesRef": "series-partner-time",
+    "participantSetKey": "87dd6808866ac176e0f9fedb9dc2c0f1d22f2f7ea444a674bcede9e4276678e2",
+    "provenance": {
+      "schemaVersion": 1,
+      "source": "local",
+      "sourceEntityId": "local-commitment-10",
+      "consentRevision": 1,
+      "freshness": {
+        "schemaVersion": 1,
+        "fetchedAt": "2026-07-23T15:00:00Z",
+        "sourceUpdatedAt": "2026-07-18T13:00:00Z",
+        "expiresAt": null,
+        "state": "fixture"
+      },
+      "importedAt": "2026-07-23T15:00:00Z"
+    }
+  },
+  {
+    "schemaVersion": 1,
+    "id": "b2000000-0000-4000-8000-000000000011",
+    "kind": "protected-time",
+    "title": "Protected quiet hour",
+    "startAt": "2026-07-19T14:00:00Z",
+    "endAt": "2026-07-19T15:00:00Z",
+    "deadlineAt": null,
+    "hard": true,
+    "protected": true,
+    "recurringSeriesRef": null,
+    "participantSetKey": null,
+    "provenance": {
+      "schemaVersion": 1,
+      "source": "fixture",
+      "sourceEntityId": "fixture-commitment-11",
+      "consentRevision": 1,
+      "freshness": {
+        "schemaVersion": 1,
+        "fetchedAt": "2026-07-23T15:00:00Z",
+        "sourceUpdatedAt": "2026-07-19T13:00:00Z",
+        "expiresAt": null,
+        "state": "fixture"
+      },
+      "importedAt": "2026-07-23T15:00:00Z"
+    }
+  },
+  {
+    "schemaVersion": 1,
+    "id": "b2000000-0000-4000-8000-000000000012",
+    "kind": "calendar-event",
+    "title": "Demanding recurring meeting",
+    "startAt": "2026-07-20T16:00:00Z",
+    "endAt": "2026-07-20T17:00:00Z",
+    "deadlineAt": null,
+    "hard": true,
+    "protected": false,
+    "recurringSeriesRef": "series-demanding-sync",
+    "participantSetKey": "0eb768080a293a429e1d1b382a6a6aa6cb76123ca5e38e98ccb9b3ca8792234a",
+    "provenance": {
+      "schemaVersion": 1,
+      "source": "google-calendar",
+      "sourceEntityId": "google-calendar-commitment-12",
+      "consentRevision": 1,
+      "freshness": {
+        "schemaVersion": 1,
+        "fetchedAt": "2026-07-23T15:00:00Z",
+        "sourceUpdatedAt": "2026-07-20T13:00:00Z",
+        "expiresAt": null,
+        "state": "fixture"
+      },
+      "importedAt": "2026-07-23T15:00:00Z"
+    }
+  },
+  {
+    "schemaVersion": 1,
+    "id": "b2000000-0000-4000-8000-000000000013",
+    "kind": "selected-email-commitment",
+    "title": "Send requested checklist",
+    "startAt": null,
+    "endAt": null,
+    "deadlineAt": "2026-07-21T20:30:00Z",
+    "hard": true,
+    "protected": false,
+    "recurringSeriesRef": null,
+    "participantSetKey": null,
+    "provenance": {
+      "schemaVersion": 1,
+      "source": "gmail",
+      "sourceEntityId": "gmail-commitment-13",
+      "consentRevision": 1,
+      "freshness": {
+        "schemaVersion": 1,
+        "fetchedAt": "2026-07-23T15:00:00Z",
+        "sourceUpdatedAt": "2026-07-21T13:00:00Z",
+        "expiresAt": null,
+        "state": "fixture"
+      },
+      "importedAt": "2026-07-23T15:00:00Z"
+    }
+  },
+  {
+    "schemaVersion": 1,
+    "id": "b2000000-0000-4000-8000-000000000014",
+    "kind": "calendar-event",
+    "title": "Administration review",
+    "startAt": "2026-07-22T19:00:00Z",
+    "endAt": "2026-07-22T19:30:00Z",
+    "deadlineAt": null,
+    "hard": true,
+    "protected": false,
+    "recurringSeriesRef": null,
+    "participantSetKey": "69208ab2f8e5fa27914b6f45e4dbcfa8e86f16270156ec40b77747d755b026fe",
+    "provenance": {
+      "schemaVersion": 1,
+      "source": "microsoft",
+      "sourceEntityId": "microsoft-commitment-14",
+      "consentRevision": 1,
+      "freshness": {
+        "schemaVersion": 1,
+        "fetchedAt": "2026-07-23T15:00:00Z",
+        "sourceUpdatedAt": "2026-07-22T13:00:00Z",
+        "expiresAt": null,
+        "state": "fixture"
+      },
+      "importedAt": "2026-07-23T15:00:00Z"
+    }
+  },
+  {
+    "schemaVersion": 1,
+    "id": "b2000000-0000-4000-8000-000000000015",
+    "kind": "selected-email-commitment",
+    "title": "Send capacity update",
+    "startAt": null,
+    "endAt": null,
+    "deadlineAt": "2026-07-23T22:00:00Z",
+    "hard": true,
+    "protected": false,
+    "recurringSeriesRef": null,
+    "participantSetKey": null,
+    "provenance": {
+      "schemaVersion": 1,
+      "source": "gmail",
+      "sourceEntityId": "gmail-commitment-15",
+      "consentRevision": 1,
+      "freshness": {
+        "schemaVersion": 1,
+        "fetchedAt": "2026-07-23T15:00:00Z",
+        "sourceUpdatedAt": "2026-07-23T14:45:00Z",
+        "expiresAt": null,
+        "state": "fixture"
+      },
+      "importedAt": "2026-07-23T15:00:00Z"
+    }
+  },
+  {
+    "schemaVersion": 1,
+    "id": "b2000000-0000-4000-8000-000000000016",
+    "kind": "calendar-event",
+    "title": "Private demanding meeting",
+    "startAt": "2026-07-23T19:00:00Z",
+    "endAt": "2026-07-23T19:30:00Z",
+    "deadlineAt": null,
+    "hard": true,
+    "protected": false,
+    "recurringSeriesRef": null,
+    "participantSetKey": "0eb768080a293a429e1d1b382a6a6aa6cb76123ca5e38e98ccb9b3ca8792234a",
+    "provenance": {
+      "schemaVersion": 1,
+      "source": "google-calendar",
+      "sourceEntityId": "google-calendar-commitment-16",
+      "consentRevision": 1,
+      "freshness": {
+        "schemaVersion": 1,
+        "fetchedAt": "2026-07-23T15:00:00Z",
+        "sourceUpdatedAt": "2026-07-23T14:40:00Z",
+        "expiresAt": null,
+        "state": "fixture"
+      },
+      "importedAt": "2026-07-23T15:00:00Z"
+    }
+  },
+  {
+    "schemaVersion": 1,
+    "id": "b2000000-0000-4000-8000-000000000017",
+    "kind": "calendar-event",
+    "title": "Private decision review",
+    "startAt": "2026-07-23T19:30:00Z",
+    "endAt": "2026-07-23T20:00:00Z",
+    "deadlineAt": null,
+    "hard": true,
+    "protected": false,
+    "recurringSeriesRef": null,
+    "participantSetKey": "0eb768080a293a429e1d1b382a6a6aa6cb76123ca5e38e98ccb9b3ca8792234a",
+    "provenance": {
+      "schemaVersion": 1,
+      "source": "google-calendar",
+      "sourceEntityId": "google-calendar-commitment-17",
+      "consentRevision": 1,
+      "freshness": {
+        "schemaVersion": 1,
+        "fetchedAt": "2026-07-23T15:00:00Z",
+        "sourceUpdatedAt": "2026-07-23T14:40:00Z",
+        "expiresAt": null,
+        "state": "fixture"
+      },
+      "importedAt": "2026-07-23T15:00:00Z"
+    }
+  },
+  {
+    "schemaVersion": 1,
+    "id": "b2000000-0000-4000-8000-000000000018",
+    "kind": "protected-time",
+    "title": "Protected workout",
+    "startAt": "2026-07-23T21:30:00Z",
+    "endAt": "2026-07-23T22:30:00Z",
+    "deadlineAt": null,
+    "hard": true,
+    "protected": true,
+    "recurringSeriesRef": "series-workout",
+    "participantSetKey": null,
+    "provenance": {
+      "schemaVersion": 1,
+      "source": "ics",
+      "sourceEntityId": "ics-commitment-18",
+      "consentRevision": 1,
+      "freshness": {
+        "schemaVersion": 1,
+        "fetchedAt": "2026-07-23T15:00:00Z",
+        "sourceUpdatedAt": "2026-07-23T14:35:00Z",
+        "expiresAt": null,
+        "state": "fixture"
+      },
+      "importedAt": "2026-07-23T15:00:00Z"
+    }
+  },
+  {
+    "schemaVersion": 1,
+    "id": "b2000000-0000-4000-8000-000000000019",
+    "kind": "protected-time",
+    "title": "Protected partner time",
+    "startAt": "2026-07-23T22:30:00Z",
+    "endAt": "2026-07-23T23:15:00Z",
+    "deadlineAt": null,
+    "hard": true,
+    "protected": true,
+    "recurringSeriesRef": "series-partner-time",
+    "participantSetKey": "87dd6808866ac176e0f9fedb9dc2c0f1d22f2f7ea444a674bcede9e4276678e2",
+    "provenance": {
+      "schemaVersion": 1,
+      "source": "local",
+      "sourceEntityId": "local-commitment-19",
+      "consentRevision": 1,
+      "freshness": {
+        "schemaVersion": 1,
+        "fetchedAt": "2026-07-23T15:00:00Z",
+        "sourceUpdatedAt": "2026-07-23T14:30:00Z",
+        "expiresAt": null,
+        "state": "fixture"
+      },
+      "importedAt": "2026-07-23T15:00:00Z"
+    }
+  }
+]

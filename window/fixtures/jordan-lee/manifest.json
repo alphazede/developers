@@ -1,0 +1,55 @@
+{
+  "schemaVersion": 1,
+  "persona": {
+    "id": "2d2882d0-6c16-4e0a-b5b6-4d2d6f604110",
+    "displayName": "Jordan Lee",
+    "timeZone": "America/Chicago"
+  },
+  "history": {
+    "startDate": "2026-07-09",
+    "endDate": "2026-07-22"
+  },
+  "canonicalDay": "2026-07-23",
+  "fixedNow": "2026-07-23T15:00:00Z",
+  "files": {
+    "tasks.json": {
+      "sha256": "a8e85b1c1ead6978fb5b300a41da210e32ae4c7ce57b813c366c70f04ce61f9a",
+      "count": 14
+    },
+    "commitments.json": {
+      "sha256": "ae4d8c43af46d487dbe0be8e4aa145590fe111067bd8dccd698f3c91937bd6af",
+      "count": 19
+    },
+    "observations.json": {
+      "sha256": "0d5735b1950a1a784198d89e7b7a9dc7089f2326837250d73dddf07b715ca828",
+      "count": 14
+    },
+    "state.json": {
+      "sha256": "5733f5d25e908121215647a33b4570d0f353eb77d17b4154c3c9befc43259b96",
+      "count": 1
+    },
+    "recommendations.json": {
+      "sha256": "2b28b7f752cd540af983c7c858eaab2491d1382a2f77cb1b05832d467dc1b7c4",
+      "count": 1
+    }
+  },
+  "focusGate": {
+    "enabled": true,
+    "windows": [
+      {
+        "id": "b15c476d-12a0-429e-9f9f-0f3148df9001",
+        "startLocalTime": "09:00",
+        "endLocalTime": "11:00"
+      },
+      {
+        "id": "b15c476d-12a0-429e-9f9f-0f3148df9002",
+        "startLocalTime": "14:00",
+        "endLocalTime": "16:00"
+      }
+    ]
+  },
+  "expected": {
+    "stateSha256": "5733f5d25e908121215647a33b4570d0f353eb77d17b4154c3c9befc43259b96",
+    "recommendationsSha256": "2b28b7f752cd540af983c7c858eaab2491d1382a2f77cb1b05832d467dc1b7c4"
+  }
+}

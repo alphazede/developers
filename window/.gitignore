@@ -1,0 +1,9 @@
+.local/
+node_modules/
+.next/
+coverage/
+.playwright-cli/
+test-results/
+playwright-report/
+*.tgz
+*.tsbuildinfo

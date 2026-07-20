@@ -1,0 +1,36 @@
+{
+  "pages": [
+    {
+      "items": [
+        {
+          "id": "event-b",
+          "summary": "Planning review",
+          "start": "2026-07-23T19:30:00Z",
+          "end": "2026-07-23T20:00:00Z",
+          "status": "confirmed",
+          "recurrence": [],
+          "recurringEventId": null,
+          "updated": "2026-07-22T18:00:00Z",
+          "attendeeIds": ["person-b", "person-a"]
+        }
+      ],
+      "nextPageToken": "page-2"
+    },
+    {
+      "items": [
+        {
+          "id": "event-a",
+          "summary": "Focus review",
+          "start": "2026-07-23T18:00:00Z",
+          "end": "2026-07-23T18:30:00Z",
+          "status": "confirmed",
+          "recurrence": ["RRULE:FREQ=WEEKLY"],
+          "recurringEventId": "series-a",
+          "updated": "2026-07-21T18:00:00Z",
+          "attendeeIds": []
+        }
+      ],
+      "nextPageToken": null
+    }
+  ]
+}

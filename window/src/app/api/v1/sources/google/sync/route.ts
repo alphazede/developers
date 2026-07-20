@@ -1,0 +1,11 @@
+import type { GoogleCalendarAdapter } from "../../../../../../adapters/google";
+import { hasExactKeys, readBoundedJsonObject, RequestBoundaryError } from "../../../request-boundary";
+import { getLiveConnectorRuntime } from "../../../../../../server/connectors/live-runtime";
+
+/** Composition seam for the assembled SessionGuard plus Origin and CSRF checks. */
+export type GoogleRouteAuthorization=(request:Request)=>boolean;
+export const createGoogleSyncHandler=(adapter:GoogleCalendarAdapter,authorize:GoogleRouteAuthorization)=>async(request:Request)=>{
+  try{if(!authorize(request))return Response.json({error:{code:"UNAUTHORIZED"}},{status:401,headers:{"cache-control":"private, no-store"}});const body=await readBoundedJsonObject(request,4_096);if(!hasExactKeys(body,["consentRevision","fetchedAt"]))throw new Error("invalid");const result=await adapter.sync(body as {consentRevision:number;fetchedAt:string});return Response.json(result,{status:result.ok?200:result.error.code==="AUTH_REQUIRED"?401:result.error.code==="SCOPE_DENIED"?403:502,headers:{"cache-control":"private, no-store"}});}catch(error){const status=error instanceof RequestBoundaryError?error.status:400;return Response.json({error:{code:status===413?"PAYLOAD_TOO_LARGE":"GOOGLE_SYNC_REJECTED"}},{status,headers:{"cache-control":"private, no-store"}});}
+};
+const disabled=()=>Response.json({error:{code:"GOOGLE_SOURCE_DISABLED",message:"Google Calendar connection is not configured.",retriable:false}},{status:503,headers:{"cache-control":"private, no-store"}});
+export const POST=async(request:Request)=>{const runtime=await getLiveConnectorRuntime();if(!runtime?.config.google)return disabled();const command=await runtime.authorizeMutation(request);if(!command)return Response.json({error:{code:"UNAUTHORIZED"}},{status:401,headers:{"cache-control":"private, no-store"}});try{const adapter=await runtime.googleAdapter(),facade={sync:async(input:Parameters<GoogleCalendarAdapter["sync"]>[0])=>{const result=await adapter.sync(input);if(result.ok)await runtime.store.commitConnectorSync({...command,source:"google-calendar",consentRevision:input.consentRevision,freshness:result.freshness,commitments:result.commitments});return result;}} as GoogleCalendarAdapter;return createGoogleSyncHandler(facade,()=>true)(request);}catch{return disabled();}};

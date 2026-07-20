@@ -1,0 +1,1429 @@
+{
+  "schemaVersion": 1,
+  "revision": 1,
+  "profileId": "2d2882d0-6c16-4e0a-b5b6-4d2d6f604110",
+  "timeZone": "America/Chicago",
+  "connections": {
+    "local": {
+      "capabilities": [
+        "read-tasks",
+        "write-local-proposals"
+      ],
+      "consentRevision": 1,
+      "freshness": {
+        "schemaVersion": 1,
+        "fetchedAt": "2026-07-23T15:00:00Z",
+        "sourceUpdatedAt": "2026-07-22T19:00:00Z",
+        "expiresAt": null,
+        "state": "fixture"
+      }
+    },
+    "fixture": {
+      "capabilities": [
+        "read-fixtures"
+      ],
+      "consentRevision": 1,
+      "freshness": {
+        "schemaVersion": 1,
+        "fetchedAt": "2026-07-23T15:00:00Z",
+        "sourceUpdatedAt": "2026-07-22T19:00:00Z",
+        "expiresAt": null,
+        "state": "fixture"
+      }
+    },
+    "google-calendar": {
+      "capabilities": [
+        "read-calendar"
+      ],
+      "consentRevision": 1,
+      "freshness": {
+        "schemaVersion": 1,
+        "fetchedAt": "2026-07-23T15:00:00Z",
+        "sourceUpdatedAt": "2026-07-22T19:00:00Z",
+        "expiresAt": null,
+        "state": "fixture"
+      }
+    },
+    "gmail": {
+      "capabilities": [
+        "read-selected-email"
+      ],
+      "consentRevision": 1,
+      "freshness": {
+        "schemaVersion": 1,
+        "fetchedAt": "2026-07-23T15:00:00Z",
+        "sourceUpdatedAt": "2026-07-22T19:00:00Z",
+        "expiresAt": null,
+        "state": "fixture"
+      }
+    },
+    "github": {
+      "capabilities": [
+        "read-tasks"
+      ],
+      "consentRevision": 1,
+      "freshness": {
+        "schemaVersion": 1,
+        "fetchedAt": "2026-07-23T15:00:00Z",
+        "sourceUpdatedAt": "2026-07-22T19:00:00Z",
+        "expiresAt": null,
+        "state": "fixture"
+      }
+    },
+    "linear": {
+      "capabilities": [
+        "read-tasks"
+      ],
+      "consentRevision": 1,
+      "freshness": {
+        "schemaVersion": 1,
+        "fetchedAt": "2026-07-23T15:00:00Z",
+        "sourceUpdatedAt": "2026-07-22T19:00:00Z",
+        "expiresAt": null,
+        "state": "fixture"
+      }
+    },
+    "microsoft": {
+      "capabilities": [
+        "read-calendar"
+      ],
+      "consentRevision": 1,
+      "freshness": {
+        "schemaVersion": 1,
+        "fetchedAt": "2026-07-23T15:00:00Z",
+        "sourceUpdatedAt": "2026-07-22T19:00:00Z",
+        "expiresAt": null,
+        "state": "fixture"
+      }
+    },
+    "strava": {
+      "capabilities": [
+        "read-activity"
+      ],
+      "consentRevision": 1,
+      "freshness": {
+        "schemaVersion": 1,
+        "fetchedAt": "2026-07-23T15:00:00Z",
+        "sourceUpdatedAt": "2026-07-22T19:00:00Z",
+        "expiresAt": null,
+        "state": "fixture"
+      }
+    },
+    "oura": {
+      "capabilities": [
+        "read-readiness"
+      ],
+      "consentRevision": 1,
+      "freshness": {
+        "schemaVersion": 1,
+        "fetchedAt": "2026-07-23T15:00:00Z",
+        "sourceUpdatedAt": "2026-07-22T19:00:00Z",
+        "expiresAt": null,
+        "state": "fixture"
+      }
+    },
+    "ics": {
+      "capabilities": [
+        "read-calendar"
+      ],
+      "consentRevision": 1,
+      "freshness": {
+        "schemaVersion": 1,
+        "fetchedAt": "2026-07-23T15:00:00Z",
+        "sourceUpdatedAt": "2026-07-22T19:00:00Z",
+        "expiresAt": null,
+        "state": "fixture"
+      }
+    }
+  },
+  "tasks": [
+    {
+      "schemaVersion": 1,
+      "id": "a1000000-0000-4000-8000-000000000001",
+      "source": "local",
+      "sourceEntityId": "local-task-01",
+      "title": "Draft learning goal",
+      "state": "completed",
+      "durationMinutes": 60,
+      "deadlineAt": null,
+      "priority": 30,
+      "projectRef": "goal-neutral-progress",
+      "labels": [
+        "goal-alignment"
+      ],
+      "immutable": false,
+      "provenance": {
+        "schemaVersion": 1,
+        "source": "local",
+        "sourceEntityId": "local-task-01",
+        "consentRevision": 1,
+        "freshness": {
+          "schemaVersion": 1,
+          "fetchedAt": "2026-07-23T15:00:00Z",
+          "sourceUpdatedAt": "2026-07-09T17:00:00Z",
+          "expiresAt": null,
+          "state": "fixture"
+        },
+        "importedAt": "2026-07-23T15:00:00Z"
+      }
+    },
+    {
+      "schemaVersion": 1,
+      "id": "a1000000-0000-4000-8000-000000000002",
+      "source": "fixture",
+      "sourceEntityId": "fixture-task-02",
+      "title": "Prepare focus notes",
+      "state": "completed",
+      "durationMinutes": 30,
+      "deadlineAt": null,
+      "priority": 31,
+      "projectRef": null,
+      "labels": [
+        "practice"
+      ],
+      "immutable": false,
+      "provenance": {
+        "schemaVersion": 1,
+        "source": "fixture",
+        "sourceEntityId": "fixture-task-02",
+        "consentRevision": 1,
+        "freshness": {
+          "schemaVersion": 1,
+          "fetchedAt": "2026-07-23T15:00:00Z",
+          "sourceUpdatedAt": "2026-07-10T17:00:00Z",
+          "expiresAt": null,
+          "state": "fixture"
+        },
+        "importedAt": "2026-07-23T15:00:00Z"
+      }
+    },
+    {
+      "schemaVersion": 1,
+      "id": "a1000000-0000-4000-8000-000000000003",
+      "source": "github",
+      "sourceEntityId": "change-request-03",
+      "title": "Review imported change request",
+      "state": "completed",
+      "durationMinutes": 45,
+      "deadlineAt": null,
+      "priority": 32,
+      "projectRef": null,
+      "labels": [
+        "imported"
+      ],
+      "immutable": true,
+      "provenance": {
+        "schemaVersion": 1,
+        "source": "github",
+        "sourceEntityId": "change-request-03",
+        "consentRevision": 1,
+        "freshness": {
+          "schemaVersion": 1,
+          "fetchedAt": "2026-07-23T15:00:00Z",
+          "sourceUpdatedAt": "2026-07-11T17:00:00Z",
+          "expiresAt": null,
+          "state": "fixture"
+        },
+        "importedAt": "2026-07-23T15:00:00Z"
+      }
+    },
+    {
+      "schemaVersion": 1,
+      "id": "a1000000-0000-4000-8000-000000000004",
+      "source": "linear",
+      "sourceEntityId": "work-item-04",
+      "title": "Plan imported milestone",
+      "state": "completed",
+      "durationMinutes": 60,
+      "deadlineAt": null,
+      "priority": 33,
+      "projectRef": null,
+      "labels": [
+        "imported"
+      ],
+      "immutable": true,
+      "provenance": {
+        "schemaVersion": 1,
+        "source": "linear",
+        "sourceEntityId": "work-item-04",
+        "consentRevision": 1,
+        "freshness": {
+          "schemaVersion": 1,
+          "fetchedAt": "2026-07-23T15:00:00Z",
+          "sourceUpdatedAt": "2026-07-12T17:00:00Z",
+          "expiresAt": null,
+          "state": "fixture"
+        },
+        "importedAt": "2026-07-23T15:00:00Z"
+      }
+    },
+    {
+      "schemaVersion": 1,
+      "id": "a1000000-0000-4000-8000-000000000005",
+      "source": "local",
+      "sourceEntityId": "local-task-05",
+      "title": "Write decision summary",
+      "state": "completed",
+      "durationMinutes": 60,
+      "deadlineAt": null,
+      "priority": 34,
+      "projectRef": null,
+      "labels": [
+        "practice"
+      ],
+      "immutable": false,
+      "provenance": {
+        "schemaVersion": 1,
+        "source": "local",
+        "sourceEntityId": "local-task-05",
+        "consentRevision": 1,
+        "freshness": {
+          "schemaVersion": 1,
+          "fetchedAt": "2026-07-23T15:00:00Z",
+          "sourceUpdatedAt": "2026-07-13T17:00:00Z",
+          "expiresAt": null,
+          "state": "fixture"
+        },
+        "importedAt": "2026-07-23T15:00:00Z"
+      }
+    },
+    {
+      "schemaVersion": 1,
+      "id": "a1000000-0000-4000-8000-000000000006",
+      "source": "fixture",
+      "sourceEntityId": "fixture-task-06",
+      "title": "Organize reference notes",
+      "state": "completed",
+      "durationMinutes": 30,
+      "deadlineAt": null,
+      "priority": 35,
+      "projectRef": null,
+      "labels": [
+        "practice"
+      ],
+      "immutable": false,
+      "provenance": {
+        "schemaVersion": 1,
+        "source": "fixture",
+        "sourceEntityId": "fixture-task-06",
+        "consentRevision": 1,
+        "freshness": {
+          "schemaVersion": 1,
+          "fetchedAt": "2026-07-23T15:00:00Z",
+          "sourceUpdatedAt": "2026-07-14T17:00:00Z",
+          "expiresAt": null,
+          "state": "fixture"
+        },
+        "importedAt": "2026-07-23T15:00:00Z"
+      }
+    },
+    {
+      "schemaVersion": 1,
+      "id": "a1000000-0000-4000-8000-000000000007",
+      "source": "github",
+      "sourceEntityId": "change-request-07",
+      "title": "Assess imported patch",
+      "state": "completed",
+      "durationMinutes": 45,
+      "deadlineAt": null,
+      "priority": 36,
+      "projectRef": null,
+      "labels": [
+        "imported"
+      ],
+      "immutable": true,
+      "provenance": {
+        "schemaVersion": 1,
+        "source": "github",
+        "sourceEntityId": "change-request-07",
+        "consentRevision": 1,
+        "freshness": {
+          "schemaVersion": 1,
+          "fetchedAt": "2026-07-23T15:00:00Z",
+          "sourceUpdatedAt": "2026-07-15T17:00:00Z",
+          "expiresAt": null,
+          "state": "fixture"
+        },
+        "importedAt": "2026-07-23T15:00:00Z"
+      }
+    },
+    {
+      "schemaVersion": 1,
+      "id": "a1000000-0000-4000-8000-000000000008",
+      "source": "linear",
+      "sourceEntityId": "work-item-08",
+      "title": "Clarify imported milestone",
+      "state": "completed",
+      "durationMinutes": 60,
+      "deadlineAt": null,
+      "priority": 37,
+      "projectRef": null,
+      "labels": [
+        "imported"
+      ],
+      "immutable": true,
+      "provenance": {
+        "schemaVersion": 1,
+        "source": "linear",
+        "sourceEntityId": "work-item-08",
+        "consentRevision": 1,
+        "freshness": {
+          "schemaVersion": 1,
+          "fetchedAt": "2026-07-23T15:00:00Z",
+          "sourceUpdatedAt": "2026-07-16T17:00:00Z",
+          "expiresAt": null,
+          "state": "fixture"
+        },
+        "importedAt": "2026-07-23T15:00:00Z"
+      }
+    },
+    {
+      "schemaVersion": 1,
+      "id": "a1000000-0000-4000-8000-000000000009",
+      "source": "local",
+      "sourceEntityId": "local-task-09",
+      "title": "Outline practice brief",
+      "state": "completed",
+      "durationMinutes": 60,
+      "deadlineAt": null,
+      "priority": 38,
+      "projectRef": null,
+      "labels": [
+        "practice"
+      ],
+      "immutable": false,
+      "provenance": {
+        "schemaVersion": 1,
+        "source": "local",
+        "sourceEntityId": "local-task-09",
+        "consentRevision": 1,
+        "freshness": {
+          "schemaVersion": 1,
+          "fetchedAt": "2026-07-23T15:00:00Z",
+          "sourceUpdatedAt": "2026-07-17T17:00:00Z",
+          "expiresAt": null,
+          "state": "fixture"
+        },
+        "importedAt": "2026-07-23T15:00:00Z"
+      }
+    },
+    {
+      "schemaVersion": 1,
+      "id": "a1000000-0000-4000-8000-000000000010",
+      "source": "fixture",
+      "sourceEntityId": "fixture-task-10",
+      "title": "Prepare administration list",
+      "state": "completed",
+      "durationMinutes": 30,
+      "deadlineAt": null,
+      "priority": 39,
+      "projectRef": null,
+      "labels": [
+        "practice"
+      ],
+      "immutable": false,
+      "provenance": {
+        "schemaVersion": 1,
+        "source": "fixture",
+        "sourceEntityId": "fixture-task-10",
+        "consentRevision": 1,
+        "freshness": {
+          "schemaVersion": 1,
+          "fetchedAt": "2026-07-23T15:00:00Z",
+          "sourceUpdatedAt": "2026-07-18T17:00:00Z",
+          "expiresAt": null,
+          "state": "fixture"
+        },
+        "importedAt": "2026-07-23T15:00:00Z"
+      }
+    },
+    {
+      "schemaVersion": 1,
+      "id": "a1000000-0000-4000-8000-000000000011",
+      "source": "github",
+      "sourceEntityId": "change-request-11",
+      "title": "Review imported follow-up",
+      "state": "open",
+      "durationMinutes": 30,
+      "deadlineAt": "2026-07-23T21:00:00Z",
+      "priority": 40,
+      "projectRef": null,
+      "labels": [
+        "imported"
+      ],
+      "immutable": true,
+      "provenance": {
+        "schemaVersion": 1,
+        "source": "github",
+        "sourceEntityId": "change-request-11",
+        "consentRevision": 1,
+        "freshness": {
+          "schemaVersion": 1,
+          "fetchedAt": "2026-07-23T15:00:00Z",
+          "sourceUpdatedAt": "2026-07-19T17:00:00Z",
+          "expiresAt": null,
+          "state": "fixture"
+        },
+        "importedAt": "2026-07-23T15:00:00Z"
+      }
+    },
+    {
+      "schemaVersion": 1,
+      "id": "a1000000-0000-4000-8000-000000000012",
+      "source": "linear",
+      "sourceEntityId": "work-item-12",
+      "title": "Estimate imported work item",
+      "state": "open",
+      "durationMinutes": 60,
+      "deadlineAt": "2026-07-24T18:00:00Z",
+      "priority": 41,
+      "projectRef": null,
+      "labels": [
+        "imported"
+      ],
+      "immutable": true,
+      "provenance": {
+        "schemaVersion": 1,
+        "source": "linear",
+        "sourceEntityId": "work-item-12",
+        "consentRevision": 1,
+        "freshness": {
+          "schemaVersion": 1,
+          "fetchedAt": "2026-07-23T15:00:00Z",
+          "sourceUpdatedAt": "2026-07-20T17:00:00Z",
+          "expiresAt": null,
+          "state": "fixture"
+        },
+        "importedAt": "2026-07-23T15:00:00Z"
+      }
+    },
+    {
+      "schemaVersion": 1,
+      "id": "a1000000-0000-4000-8000-000000000013",
+      "source": "local",
+      "sourceEntityId": "local-task-13",
+      "title": "Draft deep-work learning strategy",
+      "state": "open",
+      "durationMinutes": 30,
+      "deadlineAt": null,
+      "priority": 42,
+      "projectRef": "goal-neutral-progress",
+      "labels": [
+        "goal-alignment"
+      ],
+      "immutable": false,
+      "provenance": {
+        "schemaVersion": 1,
+        "source": "local",
+        "sourceEntityId": "local-task-13",
+        "consentRevision": 1,
+        "freshness": {
+          "schemaVersion": 1,
+          "fetchedAt": "2026-07-23T15:00:00Z",
+          "sourceUpdatedAt": "2026-07-21T17:00:00Z",
+          "expiresAt": null,
+          "state": "fixture"
+        },
+        "importedAt": "2026-07-23T15:00:00Z"
+      }
+    },
+    {
+      "schemaVersion": 1,
+      "id": "a1000000-0000-4000-8000-000000000014",
+      "source": "fixture",
+      "sourceEntityId": "fixture-task-14",
+      "title": "Prepare next-day brief",
+      "state": "open",
+      "durationMinutes": 30,
+      "deadlineAt": null,
+      "priority": 43,
+      "projectRef": null,
+      "labels": [
+        "practice"
+      ],
+      "immutable": false,
+      "provenance": {
+        "schemaVersion": 1,
+        "source": "fixture",
+        "sourceEntityId": "fixture-task-14",
+        "consentRevision": 1,
+        "freshness": {
+          "schemaVersion": 1,
+          "fetchedAt": "2026-07-23T15:00:00Z",
+          "sourceUpdatedAt": "2026-07-22T17:00:00Z",
+          "expiresAt": null,
+          "state": "fixture"
+        },
+        "importedAt": "2026-07-23T15:00:00Z"
+      }
+    }
+  ],
+  "schedulingIntents": [
+    {
+      "schemaVersion": 1,
+      "taskId": "a1000000-0000-4000-8000-000000000011",
+      "requiredCapacity": 55,
+      "goalAlignment": 60
+    },
+    {
+      "schemaVersion": 1,
+      "taskId": "a1000000-0000-4000-8000-000000000012",
+      "requiredCapacity": 75,
+      "goalAlignment": 75
+    },
+    {
+      "schemaVersion": 1,
+      "taskId": "a1000000-0000-4000-8000-000000000013",
+      "requiredCapacity": 85,
+      "goalAlignment": 90
+    },
+    {
+      "schemaVersion": 1,
+      "taskId": "a1000000-0000-4000-8000-000000000014",
+      "requiredCapacity": 35,
+      "goalAlignment": 45
+    }
+  ],
+  "commitments": [
+    {
+      "schemaVersion": 1,
+      "id": "b2000000-0000-4000-8000-000000000001",
+      "kind": "calendar-event",
+      "title": "Demanding recurring meeting",
+      "startAt": "2026-07-09T16:00:00Z",
+      "endAt": "2026-07-09T17:00:00Z",
+      "deadlineAt": null,
+      "hard": true,
+      "protected": false,
+      "recurringSeriesRef": "series-demanding-sync",
+      "participantSetKey": "0eb768080a293a429e1d1b382a6a6aa6cb76123ca5e38e98ccb9b3ca8792234a",
+      "provenance": {
+        "schemaVersion": 1,
+        "source": "google-calendar",
+        "sourceEntityId": "google-calendar-commitment-01",
+        "consentRevision": 1,
+        "freshness": {
+          "schemaVersion": 1,
+          "fetchedAt": "2026-07-23T15:00:00Z",
+          "sourceUpdatedAt": "2026-07-09T13:00:00Z",
+          "expiresAt": null,
+          "state": "fixture"
+        },
+        "importedAt": "2026-07-23T15:00:00Z"
+      }
+    },
+    {
+      "schemaVersion": 1,
+      "id": "b2000000-0000-4000-8000-000000000002",
+      "kind": "selected-email-commitment",
+      "title": "Send requested summary",
+      "startAt": null,
+      "endAt": null,
+      "deadlineAt": "2026-07-10T20:00:00Z",
+      "hard": true,
+      "protected": false,
+      "recurringSeriesRef": null,
+      "participantSetKey": null,
+      "provenance": {
+        "schemaVersion": 1,
+        "source": "gmail",
+        "sourceEntityId": "gmail-commitment-02",
+        "consentRevision": 1,
+        "freshness": {
+          "schemaVersion": 1,
+          "fetchedAt": "2026-07-23T15:00:00Z",
+          "sourceUpdatedAt": "2026-07-10T13:00:00Z",
+          "expiresAt": null,
+          "state": "fixture"
+        },
+        "importedAt": "2026-07-23T15:00:00Z"
+      }
+    },
+    {
+      "schemaVersion": 1,
+      "id": "b2000000-0000-4000-8000-000000000003",
+      "kind": "protected-time",
+      "title": "Protected workout",
+      "startAt": "2026-07-11T21:00:00Z",
+      "endAt": "2026-07-11T22:00:00Z",
+      "deadlineAt": null,
+      "hard": true,
+      "protected": true,
+      "recurringSeriesRef": null,
+      "participantSetKey": null,
+      "provenance": {
+        "schemaVersion": 1,
+        "source": "ics",
+        "sourceEntityId": "ics-commitment-03",
+        "consentRevision": 1,
+        "freshness": {
+          "schemaVersion": 1,
+          "fetchedAt": "2026-07-23T15:00:00Z",
+          "sourceUpdatedAt": "2026-07-11T13:00:00Z",
+          "expiresAt": null,
+          "state": "fixture"
+        },
+        "importedAt": "2026-07-23T15:00:00Z"
+      }
+    },
+    {
+      "schemaVersion": 1,
+      "id": "b2000000-0000-4000-8000-000000000004",
+      "kind": "protected-time",
+      "title": "Protected partner time",
+      "startAt": "2026-07-12T23:00:00Z",
+      "endAt": "2026-07-12T23:45:00Z",
+      "deadlineAt": null,
+      "hard": true,
+      "protected": true,
+      "recurringSeriesRef": "series-partner-time",
+      "participantSetKey": "87dd6808866ac176e0f9fedb9dc2c0f1d22f2f7ea444a674bcede9e4276678e2",
+      "provenance": {
+        "schemaVersion": 1,
+        "source": "local",
+        "sourceEntityId": "local-commitment-04",
+        "consentRevision": 1,
+        "freshness": {
+          "schemaVersion": 1,
+          "fetchedAt": "2026-07-23T15:00:00Z",
+          "sourceUpdatedAt": "2026-07-12T13:00:00Z",
+          "expiresAt": null,
+          "state": "fixture"
+        },
+        "importedAt": "2026-07-23T15:00:00Z"
+      }
+    },
+    {
+      "schemaVersion": 1,
+      "id": "b2000000-0000-4000-8000-000000000005",
+      "kind": "protected-time",
+      "title": "Protected focus block",
+      "startAt": "2026-07-13T14:00:00Z",
+      "endAt": "2026-07-13T15:00:00Z",
+      "deadlineAt": null,
+      "hard": true,
+      "protected": true,
+      "recurringSeriesRef": null,
+      "participantSetKey": null,
+      "provenance": {
+        "schemaVersion": 1,
+        "source": "fixture",
+        "sourceEntityId": "fixture-commitment-05",
+        "consentRevision": 1,
+        "freshness": {
+          "schemaVersion": 1,
+          "fetchedAt": "2026-07-23T15:00:00Z",
+          "sourceUpdatedAt": "2026-07-13T13:00:00Z",
+          "expiresAt": null,
+          "state": "fixture"
+        },
+        "importedAt": "2026-07-23T15:00:00Z"
+      }
+    },
+    {
+      "schemaVersion": 1,
+      "id": "b2000000-0000-4000-8000-000000000006",
+      "kind": "calendar-event",
+      "title": "Demanding recurring meeting",
+      "startAt": "2026-07-14T16:00:00Z",
+      "endAt": "2026-07-14T17:00:00Z",
+      "deadlineAt": null,
+      "hard": true,
+      "protected": false,
+      "recurringSeriesRef": "series-demanding-sync",
+      "participantSetKey": "0eb768080a293a429e1d1b382a6a6aa6cb76123ca5e38e98ccb9b3ca8792234a",
+      "provenance": {
+        "schemaVersion": 1,
+        "source": "google-calendar",
+        "sourceEntityId": "google-calendar-commitment-06",
+        "consentRevision": 1,
+        "freshness": {
+          "schemaVersion": 1,
+          "fetchedAt": "2026-07-23T15:00:00Z",
+          "sourceUpdatedAt": "2026-07-14T13:00:00Z",
+          "expiresAt": null,
+          "state": "fixture"
+        },
+        "importedAt": "2026-07-23T15:00:00Z"
+      }
+    },
+    {
+      "schemaVersion": 1,
+      "id": "b2000000-0000-4000-8000-000000000007",
+      "kind": "selected-email-commitment",
+      "title": "Reply with planning notes",
+      "startAt": null,
+      "endAt": null,
+      "deadlineAt": "2026-07-15T21:00:00Z",
+      "hard": true,
+      "protected": false,
+      "recurringSeriesRef": null,
+      "participantSetKey": null,
+      "provenance": {
+        "schemaVersion": 1,
+        "source": "gmail",
+        "sourceEntityId": "gmail-commitment-07",
+        "consentRevision": 1,
+        "freshness": {
+          "schemaVersion": 1,
+          "fetchedAt": "2026-07-23T15:00:00Z",
+          "sourceUpdatedAt": "2026-07-15T13:00:00Z",
+          "expiresAt": null,
+          "state": "fixture"
+        },
+        "importedAt": "2026-07-23T15:00:00Z"
+      }
+    },
+    {
+      "schemaVersion": 1,
+      "id": "b2000000-0000-4000-8000-000000000008",
+      "kind": "calendar-event",
+      "title": "Planning review",
+      "startAt": "2026-07-16T18:00:00Z",
+      "endAt": "2026-07-16T18:45:00Z",
+      "deadlineAt": null,
+      "hard": true,
+      "protected": false,
+      "recurringSeriesRef": null,
+      "participantSetKey": "69208ab2f8e5fa27914b6f45e4dbcfa8e86f16270156ec40b77747d755b026fe",
+      "provenance": {
+        "schemaVersion": 1,
+        "source": "microsoft",
+        "sourceEntityId": "microsoft-commitment-08",
+        "consentRevision": 1,
+        "freshness": {
+          "schemaVersion": 1,
+          "fetchedAt": "2026-07-23T15:00:00Z",
+          "sourceUpdatedAt": "2026-07-16T13:00:00Z",
+          "expiresAt": null,
+          "state": "fixture"
+        },
+        "importedAt": "2026-07-23T15:00:00Z"
+      }
+    },
+    {
+      "schemaVersion": 1,
+      "id": "b2000000-0000-4000-8000-000000000009",
+      "kind": "protected-time",
+      "title": "Protected workout",
+      "startAt": "2026-07-17T21:00:00Z",
+      "endAt": "2026-07-17T22:00:00Z",
+      "deadlineAt": null,
+      "hard": true,
+      "protected": true,
+      "recurringSeriesRef": "series-workout",
+      "participantSetKey": null,
+      "provenance": {
+        "schemaVersion": 1,
+        "source": "ics",
+        "sourceEntityId": "ics-commitment-09",
+        "consentRevision": 1,
+        "freshness": {
+          "schemaVersion": 1,
+          "fetchedAt": "2026-07-23T15:00:00Z",
+          "sourceUpdatedAt": "2026-07-17T13:00:00Z",
+          "expiresAt": null,
+          "state": "fixture"
+        },
+        "importedAt": "2026-07-23T15:00:00Z"
+      }
+    },
+    {
+      "schemaVersion": 1,
+      "id": "b2000000-0000-4000-8000-000000000010",
+      "kind": "protected-time",
+      "title": "Protected partner time",
+      "startAt": "2026-07-18T23:00:00Z",
+      "endAt": "2026-07-18T23:45:00Z",
+      "deadlineAt": null,
+      "hard": true,
+      "protected": true,
+      "recurringSeriesRef": "series-partner-time",
+      "participantSetKey": "87dd6808866ac176e0f9fedb9dc2c0f1d22f2f7ea444a674bcede9e4276678e2",
+      "provenance": {
+        "schemaVersion": 1,
+        "source": "local",
+        "sourceEntityId": "local-commitment-10",
+        "consentRevision": 1,
+        "freshness": {
+          "schemaVersion": 1,
+          "fetchedAt": "2026-07-23T15:00:00Z",
+          "sourceUpdatedAt": "2026-07-18T13:00:00Z",
+          "expiresAt": null,
+          "state": "fixture"
+        },
+        "importedAt": "2026-07-23T15:00:00Z"
+      }
+    },
+    {
+      "schemaVersion": 1,
+      "id": "b2000000-0000-4000-8000-000000000011",
+      "kind": "protected-time",
+      "title": "Protected quiet hour",
+      "startAt": "2026-07-19T14:00:00Z",
+      "endAt": "2026-07-19T15:00:00Z",
+      "deadlineAt": null,
+      "hard": true,
+      "protected": true,
+      "recurringSeriesRef": null,
+      "participantSetKey": null,
+      "provenance": {
+        "schemaVersion": 1,
+        "source": "fixture",
+        "sourceEntityId": "fixture-commitment-11",
+        "consentRevision": 1,
+        "freshness": {
+          "schemaVersion": 1,
+          "fetchedAt": "2026-07-23T15:00:00Z",
+          "sourceUpdatedAt": "2026-07-19T13:00:00Z",
+          "expiresAt": null,
+          "state": "fixture"
+        },
+        "importedAt": "2026-07-23T15:00:00Z"
+      }
+    },
+    {
+      "schemaVersion": 1,
+      "id": "b2000000-0000-4000-8000-000000000012",
+      "kind": "calendar-event",
+      "title": "Demanding recurring meeting",
+      "startAt": "2026-07-20T16:00:00Z",
+      "endAt": "2026-07-20T17:00:00Z",
+      "deadlineAt": null,
+      "hard": true,
+      "protected": false,
+      "recurringSeriesRef": "series-demanding-sync",
+      "participantSetKey": "0eb768080a293a429e1d1b382a6a6aa6cb76123ca5e38e98ccb9b3ca8792234a",
+      "provenance": {
+        "schemaVersion": 1,
+        "source": "google-calendar",
+        "sourceEntityId": "google-calendar-commitment-12",
+        "consentRevision": 1,
+        "freshness": {
+          "schemaVersion": 1,
+          "fetchedAt": "2026-07-23T15:00:00Z",
+          "sourceUpdatedAt": "2026-07-20T13:00:00Z",
+          "expiresAt": null,
+          "state": "fixture"
+        },
+        "importedAt": "2026-07-23T15:00:00Z"
+      }
+    },
+    {
+      "schemaVersion": 1,
+      "id": "b2000000-0000-4000-8000-000000000013",
+      "kind": "selected-email-commitment",
+      "title": "Send requested checklist",
+      "startAt": null,
+      "endAt": null,
+      "deadlineAt": "2026-07-21T20:30:00Z",
+      "hard": true,
+      "protected": false,
+      "recurringSeriesRef": null,
+      "participantSetKey": null,
+      "provenance": {
+        "schemaVersion": 1,
+        "source": "gmail",
+        "sourceEntityId": "gmail-commitment-13",
+        "consentRevision": 1,
+        "freshness": {
+          "schemaVersion": 1,
+          "fetchedAt": "2026-07-23T15:00:00Z",
+          "sourceUpdatedAt": "2026-07-21T13:00:00Z",
+          "expiresAt": null,
+          "state": "fixture"
+        },
+        "importedAt": "2026-07-23T15:00:00Z"
+      }
+    },
+    {
+      "schemaVersion": 1,
+      "id": "b2000000-0000-4000-8000-000000000014",
+      "kind": "calendar-event",
+      "title": "Administration review",
+      "startAt": "2026-07-22T19:00:00Z",
+      "endAt": "2026-07-22T19:30:00Z",
+      "deadlineAt": null,
+      "hard": true,
+      "protected": false,
+      "recurringSeriesRef": null,
+      "participantSetKey": "69208ab2f8e5fa27914b6f45e4dbcfa8e86f16270156ec40b77747d755b026fe",
+      "provenance": {
+        "schemaVersion": 1,
+        "source": "microsoft",
+        "sourceEntityId": "microsoft-commitment-14",
+        "consentRevision": 1,
+        "freshness": {
+          "schemaVersion": 1,
+          "fetchedAt": "2026-07-23T15:00:00Z",
+          "sourceUpdatedAt": "2026-07-22T13:00:00Z",
+          "expiresAt": null,
+          "state": "fixture"
+        },
+        "importedAt": "2026-07-23T15:00:00Z"
+      }
+    },
+    {
+      "schemaVersion": 1,
+      "id": "b2000000-0000-4000-8000-000000000015",
+      "kind": "selected-email-commitment",
+      "title": "Send capacity update",
+      "startAt": null,
+      "endAt": null,
+      "deadlineAt": "2026-07-23T22:00:00Z",
+      "hard": true,
+      "protected": false,
+      "recurringSeriesRef": null,
+      "participantSetKey": null,
+      "provenance": {
+        "schemaVersion": 1,
+        "source": "gmail",
+        "sourceEntityId": "gmail-commitment-15",
+        "consentRevision": 1,
+        "freshness": {
+          "schemaVersion": 1,
+          "fetchedAt": "2026-07-23T15:00:00Z",
+          "sourceUpdatedAt": "2026-07-23T14:45:00Z",
+          "expiresAt": null,
+          "state": "fixture"
+        },
+        "importedAt": "2026-07-23T15:00:00Z"
+      }
+    },
+    {
+      "schemaVersion": 1,
+      "id": "b2000000-0000-4000-8000-000000000016",
+      "kind": "calendar-event",
+      "title": "Private demanding meeting",
+      "startAt": "2026-07-23T19:00:00Z",
+      "endAt": "2026-07-23T19:30:00Z",
+      "deadlineAt": null,
+      "hard": true,
+      "protected": false,
+      "recurringSeriesRef": null,
+      "participantSetKey": "0eb768080a293a429e1d1b382a6a6aa6cb76123ca5e38e98ccb9b3ca8792234a",
+      "provenance": {
+        "schemaVersion": 1,
+        "source": "google-calendar",
+        "sourceEntityId": "google-calendar-commitment-16",
+        "consentRevision": 1,
+        "freshness": {
+          "schemaVersion": 1,
+          "fetchedAt": "2026-07-23T15:00:00Z",
+          "sourceUpdatedAt": "2026-07-23T14:40:00Z",
+          "expiresAt": null,
+          "state": "fixture"
+        },
+        "importedAt": "2026-07-23T15:00:00Z"
+      }
+    },
+    {
+      "schemaVersion": 1,
+      "id": "b2000000-0000-4000-8000-000000000017",
+      "kind": "calendar-event",
+      "title": "Private decision review",
+      "startAt": "2026-07-23T19:30:00Z",
+      "endAt": "2026-07-23T20:00:00Z",
+      "deadlineAt": null,
+      "hard": true,
+      "protected": false,
+      "recurringSeriesRef": null,
+      "participantSetKey": "0eb768080a293a429e1d1b382a6a6aa6cb76123ca5e38e98ccb9b3ca8792234a",
+      "provenance": {
+        "schemaVersion": 1,
+        "source": "google-calendar",
+        "sourceEntityId": "google-calendar-commitment-17",
+        "consentRevision": 1,
+        "freshness": {
+          "schemaVersion": 1,
+          "fetchedAt": "2026-07-23T15:00:00Z",
+          "sourceUpdatedAt": "2026-07-23T14:40:00Z",
+          "expiresAt": null,
+          "state": "fixture"
+        },
+        "importedAt": "2026-07-23T15:00:00Z"
+      }
+    },
+    {
+      "schemaVersion": 1,
+      "id": "b2000000-0000-4000-8000-000000000018",
+      "kind": "protected-time",
+      "title": "Protected workout",
+      "startAt": "2026-07-23T21:30:00Z",
+      "endAt": "2026-07-23T22:30:00Z",
+      "deadlineAt": null,
+      "hard": true,
+      "protected": true,
+      "recurringSeriesRef": "series-workout",
+      "participantSetKey": null,
+      "provenance": {
+        "schemaVersion": 1,
+        "source": "ics",
+        "sourceEntityId": "ics-commitment-18",
+        "consentRevision": 1,
+        "freshness": {
+          "schemaVersion": 1,
+          "fetchedAt": "2026-07-23T15:00:00Z",
+          "sourceUpdatedAt": "2026-07-23T14:35:00Z",
+          "expiresAt": null,
+          "state": "fixture"
+        },
+        "importedAt": "2026-07-23T15:00:00Z"
+      }
+    },
+    {
+      "schemaVersion": 1,
+      "id": "b2000000-0000-4000-8000-000000000019",
+      "kind": "protected-time",
+      "title": "Protected partner time",
+      "startAt": "2026-07-23T22:30:00Z",
+      "endAt": "2026-07-23T23:15:00Z",
+      "deadlineAt": null,
+      "hard": true,
+      "protected": true,
+      "recurringSeriesRef": "series-partner-time",
+      "participantSetKey": "87dd6808866ac176e0f9fedb9dc2c0f1d22f2f7ea444a674bcede9e4276678e2",
+      "provenance": {
+        "schemaVersion": 1,
+        "source": "local",
+        "sourceEntityId": "local-commitment-19",
+        "consentRevision": 1,
+        "freshness": {
+          "schemaVersion": 1,
+          "fetchedAt": "2026-07-23T15:00:00Z",
+          "sourceUpdatedAt": "2026-07-23T14:30:00Z",
+          "expiresAt": null,
+          "state": "fixture"
+        },
+        "importedAt": "2026-07-23T15:00:00Z"
+      }
+    }
+  ],
+  "observations": [
+    {
+      "schemaVersion": 1,
+      "id": "c3000000-0000-4000-8000-000000000001",
+      "observedAt": "2026-07-09T19:00:00Z",
+      "localTime": "14:00",
+      "value": -0.35,
+      "reliability": 0.9,
+      "signal": "meeting-after",
+      "provenance": {
+        "schemaVersion": 1,
+        "source": "google-calendar",
+        "sourceEntityId": "meeting-after-demanding-sync-01",
+        "consentRevision": 1,
+        "freshness": {
+          "schemaVersion": 1,
+          "fetchedAt": "2026-07-23T15:00:00Z",
+          "sourceUpdatedAt": "2026-07-09T19:00:00Z",
+          "expiresAt": null,
+          "state": "fixture"
+        },
+        "importedAt": "2026-07-23T15:00:00Z"
+      }
+    },
+    {
+      "schemaVersion": 1,
+      "id": "c3000000-0000-4000-8000-000000000002",
+      "observedAt": "2026-07-10T19:00:00Z",
+      "localTime": "14:00",
+      "value": 0.68,
+      "reliability": 0.95,
+      "signal": "readiness",
+      "provenance": {
+        "schemaVersion": 1,
+        "source": "oura",
+        "sourceEntityId": "readiness-2026-07-10",
+        "consentRevision": 1,
+        "freshness": {
+          "schemaVersion": 1,
+          "fetchedAt": "2026-07-23T15:00:00Z",
+          "sourceUpdatedAt": "2026-07-10T19:00:00Z",
+          "expiresAt": null,
+          "state": "fixture"
+        },
+        "importedAt": "2026-07-23T15:00:00Z"
+      }
+    },
+    {
+      "schemaVersion": 1,
+      "id": "c3000000-0000-4000-8000-000000000003",
+      "observedAt": "2026-07-11T19:00:00Z",
+      "localTime": "14:00",
+      "value": 0.62,
+      "reliability": 0.9,
+      "signal": "activity",
+      "provenance": {
+        "schemaVersion": 1,
+        "source": "strava",
+        "sourceEntityId": "activity-2026-07-11",
+        "consentRevision": 1,
+        "freshness": {
+          "schemaVersion": 1,
+          "fetchedAt": "2026-07-23T15:00:00Z",
+          "sourceUpdatedAt": "2026-07-11T19:00:00Z",
+          "expiresAt": null,
+          "state": "fixture"
+        },
+        "importedAt": "2026-07-23T15:00:00Z"
+      }
+    },
+    {
+      "schemaVersion": 1,
+      "id": "c3000000-0000-4000-8000-000000000004",
+      "observedAt": "2026-07-12T19:00:00Z",
+      "localTime": "14:00",
+      "value": 0.63,
+      "reliability": 0.8,
+      "signal": "self-report",
+      "provenance": {
+        "schemaVersion": 1,
+        "source": "local",
+        "sourceEntityId": "self-report-2026-07-12",
+        "consentRevision": 1,
+        "freshness": {
+          "schemaVersion": 1,
+          "fetchedAt": "2026-07-23T15:00:00Z",
+          "sourceUpdatedAt": "2026-07-12T19:00:00Z",
+          "expiresAt": null,
+          "state": "fixture"
+        },
+        "importedAt": "2026-07-23T15:00:00Z"
+      }
+    },
+    {
+      "schemaVersion": 1,
+      "id": "c3000000-0000-4000-8000-000000000005",
+      "observedAt": "2026-07-13T19:00:00Z",
+      "localTime": "14:00",
+      "value": 1,
+      "reliability": 0.9,
+      "signal": "task-outcome",
+      "provenance": {
+        "schemaVersion": 1,
+        "source": "github",
+        "sourceEntityId": "change-request-outcome-05",
+        "consentRevision": 1,
+        "freshness": {
+          "schemaVersion": 1,
+          "fetchedAt": "2026-07-23T15:00:00Z",
+          "sourceUpdatedAt": "2026-07-13T19:00:00Z",
+          "expiresAt": null,
+          "state": "fixture"
+        },
+        "importedAt": "2026-07-23T15:00:00Z"
+      }
+    },
+    {
+      "schemaVersion": 1,
+      "id": "c3000000-0000-4000-8000-000000000006",
+      "observedAt": "2026-07-14T19:00:00Z",
+      "localTime": "14:00",
+      "value": -0.3,
+      "reliability": 0.9,
+      "signal": "meeting-after",
+      "provenance": {
+        "schemaVersion": 1,
+        "source": "google-calendar",
+        "sourceEntityId": "meeting-after-demanding-sync-02",
+        "consentRevision": 1,
+        "freshness": {
+          "schemaVersion": 1,
+          "fetchedAt": "2026-07-23T15:00:00Z",
+          "sourceUpdatedAt": "2026-07-14T19:00:00Z",
+          "expiresAt": null,
+          "state": "fixture"
+        },
+        "importedAt": "2026-07-23T15:00:00Z"
+      }
+    },
+    {
+      "schemaVersion": 1,
+      "id": "c3000000-0000-4000-8000-000000000007",
+      "observedAt": "2026-07-15T19:00:00Z",
+      "localTime": "14:00",
+      "value": 0.52,
+      "reliability": 0.95,
+      "signal": "readiness",
+      "provenance": {
+        "schemaVersion": 1,
+        "source": "oura",
+        "sourceEntityId": "readiness-2026-07-15",
+        "consentRevision": 1,
+        "freshness": {
+          "schemaVersion": 1,
+          "fetchedAt": "2026-07-23T15:00:00Z",
+          "sourceUpdatedAt": "2026-07-15T19:00:00Z",
+          "expiresAt": null,
+          "state": "fixture"
+        },
+        "importedAt": "2026-07-23T15:00:00Z"
+      }
+    },
+    {
+      "schemaVersion": 1,
+      "id": "c3000000-0000-4000-8000-000000000008",
+      "observedAt": "2026-07-16T19:00:00Z",
+      "localTime": "14:00",
+      "value": 0.48,
+      "reliability": 0.9,
+      "signal": "activity",
+      "provenance": {
+        "schemaVersion": 1,
+        "source": "strava",
+        "sourceEntityId": "activity-2026-07-16",
+        "consentRevision": 1,
+        "freshness": {
+          "schemaVersion": 1,
+          "fetchedAt": "2026-07-23T15:00:00Z",
+          "sourceUpdatedAt": "2026-07-16T19:00:00Z",
+          "expiresAt": null,
+          "state": "fixture"
+        },
+        "importedAt": "2026-07-23T15:00:00Z"
+      }
+    },
+    {
+      "schemaVersion": 1,
+      "id": "c3000000-0000-4000-8000-000000000009",
+      "observedAt": "2026-07-17T19:00:00Z",
+      "localTime": "14:00",
+      "value": 0.47,
+      "reliability": 0.8,
+      "signal": "self-report",
+      "provenance": {
+        "schemaVersion": 1,
+        "source": "fixture",
+        "sourceEntityId": "self-report-2026-07-17",
+        "consentRevision": 1,
+        "freshness": {
+          "schemaVersion": 1,
+          "fetchedAt": "2026-07-23T15:00:00Z",
+          "sourceUpdatedAt": "2026-07-17T19:00:00Z",
+          "expiresAt": null,
+          "state": "fixture"
+        },
+        "importedAt": "2026-07-23T15:00:00Z"
+      }
+    },
+    {
+      "schemaVersion": 1,
+      "id": "c3000000-0000-4000-8000-000000000010",
+      "observedAt": "2026-07-18T19:00:00Z",
+      "localTime": "14:00",
+      "value": 0.8,
+      "reliability": 0.9,
+      "signal": "task-outcome",
+      "provenance": {
+        "schemaVersion": 1,
+        "source": "linear",
+        "sourceEntityId": "work-item-outcome-10",
+        "consentRevision": 1,
+        "freshness": {
+          "schemaVersion": 1,
+          "fetchedAt": "2026-07-23T15:00:00Z",
+          "sourceUpdatedAt": "2026-07-18T19:00:00Z",
+          "expiresAt": null,
+          "state": "fixture"
+        },
+        "importedAt": "2026-07-23T15:00:00Z"
+      }
+    },
+    {
+      "schemaVersion": 1,
+      "id": "c3000000-0000-4000-8000-000000000011",
+      "observedAt": "2026-07-19T19:00:00Z",
+      "localTime": "14:00",
+      "value": 0.4,
+      "reliability": 0.95,
+      "signal": "readiness",
+      "provenance": {
+        "schemaVersion": 1,
+        "source": "oura",
+        "sourceEntityId": "readiness-2026-07-19",
+        "consentRevision": 1,
+        "freshness": {
+          "schemaVersion": 1,
+          "fetchedAt": "2026-07-23T15:00:00Z",
+          "sourceUpdatedAt": "2026-07-19T19:00:00Z",
+          "expiresAt": null,
+          "state": "fixture"
+        },
+        "importedAt": "2026-07-23T15:00:00Z"
+      }
+    },
+    {
+      "schemaVersion": 1,
+      "id": "c3000000-0000-4000-8000-000000000012",
+      "observedAt": "2026-07-20T19:00:00Z",
+      "localTime": "14:00",
+      "value": -0.25,
+      "reliability": 0.9,
+      "signal": "meeting-after",
+      "provenance": {
+        "schemaVersion": 1,
+        "source": "google-calendar",
+        "sourceEntityId": "meeting-after-demanding-sync-03",
+        "consentRevision": 1,
+        "freshness": {
+          "schemaVersion": 1,
+          "fetchedAt": "2026-07-23T15:00:00Z",
+          "sourceUpdatedAt": "2026-07-20T19:00:00Z",
+          "expiresAt": null,
+          "state": "fixture"
+        },
+        "importedAt": "2026-07-23T15:00:00Z"
+      }
+    },
+    {
+      "schemaVersion": 1,
+      "id": "c3000000-0000-4000-8000-000000000013",
+      "observedAt": "2026-07-21T19:00:00Z",
+      "localTime": "14:00",
+      "value": 0.35,
+      "reliability": 0.9,
+      "signal": "activity",
+      "provenance": {
+        "schemaVersion": 1,
+        "source": "strava",
+        "sourceEntityId": "activity-2026-07-21",
+        "consentRevision": 1,
+        "freshness": {
+          "schemaVersion": 1,
+          "fetchedAt": "2026-07-23T15:00:00Z",
+          "sourceUpdatedAt": "2026-07-21T19:00:00Z",
+          "expiresAt": null,
+          "state": "fixture"
+        },
+        "importedAt": "2026-07-23T15:00:00Z"
+      }
+    },
+    {
+      "schemaVersion": 1,
+      "id": "c3000000-0000-4000-8000-000000000014",
+      "observedAt": "2026-07-22T19:00:00Z",
+      "localTime": "14:00",
+      "value": 0.38,
+      "reliability": 0.8,
+      "signal": "self-report",
+      "provenance": {
+        "schemaVersion": 1,
+        "source": "local",
+        "sourceEntityId": "self-report-2026-07-22",
+        "consentRevision": 1,
+        "freshness": {
+          "schemaVersion": 1,
+          "fetchedAt": "2026-07-23T15:00:00Z",
+          "sourceUpdatedAt": "2026-07-22T19:00:00Z",
+          "expiresAt": null,
+          "state": "fixture"
+        },
+        "importedAt": "2026-07-23T15:00:00Z"
+      }
+    }
+  ],
+  "proposals": [],
+  "events": [],
+  "commandReceipts": {}
+}

@@ -1,0 +1,38 @@
+{
+  "pages": [
+    {
+      "items": [
+        {
+          "issueId": "linear-issue-12",
+          "identifier": "WIN-12",
+          "teamId": "team-window",
+          "title": "Refine capacity review",
+          "state": "started",
+          "priority": 2,
+          "estimate": 4,
+          "cycle": "Cycle 1",
+          "dueDate": "2026-07-24T22:00:00Z",
+          "updatedAt": "2026-07-22T19:00:00Z"
+        }
+      ],
+      "nextCursor": "linear-page-2"
+    },
+    {
+      "items": [
+        {
+          "issueId": "linear-issue-3",
+          "identifier": "WIN-3",
+          "teamId": "team-window",
+          "title": "Document focus constraints",
+          "state": "backlog",
+          "priority": 3,
+          "estimate": null,
+          "cycle": null,
+          "dueDate": null,
+          "updatedAt": "2026-07-21T19:00:00Z"
+        }
+      ],
+      "nextCursor": null
+    }
+  ]
+}
