@@ -1,5 +1,5 @@
 import { createServer, request, type Server } from "node:http";
-import { access, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { access, mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -170,5 +170,77 @@ describe("repository-first onboarding HTTP", () => {
     expect(runner.calls[0].args).toContain('model_reasoning_effort="medium"');
     expect(runner.calls[0].args).not.toContain(runner.calls[0].stdin);
     expect(runner.calls[0].stdin).toMatch(/readiness/i);
+  });
+
+  it("persists the verified route and drives the real journey through contained HTML evidence", async () => {
+    const root = await mkdtemp(join(tmpdir(), "bearing-journey-")); roots.push(root);
+    await mkdir(join(root, "plans", "demo", "prompts"), { recursive: true });
+    for (const [name, content] of [["plan-spec.md", "# Plan"], ["design.md", "# Design"], ["seit.md", "# SEIT"], ["implementation.md", "# Implementation"], ["review.html", "<!doctype html><title>Evidence</title>"]] as const) await writeFile(join(root, "plans", "demo", name), content);
+    await writeFile(join(root, "plans", "demo", "prompts", "context.md"), "# Context");
+    const complete = (content?: string) => ({ exitCode: 0, events: [{ type: "complete", ...(content ? { data: { content } } : {}) }], usage: { tokens: 7 } });
+    const action = (summary: string, artifacts: string[]) => `BEARING_RESULT ${JSON.stringify({ kind: "action", summary, artifacts })}`;
+    const runner = new SyntheticRunner(undefined, [
+      complete(action("Bearings set", ["plans/demo/prompts/context.md", "plans/demo/plan-spec.md"])),
+      complete("agent output without a Bearing envelope"),
+      complete('BEARING_RESULT {"kind":"question","question":"Which acceptance risk matters most?"}'),
+      complete(action("Supplies gathered", ["plans/demo/plan-spec.md"])),
+      complete(action("Route mapped", ["plans/demo/design.md", "plans/demo/seit.md", "plans/demo/review.html"])),
+      complete(action("Implementation drafted", ["plans/demo/implementation.md"])),
+      complete(action("Explorer completed bounded work", ["plans/demo/implementation.md"])),
+      complete("No findings."),
+    ]);
+    const server = createServer();
+    await new Promise<void>((resolve) => server.listen({ host: "127.0.0.1", port: 0 }, resolve)); servers.push(server);
+    const address = server.address(); if (!address || typeof address === "string") throw new Error("missing address");
+    const port = String(address.port); const session = new LocalSessionService(`127.0.0.1:${port}`);
+    server.on("request", createRequestHandler(session, undefined, { processRunner: runner, verification: { verify: async () => true }, startupOverrides: { reasoning: "low" } }));
+    const cookie = await authenticate(port, session);
+    expect((await call(port, "POST", "/api/v1/repository", { path: root }, cookie)).status).toBe(200);
+    expect(JSON.parse((await call(port, "POST", "/api/v1/readiness", { provider: "codex", model: "*", reasoning: "medium" }, cookie)).body)).toMatchObject({ status: "ready", verified: true });
+    const runId = "browser-test"; const goal = "Ship bounded evidence";
+    const journey = (stage: string, extra: Record<string, unknown> = {}) => call(port, "POST", "/api/v1/journey", { runId, stage, workGoal: goal, ...extra }, cookie);
+    expect(JSON.parse((await journey("set-bearings")).body)).toMatchObject({ status: "action", summary: "Bearings set" });
+    expect(JSON.parse((await journey("gather-supplies")).body)).toMatchObject({ status: "failure", code: "result_missing" });
+    expect(JSON.parse((await journey("gather-supplies")).body)).toMatchObject({ status: "question", question: "Which acceptance risk matters most?" });
+    expect((await journey("map-route", { answer: "Data loss" })).status).toBe(409);
+    expect(JSON.parse((await journey("gather-supplies", { answer: "Data loss" })).body)).toMatchObject({ status: "action" });
+    expect(JSON.parse((await journey("map-route")).body)).toMatchObject({ status: "action" });
+    expect(JSON.parse((await journey("draft-implementation")).body)).toMatchObject({ status: "action" });
+    expect(JSON.parse((await journey("execute-explorer", { executionMode: "explorer", reviewCadence: "phase" })).body)).toMatchObject({ status: "action" });
+    const reviewed = JSON.parse((await journey("review")).body);
+    expect(reviewed).toMatchObject({ status: "action", summary: "No findings.", artifactLinks: [{ path: "plans/demo/review.html" }] });
+    expect(reviewed.artifacts).toEqual(["plans/demo/prompts/context.md", "plans/demo/plan-spec.md", "plans/demo/design.md", "plans/demo/seit.md", "plans/demo/review.html", "plans/demo/implementation.md"]);
+    const link = reviewed.artifactLinks[0].url as string;
+    expect((await call(port, "GET", link)).status).toBe(401);
+    const artifact = await call(port, "GET", link, undefined, cookie);
+    expect(artifact.status).toBe(200);
+    expect(artifact.body).toContain("<title>Evidence</title>");
+    expect(runner.calls.map((invocation) => invocation.stdin).join("\n")).toContain("Review cadence");
+    expect(runner.calls.slice(0, -1).every((invocation) => invocation.args.includes('model_reasoning_effort="low"'))).toBe(true);
+    expect(runner.calls.at(-1)?.args).toContain('sandbox_mode="read-only"');
+  });
+
+  it("refuses repository changes while a real journey call is in flight", async () => {
+    const root = await mkdtemp(join(tmpdir(), "bearing-busy-")); roots.push(root);
+    await mkdir(join(root, "plans", "busy"), { recursive: true });
+    await writeFile(join(root, "plans", "busy", "plan-spec.md"), "# Plan");
+    let release!: () => void, entered!: () => void;
+    const started = new Promise<void>((resolve) => { entered = resolve; });
+    const held = new Promise<void>((resolve) => { release = resolve; });
+    const runner = { executableAvailable: () => true, run: async () => { entered(); await held; return { exitCode: 0, events: [{ type: "complete", data: { content: 'BEARING_RESULT {"kind":"action","summary":"Set","artifacts":["plans/busy/plan-spec.md"]}' } }], usage: { tokens: 1 } }; } };
+    const server = createServer(); await new Promise<void>((resolve) => server.listen({ host: "127.0.0.1", port: 0 }, resolve)); servers.push(server);
+    const address = server.address(); if (!address || typeof address === "string") throw new Error("missing address");
+    const port = String(address.port), session = new LocalSessionService(`127.0.0.1:${port}`);
+    server.on("request", createRequestHandler(session, undefined, { processRunner: runner, verification: { verify: async () => true } }));
+    const cookie = await authenticate(port, session);
+    await call(port, "POST", "/api/v1/repository", { path: root }, cookie);
+    await call(port, "POST", "/api/v1/readiness", { provider: "codex", model: "*", reasoning: "medium" }, cookie);
+    const running = call(port, "POST", "/api/v1/journey", { runId: "browser-busy", stage: "set-bearings", workGoal: "Hold the route" }, cookie);
+    await started;
+    const blocked = await call(port, "POST", "/api/v1/repository", { path: root }, cookie);
+    expect(blocked.status).toBe(409);
+    expect(JSON.parse(blocked.body)).toEqual({ status: "blocked", code: "journey_in_progress" });
+    release();
+    expect(JSON.parse((await running).body)).toMatchObject({ status: "action" });
   });
 });

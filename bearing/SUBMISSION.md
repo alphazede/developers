@@ -13,7 +13,7 @@ tags:
 
 ## Problem, solution, differentiator
 
-Small teams can delegate work to agents, but they still need to bound cost and authority, pause for consequential decisions, recover durable state, and prove what really happened. Bearing is a local browser control room that turns a short request into an owner-approved Explorer or Expedition plan and presents evidence as passed, corrected, blocked, or unperformed.
+Small teams can delegate work to agents, but they still need to bound cost and authority, pause for consequential decisions, recover durable state, and prove what really happened. Bearing is a local browser control room that sends a real request through the selected verified harness: Set Bearings, adaptive Gather Supplies questions, Map the Route, implementation drafting, owner-selected Explorer or Expedition execution, native review or an independent Surveyor fallback, and validated evidence links.
 
 Its differentiator is authority-aware proof: provider credentials stay outside the browser and repository, owner decisions are durable, execution and independent Survey are separated, unsupported claims remain blocked, and evidence reports preserve remediation and Resurvey history instead of collapsing everything into a success message.
 
@@ -25,24 +25,28 @@ Its differentiator is authority-aware proof: provider credentials stay outside t
 
 ## Under-three-minute video shot list
 
+Use one real recorded journey. Honest time-compression may remove waiting, but cuts should be labeled; the loading state, owner stop, generated artifacts, execution, and review result must all come from the same run. The deterministic tutorial and fictional showcases may appear only as clearly labeled fixtures.
+
 | Time | Shot |
 |---|---|
 | 0:00-0:20 | State the Work & Productivity problem and show `node dist/cli.js start` opening the local browser. |
-| 0:20-0:45 | Choose the fictional repository, show detected routes without claiming readiness, and explain one shared model/reasoning choice. |
-| 0:45-1:15 | Enter a request; show Explorer/Expedition recommendation, agent/token estimate, warning, and explicit owner approval. |
-| 1:15-2:15 | Open Launch Readiness; show the unsupported promise finding, owner correction, Resurvey, and brief/infographic evidence. |
-| 2:15-2:40 | Save the offline report and show the engineering and due-diligence examples. |
-| 2:40-2:58 | Close on local authority boundaries, current limitations, and pending real provider evaluation. |
+| 0:20-0:40 | Choose the real target repository, verify one shared route/model/reasoning selection, and show the substantial-token warning. |
+| 0:40-1:05 | Enter the real request and Embark; show the honest moving Set Bearings loading state and one adaptive owner question. |
+| 1:05-1:30 | Answer it; show validated Set Bearings/Map Route artifacts and automatic `implementation.md` drafting. |
+| 1:30-2:05 | Compare the large Explorer/Expedition cards, choose review cadence, and start the selected execution path. |
+| 2:05-2:35 | Show real execution completing, native review or Surveyor fallback, and cumulative validated artifact links including generated HTML evidence. |
+| 2:35-2:58 | Distinguish the provider-disabled tutorial/showcases from the real run; close on local authority, token guidance, the optional owner budget, and pending submission evidence. |
 
 ## Local evidence
 
 | Evidence | Current local result |
 |---|---|
 | `pnpm typecheck` | PASS. |
-| `pnpm test` | PASS: 23 files, 221 tests. |
+| `pnpm test` | PASS: 25 files, 254 tests. |
 | `pnpm build` | PASS. |
-| `npm pack --dry-run --json` | PASS: 54 files, limited to allowlisted content plus npm-required `package.json`; no TypeScript source, tests, private plans, transcripts, secrets, or unintended generated files observed. |
+| `npm pack --dry-run --json` | PASS: 57 files, limited to allowlisted content plus npm-required `package.json`; no TypeScript source, tests, private plans, transcripts, secrets, or unintended generated files observed. |
 | `pnpm eval:native` | PASS: 336 synthetic cells created and cleaned; machinery validation only, not provider evidence. |
+| Real browser journey | Selected-harness stages, durable owner Q&A, retryable loading/failure states, crew/cadence choice, native review boundary, and contained artifact serving are implemented and covered by focused integration tests. |
 | Three fictional workflows | Deterministic provider-disabled projections with local evidence reports. |
 
 ## Submission provenance

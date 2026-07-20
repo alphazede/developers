@@ -36,14 +36,26 @@ Keep that terminal running while using the control room. The URL contains a one-
 1. Choose one absolute path to a writable local repository. Bearing initializes or resumes `.bearing/` inside that repository; credentials remain outside it.
 2. Choose one detected provider route, model, and reasoning level. The model and reasoning selection is shared across all four role profiles for the run; there are no per-role model choices.
 3. Complete the readiness check. Detection alone is not verification, and an unavailable selection is blocked rather than silently substituted.
-4. Enter a work request and review the recommended execution mode, estimated agent count, and token warning. Approval or override records the owner decision but does not currently launch work from the browser.
+4. Enter a work request and select **Embark**. Bearing records the request, invokes the verified route, and begins the real staged journey. Agent questions and owner answers are also recorded in the durable run ledger.
+
+## Real browser journey
+
+The main browser flow uses the selected, readiness-verified harness; it is not a canned workflow projection:
+
+1. **Set Bearings** starts the plan and returns validated plan artifacts.
+2. **Gather Supplies** asks one adaptive owner question at a time until the selected agent can proceed.
+3. **Map the Route** produces the design, SEIT, and self-contained review baseline, then Bearing drafts `implementation.md`.
+4. The owner chooses **Explorer** or **Expedition** plus Surveyor review cadence. Explorer uses fewer sessions; Expedition enables bounded subagents for parallel lanes.
+5. The selected harness executes the approved route. Bearing then invokes native review where supported, with a read-only Surveyor fallback, and presents cumulative validated artifacts. Generated HTML evidence opens through contained, authenticated links.
+
+While a real agent call is pending, Bearing shows the stable public phase name, an indeterminate moving trail, honest helper text, elapsed time, and only artifacts already validated by completed results. It does not invent percentages, activity details, or an ETA. Failures remain retryable and do not become success claims.
 
 ## Explorer and Expedition
 
 - **Explorer** uses one Explorer to coordinate bounded Crewmates. It is the lower-agent, lower-manager-token choice for a small set of related work items, but one Explorer carries the coordination fan-out.
 - **Expedition** adds a Navigator and multiple bounded Explorer groups. It costs more coordination and tokens, but fits multi-phase work whose lanes benefit from independent management.
 
-Bearing estimates agents and tokens before approval. Treat the estimate as a warning, not a quote. As provider-neutral product guidance, start planning with a `low` reasoning profile and bounded implementation with `medium`; increase reasoning only when the task and evidence justify the extra cost. No specific provider is required by that guidance.
+Real skill-driven planning and execution can use substantial tokens, especially with Explorer or Expedition. Bearing displays a persistent warning rather than imposing a default hard token ceiling. If you use a subscription plan, consider a higher tier, choose reasoning deliberately, and use [Caveman](https://github.com/juliusbrussee/caveman) to reduce planning context. An explicit `--budget` remains available when an owner wants a hard per-call boundary.
 
 ## Roles and authority
 
@@ -70,13 +82,13 @@ The CLI accepts only the following bounded overrides:
 | `--offline` | Remove network authority for the run. |
 | `--timeout` | Positive milliseconds, at most `300000`. |
 | `--max-turns` | Positive count, at most `20`. |
-| `--budget` | Positive token budget, at most `100000`. |
+| `--budget` | Optional positive safe-integer per-call token ceiling. No ceiling is imposed by default. |
 
 Pass values as `--flag value` or `--flag=value`. Duplicate, unknown, credential-shaped, per-role, conflicting tool, and out-of-range values are rejected. Never put keys, tokens, passwords, or other credentials in a flag.
 
-## Deterministic demo workflows
+## Deterministic tutorial and showcase fixtures
 
-The included fictional B2B fixture provides three provider-disabled demonstrations. Their authenticated JSON and offline HTML report endpoints remain available for deterministic QA, but they are not presented as onboarding choices and never execute external work.
+The token-free tutorial and included fictional B2B showcases are separate from the real browser journey above. They are deterministic, provider-disabled fixtures for orientation and QA. Their authenticated JSON and offline HTML report endpoints never execute external work and are not evidence that a selected harness completed a real request.
 
 1. **Engineering Import** models a feature/import flow with an owner role gate, input validation, dry run, duplicate handling, atomic customer/audit publication, and independent Survey.
 2. **Launch Readiness** turns repository facts into a marketing brief and infographic-input evidence. Survey blocks an unsupported 40% promise; an owner-approved correction removes it, then an independent Resurvey passes the corrected brief.
@@ -88,7 +100,7 @@ Each demo exposes decision stops, expected artifacts, outcome classes, Survey/Re
 
 Bearing stores a workspace manifest plus per-run hash-linked JSONL ledgers and snapshots beneath the selected repository's `.bearing/` directory. Choosing the same repository on a later launch resumes it. The ledger is authoritative; a missing or stale snapshot can be rebuilt from valid events. Corrupt, truncated, future-schema, sequence-invalid, or hash-invalid state blocks writable resume instead of being silently reset.
 
-The current export surface saves a self-contained HTML evidence report for a demo workflow. There is not yet an in-app full-state export or delete control. To preserve all local state, stop Bearing and copy the repository's `.bearing/` directory to an owner-controlled backup. To retire it recoverably, stop Bearing, make that backup, and rename `.bearing/` to a repository-specific quarantine name; permanent deletion remains an explicit repository-owner action. Provider credentials are never part of `.bearing/`.
+The real journey presents contained authenticated links for validated generated HTML artifacts; showcase reports remain self-contained HTML fixtures. There is not yet an in-app full-state export or delete control. To preserve all local state, stop Bearing and copy the repository's `.bearing/` directory to an owner-controlled backup. To retire it recoverably, stop Bearing, make that backup, and rename `.bearing/` to a repository-specific quarantine name; permanent deletion remains an explicit repository-owner action. Provider credentials are never part of `.bearing/`.
 
 ## Evaluation
 
@@ -98,15 +110,15 @@ The current native characterization command creates and cleans **336 synthetic l
 
 ## Provenance of the work
 
-AlphaZede's underlying workflow skills, planning conventions, and bounded-agent engine concepts pre-date this hackathon submission. The Bearing submission-period work is the new local browser/HTTP control-room package, repository-local durable state and authority surfaces, provider adapter boundary, Explorer/Expedition recommendation UI, fictional three-workflow showcase, evidence reports, evaluation harness, and public package/submission material. The package does not represent the pre-existing workflow engine itself as newly created work.
+AlphaZede's underlying workflow skills, planning conventions, and bounded-agent engine concepts pre-date this hackathon submission. The Bearing submission-period work is the new local browser/HTTP control-room package, repository-local durable state and authority surfaces, selected-harness journey bridge, adaptive owner Q&A, Explorer/Expedition execution UI, validated artifact serving, fictional showcase fixtures, evidence reports, evaluation harness, and public package/submission material. The package does not represent the pre-existing workflow engine itself as newly created work.
 
 ## Platform assumptions and limitations
 
 - Node.js 22+ and a writable local filesystem are required. `package.json` pins pnpm 10.33.0.
 - Browser opening uses `open` on macOS, `cmd /c start` on Windows, and `xdg-open` on other platforms; use `--no-open` when that integration is unavailable. Cross-platform packaging is implemented but not certified here.
 - The server is single-user and loopback-only. There are no hosted accounts, remote telemetry, production deployment, support SLA, or multi-user authorization boundary.
-- The native UI is intentionally small. Approval currently records a recommendation; it does not launch the demo workflow or offer general run execution, repair, full-state export, or delete controls.
-- Demo providers are disabled. Built-in route descriptors and process adapters exist, but no route/provider readiness is claimed. Isolation depends on active-adapter attestation and may be unavailable.
+- The native UI is intentionally small. The real staged journey launches the selected harness, but it does not provide a general-purpose terminal, arbitrary workflow editor, full-state export, or delete controls.
+- Tutorial and showcase providers are intentionally disabled; they remain deterministic fixtures. Real journey readiness and effective isolation depend on the selected local harness and its attestation, and may be unavailable.
 - SkillsBench execution, hosted CI, package publication, deployment, and owner-recorded video evidence are unverified or pending.
 - Optional RAG-assisted context, external config discovery, OAuth/setup flows, alias migrations, and skill lifecycle changes are not enabled by this package's browser flow.
 

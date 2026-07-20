@@ -29,6 +29,23 @@ describe("provider-neutral adapters", () => {
     expect(JSON.stringify(receipt)).not.toMatch(/nope|credential|prompt/i);
   });
 
+  it("allows Grok subagents only through an explicit execution request", async () => {
+    const selection = { provider: "grok", model: "grok-build", reasoning: "medium" };
+    const runner = new SyntheticRunner();
+    const grok = createAgentAdapter(selection, runner);
+    if (!grok) throw new Error("missing grok adapter");
+    await grok.execute({ runId: "grok-expedition", repositoryPath, role: role({ selection }), task: { prompt: "coordinate" }, allowSubagents: true });
+    expect(runner.calls[0].args.slice(0, 2)).toEqual(["--allow-subagents", "--"]);
+    expect(runner.calls[0].args).not.toContain("--no-subagents");
+
+    const boundedRunner = new SyntheticRunner();
+    const bounded = createAgentAdapter(selection, boundedRunner);
+    if (!bounded) throw new Error("missing grok adapter");
+    await bounded.execute({ runId: "grok-bounded", repositoryPath, role: role({ selection }), task: { prompt: "work" } });
+    expect(boundedRunner.calls[0].args[0]).toBe("--");
+    expect(boundedRunner.calls[0].args).toContain("--no-subagents");
+  });
+
   it("pins non-interactive Codex approval policy through current config argv", async () => {
     const runner = new SyntheticRunner();
     const codex = createAgentAdapter({ provider: "codex", model: "gpt-5.6-sol", reasoning: "medium" }, runner);

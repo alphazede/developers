@@ -54,6 +54,11 @@ describe("parseStartArgs", () => {
     expect(parseStartArgs(["start", "--decision-depth", "medium"]).ok).toBe(false);
   });
 
+  it("accepts an optional safe-integer budget and rejects unsafe values", () => {
+    expect(parseStartArgs(["start", "--budget", "9007199254740991"])).toMatchObject({ ok: true, overrides: { budget: { tokens: Number.MAX_SAFE_INTEGER } } });
+    expect(parseStartArgs(["start", "--budget", "9007199254740992"]).ok).toBe(false);
+  });
+
   it("rejects duplicate, credential, per-role, malformed, and unsafe overrides", () => {
     for (const args of [
       ["start", "--model", "a", "--model=b"],
@@ -65,7 +70,7 @@ describe("parseStartArgs", () => {
       ["start", "--reasoning", "maximum"],
       ["start", "--timeout", "0"],
       ["start", "--max-turns=-1"],
-      ["start", "--budget", "10000001"],
+      ["start", "--budget", "9007199254740992"],
       ["start", "--provider"],
       ["start", "--offline=true"],
       ["start", "--agent", "x".repeat(257)],

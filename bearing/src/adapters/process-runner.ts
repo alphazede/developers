@@ -90,7 +90,9 @@ function normalize(stdout: string): { events: readonly unknown[]; usage: { token
     const found = tokenUsage(record);
     if (found !== undefined) tokens = found;
     const type = typeof record.type === "string" ? record.type : typeof record.event === "string" ? record.event : "message";
-    const data = record.data ?? record.message ?? record.text ?? record.content ?? record.status;
+    const item = typeof record.item === "object" && record.item !== null && !Array.isArray(record.item) ? record.item as Record<string, unknown> : undefined;
+    const agentMessage = type === "item.completed" && item?.type === "agent_message" && typeof item.text === "string" ? item.text : undefined;
+    const data = agentMessage ?? record.data ?? record.message ?? record.text ?? record.content ?? record.status;
     return { type, ...(data === undefined ? {} : { data: typeof data === "object" && data !== null && !Array.isArray(data) ? safe(data) : { content: safe(data) } }) };
   });
   return tokens === undefined ? undefined : { events, usage: { tokens } };

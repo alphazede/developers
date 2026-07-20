@@ -98,6 +98,13 @@ describe("production process runner", () => {
     expect(JSON.stringify(receipt)).not.toContain("hunter2");
   });
 
+  it("retains real Codex item.completed agent_message text", async () => {
+    const h = harness('{"type":"item.completed","item":{"id":"item_1","type":"agent_message","text":"BEARING_RESULT {\\"kind\\":\\"question\\",\\"question\\":\\"Which database? password=hunter2 please\\"}"}}\n{"type":"turn.completed","usage":{"input_tokens":4,"output_tokens":3}}\n');
+    const result = await h.runner.run({ routeId: "codex", executable: "codex", args: [], stdin: "x", cwd: repositoryPath, timeoutMs: 50, runId: "codex-agent-message" });
+    expect(result).toMatchObject({ exitCode: 0, usage: { tokens: 7 }, events: [{ type: "item.completed", data: { content: 'BEARING_RESULT {"kind":"question","question":"Which database? [redacted] please"}' } }, { type: "turn.completed" }] });
+    expect(JSON.stringify(result)).not.toContain("hunter2");
+  });
+
   it("bounds output, rejects malformed JSON, times out, and cancels idempotently", async () => {
     const invocation: ProcessInvocation = { routeId: "codex", executable: "codex", args: [], stdin: "secret", cwd: repositoryPath, timeoutMs: 5, runId: "r" };
     expect(await harness("not json").runner.run(invocation)).toEqual({ unknownSideEffect: true });

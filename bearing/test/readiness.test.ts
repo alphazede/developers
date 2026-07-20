@@ -16,6 +16,7 @@ describe("readiness service", () => {
     expect(detected.status).toBe("detected");
     if (detected.status === "blocked") return;
     expect(detected.verified).toBe(false);
+    expect(detected.run.roles.every((role) => role.limits.tokenBudget === Number.MAX_SAFE_INTEGER)).toBe(true);
     expect(new Set(detected.run.roles.map((role) => JSON.stringify(role.selection))).size).toBe(1);
     expect(new Set(detected.run.roles.map((role) => role.identity)).size).toBe(4);
     expect(new Set(detected.run.roles.map((role) => JSON.stringify(role.authority))).size).toBe(4);
@@ -47,5 +48,8 @@ describe("readiness service", () => {
     const routed = await new ReadinessService({ executableAvailable: (executable) => executable === "pi" }, undefined, { provider: "pi", model: "zai/glm-5.2", reasoning: "low" }).check({ provider: "codex", model: "gpt-5.6-sol", reasoning: "medium" });
     expect(routed.status).toBe("detected");
     if (routed.status !== "blocked") expect(routed.run.roles[0].selection).toEqual({ provider: "pi", model: "zai/glm-5.2", reasoning: "low" });
+    const lowered = await new ReadinessService({ executableAvailable: () => true }, undefined, { budget: { tokens: 120_000 } }).check({ provider: "codex", model: "*", reasoning: "medium" });
+    expect(lowered.status).toBe("detected");
+    if (lowered.status !== "blocked") expect(lowered.run.roles.every((role) => role.limits.tokenBudget === 120_000)).toBe(true);
   });
 });

@@ -48,7 +48,7 @@ export interface ProcessRunner {
 
 export interface Inspection { readonly route: RouteDescriptor; readonly available: boolean; readonly capabilities: readonly string[]; }
 export interface Verification { readonly ok: boolean; readonly failure?: "unavailable" | "verification_failed"; }
-export interface ExecuteRequest { readonly runId: string; readonly repositoryPath: string; readonly role: RoleProjection; readonly task: { readonly prompt: string }; readonly fallbackRoute?: string; }
+export interface ExecuteRequest { readonly runId: string; readonly repositoryPath: string; readonly role: RoleProjection; readonly task: { readonly prompt: string }; readonly fallbackRoute?: string; readonly allowSubagents?: boolean; }
 export interface ExecutionReceipt {
   readonly status: ExecutionStatus;
   readonly requestedRoute: string;
@@ -166,7 +166,7 @@ function buildInvocation(route: RouteDescriptor, selection: Selection, request: 
   }
   if (route.provider === "grok") {
     if (role.sessionId !== null) return { ok: false, warnings: ["grok_session_policy_unsupported"] };
-    const args = ["--", "--output-format", "streaming-json", "--prompt-file", "/dev/stdin", "--cwd", request.repositoryPath, "--model", selection.model, "--reasoning-effort", selection.reasoning, "--max-turns", String(role.limits.maxTurns), "--tools", role.toolAllow.join(","), "--disallowed-tools", role.toolDeny.join(","), "--sandbox", "strict", "--permission-mode", "dontAsk", "--no-memory", "--no-subagents", ...(!role.authority.network ? ["--disable-web-search"] : [])];
+    const args = [...(request.allowSubagents === true ? ["--allow-subagents"] : []), "--", "--output-format", "streaming-json", "--prompt-file", "/dev/stdin", "--cwd", request.repositoryPath, "--model", selection.model, "--reasoning-effort", selection.reasoning, "--max-turns", String(role.limits.maxTurns), "--tools", role.toolAllow.join(","), "--disallowed-tools", role.toolDeny.join(","), "--sandbox", "strict", "--permission-mode", "dontAsk", "--no-memory", ...(request.allowSubagents === true ? [] : ["--no-subagents"]), ...(!role.authority.network ? ["--disable-web-search"] : [])];
     return { ok: true, value: { ...common, args }, warnings: [] };
   }
   if (route.provider === "pi") {

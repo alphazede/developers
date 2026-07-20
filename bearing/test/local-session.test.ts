@@ -237,7 +237,8 @@ describe("GET / native page and fragment secrecy", () => {
     expect(r.body).toContain("#repository-panel .repo-grid,.route-options,.route-details{grid-template-columns:1fr}");
     expect(r.body).toContain("#repository-panel .signature-link{display:none}");
     expect(r.body).toContain("--canvas:#010102");
-    expect(r.body).toContain("html{zoom:1.2}.panel,#repository-panel{background:rgba(15,16,17,.35)");
+    expect(r.body).toContain("html{zoom:1.2}.token-banner{");
+    expect(r.body).toContain(".panel,#repository-panel{background:rgba(15,16,17,.35)");
     expect(r.body).toContain("padding:0 clamp(24px,4vw,72px)");
     expect(r.body).toContain("main{max-width:1180px;margin:0;padding:42px clamp(24px,4vw,72px) 72px}");
     expect(r.body).not.toContain("calc((100vw - 1180px)/2)");
@@ -256,6 +257,9 @@ describe("GET / native page and fragment secrecy", () => {
     expect(r.body).toContain('<h2>What are we working on?</h2>');
     expect(r.body).toContain('id="work-back" type="button">\u2190 Back</button>');
     expect(r.body).toContain('class="primary">Embark</button>');
+    expect(r.body).toContain("Plan for substantial token use.");
+    expect(r.body).toContain("consider a higher tier, choose reasoning deliberately");
+    expect(r.body).toContain("https://github.com/juliusbrussee/caveman");
     expect(r.body).toContain('workBack.addEventListener("click"');
     expect(r.body).toContain('.compact-back{min-height:32px');
     expect(r.body).toContain('id="work-goal" required maxlength="4096"');
@@ -267,17 +271,30 @@ describe("GET / native page and fragment secrecy", () => {
     expect(r.body).not.toContain('workItems: 1, maxCrewmatesPerExplorer: 3, perAgentTokenEstimate: 4000');
     expect(r.body).toContain('id="planning-panel" hidden');
     expect(r.body).toContain("You choose Explorer or Expedition after implementation.md is ready.");
-    expect(r.body).toContain("<h2>Journey started</h2>");
-    expect(r.body).toContain('<span class="step">SET BEARINGS</span>');
-    expect(r.body).toContain("First stop: Set Bearings");
-    expect(r.body).toContain("Are all source files in this workspace, or are there reference documents Bearing should use?");
+    expect(r.body).toContain('<h2>Journey</h2>');
+    expect(r.body).toContain('id="journey-phase">SET BEARINGS</span>');
+    expect(r.body).toContain('"set-bearings": "Set Bearings"');
     expect(r.body).toContain('id="planning-answer-form"');
     expect(r.body).toContain('<label for="planning-answer">Your answer</label>');
     expect(r.body).toContain('placeholder="Type your answer here…"');
+    expect(r.body).toContain('fetch("/api/v1/journey"');
+    expect(r.body).toContain('postCommand(currentRunId, state, "createWorkRequest"');
     expect(r.body).toContain('postCommand(currentRunId, state, "requireDecision"');
     expect(r.body).toContain('postCommand(currentRunId, state, "recordOwnerAnswer"');
-    expect(r.body).toContain('question: "Anything else?"');
-    expect(r.body).toContain('setStatus("Journey started. Set Bearings comes next.", false)');
+    expect(r.body).toContain('invokeJourney("set-bearings")');
+    expect(r.body).toContain('currentStage === "set-bearings" ? "gather-supplies" : "map-route"');
+    expect(r.body).toContain('id="journey-wait" hidden');
+    expect(r.body).toContain('role="progressbar" aria-label="Agent work in progress"');
+    expect(r.body).not.toContain("aria-valuenow");
+    expect(r.body).toContain('id="journey-body" aria-busy="false"');
+    expect(r.body).toContain('id="wait-elapsed">0s elapsed');
+    expect(r.body).toContain("@keyframes wait-trail");
+    expect(r.body).toContain('name="review-cadence" value="phase" checked');
+    expect(r.body).toContain("Each phase <b>(recommended)</b>");
+    expect(r.body).toContain('id="journey-retry" type="button" hidden>Retry');
+    expect(r.body).toContain('setStatus(phaseNames[stage] + " is working…", true)');
+    expect(r.body).toContain("This run reached its token budget before the phase completed. Retry with a higher CLI --budget or a lower reasoning profile.");
+    expect(r.body).toContain('id="journey-action-back" type="button">← Back');
     expect(r.body).toContain('<p class="hero-help">New to Bearing?<button class="demo-link" id="view-demo" type="button">See how it works</button></p>');
     expect(r.body).not.toContain('id="view-demo" type="button" hidden');
     expect(r.body).not.toContain("Live demo");
@@ -294,7 +311,7 @@ describe("GET / native page and fragment secrecy", () => {
     expect(r.body).toContain("Before planning, it checks whether the source files are here");
     expect(r.body).toContain("Anything else?");
     expect(r.body).toContain("Come back to evidence, not just “done”");
-    expect(r.body).toContain("Back to Bearing");
+    expect(r.body).toContain('currentRunId ? "Back to journey" : "Start journey"');
     expect(r.body).toContain('id="demo-explorer" type="button" aria-pressed="false"');
     expect(r.body).toContain('src="/assets/bearing-explorer-card.png"');
     expect(r.body).toContain('id="demo-expedition" type="button" aria-pressed="false"');
@@ -320,12 +337,15 @@ describe("GET / native page and fragment secrecy", () => {
     expect(r.body).toContain('@keyframes compass-spin');
     expect(r.body).not.toContain('id="workflow-select"');
     expect(r.body).not.toContain('id="showcase"');
-    expect(r.body).toContain('"/commands"');
+    expect(r.body).toContain('"/api/v1/journey"');
     expect(r.body).not.toContain('/launch');
     expect(r.body).not.toContain(cap);
     // If the fragment leaked into req.url the path check would 404; a 200 proves
     // the server only ever saw "/" on the initial GET.
     expect(r.body).not.toContain("Rejected");
+    const script = /<script>([\s\S]*)<\/script>/.exec(r.body)?.[1];
+    expect(script).toBeDefined();
+    expect(() => new Function(script!)).not.toThrow();
 
     const image = await call(port, { method: "GET", path: "/assets/bearing-office.png" });
     expect(image.status).toBe(200);

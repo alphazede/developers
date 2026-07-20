@@ -73,7 +73,7 @@ export function parseStartArgs(args: string[]): ParseResult {
   const excludedTools = typeof values.get("exclude-tools") === "string" ? toolList(values.get("exclude-tools") as string) : undefined;
   const timeoutMs = typeof values.get("timeout") === "string" ? positiveInteger(values.get("timeout") as string, 300_000) : undefined;
   const maxTurns = typeof values.get("max-turns") === "string" ? positiveInteger(values.get("max-turns") as string, 20) : undefined;
-  const budget = typeof values.get("budget") === "string" ? positiveInteger(values.get("budget") as string, 100_000) : undefined;
+  const budget = typeof values.get("budget") === "string" ? positiveInteger(values.get("budget") as string, Number.MAX_SAFE_INTEGER) : undefined;
   if ((reasoning !== undefined && (typeof reasoning !== "string" || !REASONING.has(reasoning))) || (decisionDepth !== undefined && (typeof decisionDepth !== "string" || !DECISION_DEPTH.has(decisionDepth))) || (values.has("tools") && !tools) || (values.has("exclude-tools") && !excludedTools) || (tools && excludedTools && tools.some((tool) => excludedTools.includes(tool))) || (values.has("timeout") && !timeoutMs) || (values.has("max-turns") && !maxTurns) || (values.has("budget") && !budget)) return { ok: false };
   return {
     ok: true,
