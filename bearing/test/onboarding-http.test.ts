@@ -217,7 +217,7 @@ describe("repository-first onboarding HTTP", () => {
     const cookie = await authenticate(port, session);
     expect((await call(port, "POST", "/api/v1/repository", { path: root }, cookie)).status).toBe(200);
     expect(JSON.parse((await call(port, "POST", "/api/v1/readiness", { provider: "codex", model: "*", reasoning: "medium" }, cookie)).body)).toMatchObject({ status: "ready", verified: true });
-    const runId = "browser-test"; const goal = "Ship bounded evidence";
+    const runId = "browser-test"; const goal = "Ship bounded evidence\nwithout losing owner control";
     const journey = (stage: string, extra: Record<string, unknown> = {}) => call(port, "POST", "/api/v1/journey", { runId, stage, workGoal: goal, ...extra }, cookie);
     await postOwnerCommand(port, cookie, runId, "createWorkRequest", { title: goal, goal });
     expect(JSON.parse((await journey("set-bearings")).body)).toMatchObject({ status: "action", summary: "Bearings set" });

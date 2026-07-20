@@ -343,6 +343,10 @@ interface JourneyBody {
 
 interface JourneyControlBody { readonly runId: string; readonly action: "stop" | "steer"; readonly instruction?: string; }
 
+function hasUnsafeTextControl(value: string): boolean {
+  return /[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/.test(value);
+}
+
 function isJourneyControlBody(v: unknown): v is JourneyControlBody {
   if (typeof v !== "object" || v === null || Array.isArray(v)) return false;
   const body = v as Record<string, unknown>, allowed = new Set(["runId", "action", "instruction"]);
@@ -358,9 +362,9 @@ function isJourneyBody(v: unknown): v is JourneyBody {
   const stages = new Set<JourneyStage>(["set-bearings", "gather-supplies", "map-route", "draft-implementation", "execute-explorer", "execute-expedition", "review"]);
   return Object.keys(body).every((key) => allowed.has(key)) && /^[A-Za-z0-9_-]{1,128}$/.test(String(body.runId ?? "")) &&
     stages.has(body.stage as JourneyStage) &&
-    (body.workGoal === undefined || (typeof body.workGoal === "string" && body.workGoal === body.workGoal.trim() && body.workGoal.length > 0 && body.workGoal.length <= 4096 && !/[\u0000-\u001f\u007f]/.test(body.workGoal))) &&
-    (body.answer === undefined || (typeof body.answer === "string" && body.answer === body.answer.trim() && body.answer.length > 0 && body.answer.length <= 4096 && !/[\u0000-\u001f\u007f]/.test(body.answer))) &&
-    (body.reviewChange === undefined || (body.stage === "gather-supplies" && typeof body.reviewChange === "string" && body.reviewChange === body.reviewChange.trim() && body.reviewChange.length > 0 && body.reviewChange.length <= 4096 && !/[\u0000-\u001f\u007f]/.test(body.reviewChange))) &&
+    (body.workGoal === undefined || (typeof body.workGoal === "string" && body.workGoal === body.workGoal.trim() && body.workGoal.length > 0 && body.workGoal.length <= 4096 && !hasUnsafeTextControl(body.workGoal))) &&
+    (body.answer === undefined || (typeof body.answer === "string" && body.answer === body.answer.trim() && body.answer.length > 0 && body.answer.length <= 4096 && !hasUnsafeTextControl(body.answer))) &&
+    (body.reviewChange === undefined || (body.stage === "gather-supplies" && typeof body.reviewChange === "string" && body.reviewChange === body.reviewChange.trim() && body.reviewChange.length > 0 && body.reviewChange.length <= 4096 && !hasUnsafeTextControl(body.reviewChange))) &&
     (body.executionMode === undefined || body.executionMode === "explorer" || body.executionMode === "expedition") &&
     (body.reviewCadence === undefined || body.reviewCadence === "slice" || body.reviewCadence === "phase" || body.reviewCadence === "end");
 }
