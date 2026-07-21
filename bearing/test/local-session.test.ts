@@ -734,6 +734,15 @@ describe("POST /api/v1/session rejection matrix", () => {
     expect(cookie).not.toContain("Secure"); // plain loopback HTTP
     expect(r.body).not.toContain(cap); // capability never echoed, even on success
 
+    const authenticatedReplay = await call(port, {
+      method: "POST",
+      path: "/api/v1/session",
+      headers: sessionHeaders(port, { cookie: cookie.split(";")[0] }),
+      body: JSON.stringify({ capability: cap }),
+    });
+    expect(authenticatedReplay.status).toBe(200);
+    expect(authenticatedReplay.headers["set-cookie"]).toBeUndefined();
+
     const replay = await call(port, {
       method: "POST",
       path: "/api/v1/session",

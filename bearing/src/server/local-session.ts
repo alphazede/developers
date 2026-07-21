@@ -485,6 +485,11 @@ function handleSessionPost(
       writeRejection(res, 400);
       return;
     }
+    if (service.authenticateRequest(req)) {
+      res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
+      res.end("{}");
+      return;
+    }
     const result = service.exchange(parsed.capability);
     if (!result.ok) {
       // Wrong/missing/replayed capability: no capability is ever echoed back.
