@@ -33,7 +33,8 @@ export const BUILTIN_ROUTES: readonly RouteDescriptor[] = [
 ];
 
 export interface IsolationAttestation { readonly isolated: boolean; readonly evidence: string; }
-export interface ProcessInvocation { readonly routeId: string; readonly executable: string; readonly args: readonly string[]; readonly stdin: string; readonly cwd: string; readonly timeoutMs: number; readonly runId: string; readonly sessionKey?: string; readonly providerSessionId?: string; readonly promptFile?: boolean; readonly environment?: Readonly<Record<string, string>>; }
+export interface ProcessActivity { readonly sequence: number; readonly kind: string; readonly status?: string; readonly tool?: string; }
+export interface ProcessInvocation { readonly routeId: string; readonly executable: string; readonly args: readonly string[]; readonly stdin: string; readonly cwd: string; readonly timeoutMs: number; readonly runId: string; readonly sessionKey?: string; readonly providerSessionId?: string; readonly promptFile?: boolean; readonly environment?: Readonly<Record<string, string>>; readonly onActivity?: (activity: ProcessActivity) => void; }
 export interface ProcessResult {
   readonly exitCode?: number;
   readonly timedOut?: boolean;
@@ -60,7 +61,7 @@ export interface ProcessRunner {
 
 export interface Inspection { readonly route: RouteDescriptor; readonly available: boolean; readonly capabilities: readonly string[]; }
 export interface Verification { readonly ok: boolean; readonly failure?: "unavailable" | "verification_failed"; }
-export interface ExecuteRequest { readonly runId: string; readonly repositoryPath: string; readonly role: RoleProjection; readonly task: { readonly prompt: string }; readonly fallbackRoute?: string; readonly allowSubagents?: boolean; }
+export interface ExecuteRequest { readonly runId: string; readonly repositoryPath: string; readonly role: RoleProjection; readonly task: { readonly prompt: string }; readonly fallbackRoute?: string; readonly allowSubagents?: boolean; readonly onActivity?: (activity: ProcessActivity) => void; }
 export interface ExecutionReceipt {
   readonly status: ExecutionStatus;
   readonly requestedRoute: string;
@@ -181,7 +182,7 @@ function buildInvocation(route: RouteDescriptor, selection: Selection, request: 
   if (role.authority.externalAction || !role.authority.read || !role.authority.workspace) return { ok: false, warnings: ["authority_unsupported"] };
   if (!route.reasoningLevels.includes(selection.reasoning)) return { ok: false, warnings: ["reasoning_unsupported"] };
   if (!role.authority.write && role.toolAllow.some((tool) => /write|edit|shell|bash/i.test(tool))) return { ok: false, warnings: ["tool_authority_conflict"] };
-  const common = { routeId: route.id, executable: route.executable, stdin: request.task.prompt, cwd: request.repositoryPath, timeoutMs: role.limits.timeoutMs, runId: request.runId };
+  const common = { routeId: route.id, executable: route.executable, stdin: request.task.prompt, cwd: request.repositoryPath, timeoutMs: role.limits.timeoutMs, runId: request.runId, ...(request.onActivity ? { onActivity: request.onActivity } : {}) };
   if (route.provider === "codex") {
     if (role.toolDeny.some((tool) => tool !== "external-action")) return { ok: false, warnings: ["codex_tool_deny_unsupported"] };
     if (role.authority.network) return { ok: false, warnings: ["codex_network_policy_unsupported"] };

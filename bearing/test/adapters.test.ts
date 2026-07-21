@@ -29,6 +29,13 @@ describe("provider-neutral adapters", () => {
     expect(JSON.stringify(receipt)).not.toMatch(/nope|credential|prompt/i);
   });
 
+  it("passes the optional activity observer through the provider-neutral process seam", async () => {
+    const runner = new SyntheticRunner();
+    const onActivity = () => {};
+    await adapter(runner).execute({ runId: "activity", repositoryPath, role: role(), task: { prompt: "do work" }, onActivity });
+    expect(runner.calls[0]?.onActivity).toBe(onActivity);
+  });
+
   it("allows Grok subagents only through an explicit execution request", async () => {
     const selection = { provider: "grok", model: "grok-build", reasoning: "medium" };
     const runner = new SyntheticRunner();

@@ -38,6 +38,21 @@ function harness(output?: string, exitCode?: number, errorOutput?: string) {
   return { runner: new NodeProcessRunner(spawn, () => true, (executable, cwd) => ({ executable, cwd })), calls };
 }
 
+function chunkedHarness(chunks: readonly string[]) {
+  const spawn = () => {
+    const child = new EventEmitter() as ChildProcessWithoutNullStreams;
+    Object.assign(child, { pid: undefined, stdin: new PassThrough(), stdout: new PassThrough(), stderr: new PassThrough(), kill: () => true });
+    queueMicrotask(() => {
+      for (const chunk of chunks) child.stdout.write(chunk);
+      child.stdout.end();
+      child.stderr.end();
+      child.emit("close", 0);
+    });
+    return child;
+  };
+  return new NodeProcessRunner(spawn, () => true, (executable, cwd) => ({ executable, cwd }));
+}
+
 async function execute(selection: Selection, overrides: Record<string, unknown> = {}, runOverrides: Record<string, unknown> = {}) {
   const h = harness();
   const adapter = createAgentAdapter(selection, h.runner); if (!adapter) throw new Error("missing adapter");
@@ -110,6 +125,28 @@ describe("production process runner", () => {
     expect(h.calls).toHaveLength(0);
     const result = await h.runner.run({ routeId: "codex", executable: "codex", args: [], stdin: "x", cwd: repositoryPath, timeoutMs: 50, runId: "jsonl" });
     expect(result).toMatchObject({ exitCode: 0, usage: { tokens: 5 }, events: [{ type: "message", data: { content: "ok" } }, { type: "complete" }] });
+  });
+
+  it("streams only ordered, allowlisted activity metadata from complete JSONL lines", async () => {
+    const output = '{"type":"tool.started","status":"running","tool":{"name":"Read","arguments":"password=hunter2"},"message":"raw model content","path":"/private/source"}\nnot-json\n{"event":"turn.completed","status":"sk-abcdefgh","name":"private-source","usage":{"input_tokens":2,"output_tokens":3}}';
+    const activities: unknown[] = [];
+    const runner = chunkedHarness([output.slice(0, 19), output.slice(19, 81), output.slice(81)]);
+    const invocation: ProcessInvocation = { routeId: "codex", executable: "codex", args: [], stdin: "private prompt", cwd: repositoryPath, timeoutMs: 50, runId: "activity", onActivity: (event) => activities.push(event) };
+    const result = await runner.run(invocation);
+    expect(activities).toEqual([
+      { sequence: 1, kind: "tool.started", status: "running", tool: "Read" },
+      { sequence: 2, kind: "turn.completed" },
+    ]);
+    expect(JSON.stringify(activities)).not.toMatch(/hunter2|raw model content|private|source|arguments|path|prompt/i);
+
+    const baseline = await harness(output).runner.run({ ...invocation, runId: "baseline", onActivity: undefined });
+    expect(result).toEqual(baseline);
+  });
+
+  it("does not let activity observers change process results", async () => {
+    const output = '{"type":"message","usage":{"total_tokens":1}}\n';
+    const result = await chunkedHarness([output]).run({ routeId: "codex", executable: "codex", args: [], stdin: "x", cwd: repositoryPath, timeoutMs: 50, runId: "observer", onActivity: () => { throw new Error("observer failed"); } });
+    expect(result).toEqual(await harness(output).runner.run({ routeId: "codex", executable: "codex", args: [], stdin: "x", cwd: repositoryPath, timeoutMs: 50, runId: "baseline-observer" }));
   });
 
   it("parses OpenCode step-finish token usage", async () => {
