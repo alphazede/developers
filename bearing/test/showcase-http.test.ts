@@ -102,7 +102,8 @@ describe("native browser showcase HTTP", () => {
     expect(page.body).toContain("<main>");
     expect(page.body).toContain('id="status" role="status" aria-live="polite"');
     expect(page.body).toContain('id="change-repository"');
-    expect(page.body).toContain('label for="work-goal"');
+    expect(page.body).toContain('aria-label="Current workspace and agent settings"');
+    expect(page.body).toContain('id="work-goal"');
     expect(page.body).not.toContain('id="workflow-select"');
     expect(page.body).not.toContain('aria-labelledby="showcase-heading"');
     expect(page.body).toContain("focus-visible");

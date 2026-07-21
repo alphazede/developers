@@ -314,7 +314,7 @@ describe("repository-first onboarding HTTP", () => {
     expect(JSON.parse((await journey("map-route")).body)).toMatchObject({ status: "action", summary: "Route and implementation redrafted" });
     expect((await journey("execute-explorer", { executionMode: "explorer", reviewCadence: "phase" })).status).toBe(409);
     await recordPlanningApproval(port, cookie, runId);
-    expect(JSON.parse((await journey("execute-explorer", { executionMode: "explorer", reviewCadence: "phase" })).body)).toMatchObject({ status: "question", question: "May I replace the generated client?" });
+    expect(JSON.parse((await journey("execute-explorer", { executionMode: "explorer", reviewCadence: "phase", cleanupMergedWorktrees: true })).body)).toMatchObject({ status: "question", question: "May I replace the generated client?" });
     const executionQuestion = JSON.parse((await call(port, "GET", `/api/v1/runs/${runId}`, undefined, cookie)).body).pendingDecision;
     expect(executionQuestion).toMatchObject({ question: "May I replace the generated client?" });
     await postOwnerCommand(port, cookie, runId, "recordOwnerAnswer", { decisionId: executionQuestion.decisionId, answer: "Yes, keep the public API stable" });
@@ -333,6 +333,8 @@ describe("repository-first onboarding HTTP", () => {
     expect(markdown.headers["content-type"]).toBe("text/plain; charset=utf-8");
     expect(markdown.body).toContain("Agent reasoning level");
     expect(runner.calls.map((invocation) => invocation.stdin).join("\n")).toContain("Review cadence");
+    expect(runner.calls.map((invocation) => invocation.stdin).join("\n")).toContain('"question":"Cleanup merged worktrees","answer":"on"');
+    expect(runner.calls.map((invocation) => invocation.stdin).join("\n")).toContain("Clean eligible worktrees after each completed phase.");
     expect(runner.calls.map((invocation) => invocation.stdin).join("\n")).toContain("Add a rollback acceptance check");
     expect(runner.calls.slice(0, -1).every((invocation) => invocation.args.includes('model_reasoning_effort="low"'))).toBe(true);
     expect(runner.calls.at(-1)?.args).toContain('sandbox_mode="read-only"');
@@ -635,7 +637,11 @@ describe("repository-first onboarding HTTP", () => {
     const calls: unknown[] = [];
     const runner = {
       executableAvailable: () => true,
-      run: async (invocation: unknown) => { calls.push(invocation); entered(); return await new Promise<{ unknownSideEffect: true }>((resolve) => { release = resolve; }); },
+      run: async (invocation: unknown) => {
+        calls.push(invocation);
+        if (calls.length === 1) { entered(); return await new Promise<{ unknownSideEffect: true }>((resolve) => { release = resolve; }); }
+        return { exitCode: 0, events: [{ type: "complete", data: { content: 'BEARING_RESULT {"kind":"questions","questions":["Proceed with the steered boundary?"]}' } }], usage: { tokens: 1 } };
+      },
       cancel: () => release({ unknownSideEffect: true }),
     };
     const server = createServer(); await new Promise<void>((resolve) => server.listen({ host: "127.0.0.1", port: 0 }, resolve)); servers.push(server);
@@ -652,5 +658,10 @@ describe("repository-first onboarding HTTP", () => {
     await call(port, "POST", "/api/v1/journey/control", { runId: "browser-steer-ambiguous", action: "steer", instruction: "Change direction" }, cookie);
     expect(JSON.parse((await running).body)).toMatchObject({ status: "failure", code: "interrupted" });
     expect(calls).toHaveLength(1);
+    const retry = JSON.parse((await call(port, "POST", "/api/v1/journey", { runId: "browser-steer-ambiguous", stage: "gather-supplies", workGoal: "Do not duplicate writes" }, cookie)).body);
+    expect(retry).toMatchObject({ status: "question", question: "Proceed with the steered boundary?" });
+    expect(calls).toHaveLength(2);
+    expect((calls[1] as { stdin: string }).stdin).toContain("Owner steering during gather-supplies");
+    expect((calls[1] as { stdin: string }).stdin).toContain("Change direction");
   });
 });

@@ -205,19 +205,32 @@ describe("JourneyService", () => {
     expect(runner.calls[0].args).not.toContain("unsupported_policy");
     expect(runner.calls[0].stdin).toMatch(/\$grill-with-docs|one owner question at a time|update only the validated plan specification|BEARING_RESULT/);
     expect(runner.calls[0].stdin).toContain('"answer":"CSV"');
-    expect(runner.calls[0].stdin).toContain('The onboarding selection {"provider":"codex","model":"*","reasoning":"medium"} applies to every role and child.');
-    expect(runner.calls[0].stdin).toContain("Do not substitute a different provider, model, or reasoning route.");
+    expect(runner.calls[0].stdin).toContain('The onboarding selection {"provider":"codex","model":"*","reasoning":"medium"} governs this top-level planning agent and the Explorer/Navigator session.');
+    expect(runner.calls[0].stdin).toContain("Implementation.md may record task-appropriate supported model routes and reasoning levels per coding slice");
+    expect(runner.calls[0].stdin).toContain("Accepted implementation route labels and supported reasoning levels:");
+    expect(runner.calls[0].stdin).toContain("codex agent default [low, medium, high, xhigh, max, ultra]");
+    expect(runner.calls[0].stdin).toContain("do not copy a canned duration");
   });
 
   it("discovers every grilling question in one read-only call and appends the final check", async () => {
-    const runner = new StubRunner(completed('BEARING_RESULT {"kind":"questions","questions":["Are all source files in this workspace?","Are there reference documents I should use?"]}', 21));
+    const runner = new StubRunner(completed('BEARING_RESULT {"kind":"questions","questions":["Are all source files in this workspace?","Are there reference documents I should use?"],"nextStageEstimate":{"stage":"gather-supplies","minMinutes":4,"maxMinutes":9,"basis":"two owner decisions and one plan file"}}', 21));
     const result = await new JourneyService(runner).execute(await request({ priorOwnerQa: [], gatherMode: "questions" }));
-    expect(result).toEqual({ status: "question", question: "Are all source files in this workspace?", questions: ["Are all source files in this workspace?", "Are there reference documents I should use?", "Anything else?"], tokens: 21 });
+    expect(result).toEqual({ status: "question", question: "Are all source files in this workspace?", questions: ["Are all source files in this workspace?", "Are there reference documents I should use?", "Anything else?"], tokens: 21, nextStageEstimate: { stage: "gather-supplies", minMinutes: 4, maxMinutes: 9, basis: "two owner decisions and one plan file" } });
     expect(runner.calls).toHaveLength(1);
     expect(runner.calls[0].args).toContain("read-only");
     expect(runner.calls[0].args).not.toContain("workspace-write");
     expect(runner.calls[0].stdin).toMatch(/return every important unresolved owner question together/i);
     expect(runner.calls[0].stdin).toMatch(/Do not create or modify files during question discovery/i);
+    expect(runner.calls[0].stdin).toContain('"stage":"gather-supplies"');
+  });
+
+  it("accepts a same-stage estimate on the map-route lens question", async () => {
+    const input = await request({ stage: "map-route", planDirectory: "docs/plans/import" });
+    await mkdir(join(input.repositoryPath, input.planDirectory!), { recursive: true });
+    const runner = new StubRunner(completed('BEARING_RESULT {"kind":"question","question":"Which design lenses do you approve?","nextStageEstimate":{"stage":"map-route","minMinutes":12,"maxMinutes":20,"basis":"approved lenses cover three design surfaces"}}'));
+    expect(await new JourneyService(runner).execute(input)).toMatchObject({ status: "question", nextStageEstimate: { stage: "map-route", minMinutes: 12, maxMinutes: 20 } });
+    expect(runner.calls[0].stdin).toContain('"kind":"question","question":"one blocking question","nextStageEstimate":{"stage":"map-route"');
+    expect(runner.calls[0].stdin).toContain("including design, SEIT, review generation, implementation drafting, validation, and required agent round trips");
   });
 
   it("reuses only the matching Codex planning thread", async () => {
@@ -266,6 +279,11 @@ describe("JourneyService", () => {
     expect(expeditionRunner.calls[0].stdin).toContain('{"provider":"grok","model":"grok-build","reasoning":"medium"}');
     expect(expeditionRunner.calls[0].stdin).toMatch(/recorded Review cadence \(each slice, each phase, or end\).*enforce that cadence/);
     expect(expeditionRunner.calls[0].stdin).toMatch(/harness-native reviewer.*Surveyor fallback/);
+    expect(expeditionRunner.calls[0].stdin).toMatch(/Keep parallel lanes until the entire phase is integrated.*Never force-remove/);
+
+    const preserveRunner = new StubRunner(completed('BEARING_RESULT {"kind":"question","question":"Proceed?"}'));
+    await new JourneyService(preserveRunner).execute(await request({ stage: "execute-explorer", priorOwnerQa: [{ question: "Cleanup merged worktrees", answer: "off" }] }));
+    expect(preserveRunner.calls[0].stdin).toContain("Preserve every temporary worktree and branch; the owner disabled automatic cleanup.");
 
     const normalRunner = new StubRunner(completed('BEARING_RESULT {"kind":"question","question":"Any constraints?"}'));
     expect((await new JourneyService(normalRunner).execute(await request({ stage: "gather-supplies", selection, run: resolved(selection) }))).status).toBe("question");
@@ -320,6 +338,84 @@ describe("JourneyService", () => {
     expect(runner.calls[0].stdin).toContain("docs/plans/import");
     expect(runner.calls[0].stdin).toMatch(/Regenerate the existing review HTML.*implementation\.md/);
     expect(runner.calls[0].stdin).toContain("do not use standard gate or gate-review");
+  });
+
+  it("repairs a stale final review with exact current planning sources", async () => {
+    const input = await request({ stage: "draft-implementation", planDirectory: "docs/plans/import" });
+    await writePlanningPackage(input.repositoryPath);
+    const directory = join(input.repositoryPath, input.planDirectory!);
+    const currentSeit = seitFixture.replace("Complete matrix.", "Current matrix with <new> evidence.");
+    const currentImplementation = implementationFixture.replace("pnpm test", "pnpm typecheck & pnpm test");
+    await Promise.all([
+      writeFile(join(directory, "seit.md"), currentSeit),
+      writeFile(join(directory, "implementation.md"), currentImplementation),
+    ]);
+    const runner = new StubRunner(completed('BEARING_RESULT {"kind":"action","summary":"Implementation plan drafted.","artifacts":["docs/plans/import/implementation.md","docs/plans/import/review.html"]}'));
+
+    expect(await new JourneyService(runner).execute(input)).toMatchObject({ status: "action", planningReview: { phases: 1, slices: 1 } });
+    const review = await readFile(join(directory, "review.html"), "utf8");
+    expect(review).toContain('id="bearing-source-artifacts"');
+    expect(review).toContain(escapeFixture(currentSeit));
+    expect(review).toContain(escapeFixture(currentImplementation));
+  });
+
+  it("accepts supported per-slice routing independent of onboarding and rejects invalid routing fields", async () => {
+    const input = await request({ stage: "draft-implementation", planDirectory: "docs/plans/import" });
+    await writeDesignPackage(input.repositoryPath);
+    const writeSlice = async (model: string, reasoning: string, ponytail: string): Promise<void> => {
+      const implementation = `# Implementation\n\n## Phase 1 — Build\n\n### Slice 1.1 — Import\n\n**Implementation role.** Backend Engineer\n\n**Agent model route.** ${model}\n\n**Agent reasoning level.** ${reasoning}\n\n**Ponytail mode.** ${ponytail}\n\n**Review path.** native review\n\n**Required lint/static-analysis.** pnpm test\n`;
+      await Promise.all([
+        writeFile(join(input.repositoryPath, input.planDirectory!, "implementation.md"), implementation),
+        writeFile(join(input.repositoryPath, input.planDirectory!, "review.html"), `<html><body>${[planFixture, designFixture, seitFixture, implementation].map((value) => `<pre>${escapeFixture(value)}</pre>`).join("")}</body></html>`),
+      ]);
+    };
+    const receipt = completed('BEARING_RESULT {"kind":"action","summary":"Implementation plan drafted.","artifacts":["docs/plans/import/implementation.md","docs/plans/import/review.html"]}');
+
+    for (const [model, reasoning] of [["Codex agent default", "max"], ["Codex agent default", "ultra"], ["Agy", "thinking"], ["OpenCode", "default"], ["OpenCode", "none"], ["OpenCode", "minimal"], ["Pi", "off"], ["Grok Build", "high"], ["grok-safe (grok-build)", "high"]]) {
+      await writeSlice(model, reasoning, "full");
+      expect(await new JourneyService(new StubRunner(receipt)).execute(input)).toMatchObject({ status: "action", planningReview: { assignments: [{ model, reasoning }] } });
+    }
+    await writeSlice("Gork Build", "high", "full");
+    expect(await new JourneyService(new StubRunner(receipt)).execute(input)).toMatchObject({ status: "failure", code: "artifact_invalid" });
+    await writeSlice("Grok Build", "ultra", "full");
+    expect(await new JourneyService(new StubRunner(receipt)).execute(input)).toMatchObject({ status: "failure", code: "artifact_invalid" });
+    await writeSlice("Grok Build", "high", "half");
+    expect(await new JourneyService(new StubRunner(receipt)).execute(input)).toMatchObject({ status: "failure", code: "artifact_invalid" });
+  });
+
+  it("accepts the current selected-model composite and rejects another provider model", async () => {
+    const selection = { provider: "codex", model: "gpt-5.6-sol", reasoning: "medium" };
+    const input = await request({ stage: "draft-implementation", planDirectory: "docs/plans/import", selection, run: resolved(selection) });
+    await writeDesignPackage(input.repositoryPath);
+    const selectedLabel = "Codex `gpt-5.6-sol`";
+    const implementation = implementationFixture.replace("Codex agent default", selectedLabel);
+    await Promise.all([
+      writeFile(join(input.repositoryPath, input.planDirectory!, "implementation.md"), implementation),
+      writeFile(join(input.repositoryPath, input.planDirectory!, "review.html"), `<html><body>${[planFixture, designFixture, seitFixture, implementation].map((value) => `<pre>${escapeFixture(value)}</pre>`).join("")}</body></html>`),
+    ]);
+    const receipt = completed('BEARING_RESULT {"kind":"action","summary":"Implementation plan drafted.","artifacts":["docs/plans/import/implementation.md","docs/plans/import/review.html"]}');
+    expect(await new JourneyService(new StubRunner(receipt)).execute(input)).toMatchObject({ status: "action", planningReview: { assignments: [{ model: selectedLabel, reasoning: "medium" }] } });
+    await writeFile(join(input.repositoryPath, input.planDirectory!, "implementation.md"), implementation.replace(selectedLabel, "Codex `gpt-5.6-terra`"));
+    expect(await new JourneyService(new StubRunner(receipt)).execute(input)).toMatchObject({ status: "failure", code: "artifact_invalid" });
+  });
+
+  it("accepts only bounded agent next-stage estimates", async () => {
+    const input = await request({ gatherMode: "apply", planDirectory: "docs/plans/import" });
+    await mkdir(join(input.repositoryPath, input.planDirectory!), { recursive: true });
+    await writeFile(join(input.repositoryPath, input.planDirectory!, "plan-spec.md"), planFixture);
+    const valid = new StubRunner(completed('BEARING_RESULT {"kind":"action","summary":"Plan saved.","artifacts":["docs/plans/import/plan-spec.md"],"nextStageEstimate":{"stage":"map-route","minMinutes":8,"maxMinutes":14,"basis":"repository map and two design surfaces"}}'));
+    expect(await new JourneyService(valid).execute(input)).toMatchObject({ status: "action", nextStageEstimate: { stage: "map-route", minMinutes: 8, maxMinutes: 14 } });
+    expect(valid.calls[0].stdin).toContain("Do not estimate from repository inspection size alone");
+    const invalid = new StubRunner(completed('BEARING_RESULT {"kind":"action","summary":"Plan saved.","artifacts":["docs/plans/import/plan-spec.md"],"nextStageEstimate":{"stage":"map-route","minMinutes":14,"maxMinutes":8,"basis":"bad range"}}'));
+    expect(await new JourneyService(invalid).execute(input)).toEqual({ status: "failure", code: "result_malformed", tokens: 5 });
+  });
+
+  it("requests and accepts one generic execution estimate before mode selection", async () => {
+    const input = await request({ stage: "draft-implementation", planDirectory: "docs/plans/import" });
+    await writePlanningPackage(input.repositoryPath);
+    const runner = new StubRunner(completed('BEARING_RESULT {"kind":"action","summary":"Implementation plan drafted.","artifacts":["docs/plans/import/implementation.md","docs/plans/import/review.html"],"nextStageEstimate":{"stage":"execute","minMinutes":10,"maxMinutes":18,"basis":"three bounded implementation slices"}}'));
+    expect(await new JourneyService(runner).execute(input)).toMatchObject({ status: "action", nextStageEstimate: { stage: "execute", minMinutes: 10, maxMinutes: 18 } });
+    expect(runner.calls[0].stdin).toContain('"nextStageEstimate":{"stage":"execute"');
   });
 
   it("resumes a validated design baseline and drafts implementation in a separate call", async () => {

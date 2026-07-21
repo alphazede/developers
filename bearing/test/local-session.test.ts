@@ -11,6 +11,7 @@ import {
   SESSION_COOKIE_NAME,
   createRequestHandler,
   greetingFor,
+  unnamedGreetingFor,
   readCookie,
 } from "../src/server/local-session.js";
 
@@ -106,13 +107,25 @@ async function exchangeCookie(port: string, cap: string): Promise<string> {
 }
 
 describe("LocalSessionService unit", () => {
-  it("greets returning owners by local time and weekend", () => {
-    const at = (day: number, hour: number) => { const value = new Date(2026, 6, 20, hour); value.setDate(value.getDate() + ((day - value.getDay() + 7) % 7)); return value; };
-    expect(greetingFor("Smokie", at(1, 9))).toBe("Good morning, Smokie. What are we working on today?");
-    expect(greetingFor("Smokie", at(2, 13))).toBe("Good afternoon, Smokie. What are we working on today?");
-    expect(greetingFor("Smokie", at(3, 19))).toBe("Good evening, Smokie. What are we working on today?");
-    expect(greetingFor("Smokie", at(6, 9))).toBe("Good morning, Smokie. Weekend warrior—what are we building today?");
-    expect(greetingFor("Smokie", at(0, 23))).toBe("Burning the midnight oil, Smokie? What's on your mind to build today?");
+  it("rotates stable owner greetings by local date, time, and weekend", () => {
+    const at = (year: number, month: number, date: number, hour: number) => new Date(year, month, date, hour);
+    const mondayMorning = at(2026, 6, 20, 9);
+    expect(greetingFor("Smokie", mondayMorning)).toBe(greetingFor("Smokie", mondayMorning));
+    expect(greetingFor("Smokie", mondayMorning)).toContain("Smokie");
+    expect(greetingFor("Smokie", at(2026, 6, 20, 13))).toMatch(/afternoon|Afternoon|Welcome back/);
+    expect(greetingFor("Smokie", at(2026, 6, 20, 19))).toMatch(/evening|Evening/);
+    expect(greetingFor("Smokie", at(2026, 6, 20, 23))).toMatch(/midnight oil|Late-night|exploring|trail is quiet|Night-owl/);
+    expect(greetingFor("Smokie", at(2026, 6, 25, 9))).toContain("Weekend");
+    expect(greetingFor("Smokie", at(2026, 6, 26, 23))).toMatch(/weekend|Weekend/);
+    const weekdayMornings = [20, 21, 22, 23, 24, 27, 28, 29, 30, 31].map((date) => greetingFor("Smokie", at(2026, 6, date, 9)));
+    expect(new Set(weekdayMornings).size).toBeGreaterThanOrEqual(3);
+  });
+
+  it("provides a time-aware unnamed greeting before repository selection", () => {
+    expect(unnamedGreetingFor(new Date(2026, 6, 20, 9))).toBe("Good morning. What are we working on today?");
+    expect(unnamedGreetingFor(new Date(2026, 6, 20, 13))).toBe("Good afternoon. What are we building today?");
+    expect(unnamedGreetingFor(new Date(2026, 6, 20, 23))).toBe("Burning the midnight oil? What's on your mind to build?");
+    expect(unnamedGreetingFor(new Date(2026, 6, 25, 19))).toContain("Weekend warrior");
   });
 
   it("issues a distinct high-entropy capability and validates Host/Origin", () => {
@@ -225,8 +238,12 @@ describe("GET / native page and fragment secrecy", () => {
     expect(r.body).not.toContain('for="repository-path"');
     expect(r.body).toContain('alt="A bear in sunglasses working at a tidy office desk."');
     expect(r.body).toContain('src="/assets/bearing-office.png"');
+    expect(r.body.match(/src="\/assets\/bearing-title-mark\.png"/g)).toHaveLength(2);
+    expect(r.body).toContain('<img class="title-mark" src="/assets/bearing-title-mark.png" alt="">');
+    expect(r.body).not.toContain('class="brand-mark"');
     expect(r.body).toContain('class="signature-link" href="https://github.com/alphazede/developers/tree/main/bearing" target="_blank" rel="noopener noreferrer" aria-label="Open Bearing GitHub repository"');
     expect(r.body).toContain("<figcaption>GitHub repo \u2197</figcaption>");
+    expect(r.body).toContain('<nav class="nav-state" aria-label="Runtime status"><a class="repo-switch" href="https://github.com/alphazede/developers/tree/main/bearing"');
     expect(r.body).toContain("#repository-panel .signature-link{display:block;min-height:84px");
     expect(r.body).toContain('url("/assets/bearing-expedition.png")');
     expect(r.body).not.toContain('<img src="/assets/bearing-expedition.png"');
@@ -256,13 +273,31 @@ describe("GET / native page and fragment secrecy", () => {
     expect(r.body).toContain('id="reasoning-choice"');
     expect(r.body).toContain('MVP support is currently limited to Claude Code, Codex, Agy, Grok Build, OpenCode, and Pi.');
     expect(r.body).toContain("detectedRoutes.textContent");
-    expect(r.body).toContain('<span class="step">02 / LAUNCH</span>');
-    expect(r.body).toContain('<button class="primary" id="launch-bearing" disabled>Launch</button>');
+    expect(r.body).toContain('<span class="step">AGENT SETTINGS</span>');
+    expect(r.body).toContain('<button class="primary" id="launch-bearing" disabled>Apply settings</button>');
     expect(r.body).toContain('setStatus("Launching Bearing with "');
-    expect(r.body).toContain('id="work-form" hidden');
-    expect(r.body).toContain('<h2>What are we working on?</h2>');
-    expect(r.body).toContain('id="work-back" type="button">\u2190 Back</button>');
+    expect(r.body).toContain('id="work-form"><div class="chat-heading"');
+    expect(r.body).toMatch(/<h2 id="work-greeting">(Good morning|Good afternoon|Good evening|Burning the midnight oil)/);
+    expect(r.body).not.toContain("Where should we start?");
+    expect(r.body).toContain('id="work-back" type="button" aria-haspopup="dialog"><small>Agent</small>');
     expect(r.body).toContain('class="primary">Embark</button>');
+    expect(r.body).toContain('id="app-shell"');
+    expect(r.body).toContain('class="journey-rail" aria-label="Journey navigation"');
+    expect(r.body).toContain('id="rail-history-list"');
+    expect(r.body).toContain('id="workspace-chip"');
+    expect(r.body).toContain('id="model-chip"');
+    expect(r.body).toContain('id="reasoning-chip"');
+    expect(r.body).toContain('data-starter="Add a feature to this codebase."');
+    expect(r.body).toContain('.journey-rail{position:sticky');
+    expect(r.body).toContain('background:rgba(8,9,10,.35)');
+    expect(r.body).toContain('function renderRailHistory(entries)');
+    expect(r.body).toContain('function syncShellSummary()');
+    expect(r.body).toContain('function openRouteChooser()');
+    expect(r.body).toContain('function closeSetupSheets()');
+    expect(r.body).toContain('class="panel journey-surface" id="planning-panel"');
+    expect(r.body).toContain('class="panel journey-surface" id="plan-review-panel"');
+    expect(r.body).toContain('.setup-sheet{position:fixed');
+    expect(r.body).toContain('workForm.hidden = false; syncShellSummary(); loadRepositoryOptions()');
     expect(r.body).toContain("Plan for substantial token use.");
     expect(r.body).toContain("consider a higher tier, choose reasoning deliberately");
     expect(r.body).toContain("https://github.com/juliusbrussee/caveman");
@@ -294,6 +329,7 @@ describe("GET / native page and fragment secrecy", () => {
     expect(r.body).toContain('postCommand(currentRunId, state, "recordOwnerAnswer"');
     expect(r.body).toContain('invokeJourney("set-bearings")');
     expect(r.body).toContain('currentStage === "set-bearings" ? "gather-supplies" : "map-route"');
+    expect(r.body).toContain('if (body.status === "action" && currentStage === "gather-supplies") invokeJourney("map-route")');
     expect(r.body).toContain('id="journey-wait" hidden');
     expect(r.body).toContain('role="progressbar" aria-label="Agent work in progress"');
     expect(r.body).not.toContain("aria-valuenow");
@@ -303,9 +339,26 @@ describe("GET / native page and fragment secrecy", () => {
     expect(r.body).toContain('id="wait-range">Typical time: about 3 minutes');
     expect(r.body).toContain("Safe to leave—resume this journey from History.");
     expect(r.body).toContain("Still active; this is taking longer than usual.");
-    expect(r.body).toContain('"gather-supplies": { label: "5–60 minutes", max: 3600 }');
-    expect(r.body).toContain('"map-route": { label: "10–35 minutes — design, validation, and implementation slicing", max: 2100 }');
-    expect(r.body).toContain('"draft-implementation": { label: "about 5 minutes", max: 300 }');
+    expect(r.body).toContain('function cacheEstimate(body)');
+    expect(r.body).toContain('estimate.stage === "execute"');
+    expect(r.body).toContain('function waitEstimate(stage)');
+    expect(r.body).toContain('stage === "execute-explorer" || stage === "execute-expedition" ? waitEstimates.execute : null');
+    expect(r.body).toContain('Timing estimate will appear after agent inspection.');
+    expect(r.body).toContain('Agent estimate: " + estimate.minMinutes');
+    expect(r.body).toContain('if (/\\blens(?:es)?\\b/i.test(question))');
+    expect(r.body).not.toContain('currentStage === "map-route" && /\\blenses?\\b/i.test(question)');
+    expect(r.body).toContain('function reconcileJourney()');
+    expect(r.body).toContain('var reconcileTimer = null');
+    expect(r.body).toContain('clearTimeout(reconcileTimer)');
+    expect(r.body).toContain('reconcileTimer = setTimeout(function ()');
+    expect(r.body).toContain('currentRunId === runId && currentStage === run.stage');
+    expect(r.body).toContain('then(renderJourney, reconcileJourney)');
+    expect(r.body).toContain('function renderSavedExecution(body)');
+    expect(r.body).toContain('The follow-on review request disconnected. Your implementation success is saved; choose Retry to start Surveyor review.');
+    expect(r.body).toContain('var stage = retryStage || currentStage; retryStage = ""; invokeJourney(stage)');
+    expect(r.body).toContain('run.stage === "execute-explorer" || run.stage === "execute-expedition"');
+    expect(r.body).toContain('For more information about lenses, use Glossary in the bottom-left.');
+    expect(r.body).toContain('per-slice model and reasoning assignments');
     expect(r.body).toContain("Bearing is creating or resuming the local plan stub and bounded repository map. Next: Gather Supplies discovers owner decisions.");
     expect(r.body).toContain("The selected agent is inspecting the repository to discover unresolved owner questions. Next: your answers become the validated plan specification.");
     expect(r.body).toContain("The selected agent is producing design.md, SEIT evidence, implementation slices, and the review package.");
@@ -321,6 +374,9 @@ describe("GET / native page and fragment secrecy", () => {
     expect(r.body).toContain("@keyframes wait-trail");
     expect(r.body).toContain('name="review-cadence" value="phase" checked');
     expect(r.body).toContain("Each phase <b>(recommended)</b>");
+    expect(r.body).toContain('id="cleanup-worktrees" type="checkbox" checked');
+    expect(r.body).toContain("Only clean, proven-merged temporary lanes are removed.");
+    expect(r.body).toContain('cleanupMergedWorktrees: document.getElementById("cleanup-worktrees").checked');
     expect(r.body).toContain('id="journey-retry" type="button" hidden>Retry');
     expect(r.body).toContain('setStatus(phaseNames[stage] + " is working…", true)');
     expect(r.body).toContain("This run reached its token budget before the phase completed. Retry after lowering reasoning with /model or raise the CLI budget.");
@@ -344,7 +400,7 @@ describe("GET / native page and fragment secrecy", () => {
     expect(r.body).toContain("function questionHelp(question)");
     expect(r.body).not.toContain('id="view-demo" type="button" hidden');
     expect(r.body).not.toContain("Live demo");
-    expect(r.body).toContain('class="actions actions-end"><button class="primary" id="launch-bearing" disabled>Launch</button>');
+    expect(r.body).toContain('class="actions actions-end"><button class="primary" id="launch-bearing" disabled>Apply settings</button>');
     expect(r.body).not.toContain("Want a quick, token-free tour before you continue?");
     expect(r.body).not.toContain('id="planning-demo"');
     expect(r.body).toContain('id="demo-panel" hidden');
@@ -377,7 +433,11 @@ describe("GET / native page and fragment secrecy", () => {
     expect(r.body).not.toContain('"overrideExecutionMode"');
     expect(r.body).toContain('id="change-repository" type="button" hidden');
     expect(r.body).toContain('function toggleRepositoryChooser()');
-    expect(r.body).toContain('changeRepository.textContent = activeJourney ? "Return to journey" : "Keep current"');
+    expect(r.body).toContain('function openWorkspacePicker() { closeSetupSheets(); chooseRepository("browse"); }');
+    expect(r.body).toContain('changeRepository.addEventListener("click", openWorkspacePicker)');
+    expect(r.body).toContain('document.getElementById("workspace-chip").addEventListener("click", openWorkspacePicker)');
+    expect(r.body).toContain('if (code === "repository_picker_unavailable") { browseAvailable = false; repositoryPanel.hidden = false;');
+    expect(r.body).toContain('setStatus("Choose a workspace. Your current screen will stay open."');
     expect(r.body).toContain('document.getElementById("launch-bearing").disabled = false;');
     expect(r.body).toContain('history-button');
     expect(r.body).toContain('id="clear-history"');
@@ -415,6 +475,12 @@ describe("GET / native page and fragment secrecy", () => {
     expect(Number(image.headers["content-length"])).toBeGreaterThan(2_000_000);
     expect(image.headers["cache-control"]).toBe("no-cache");
     expect(image.headers["x-content-type-options"]).toBe("nosniff");
+    const titleMark = await call(port, { method: "GET", path: "/assets/bearing-title-mark.png" });
+    expect(titleMark.status).toBe(200);
+    expect(titleMark.headers["content-type"]).toBe("image/png");
+    expect(Number(titleMark.headers["content-length"])).toBeGreaterThan(0);
+    expect(titleMark.headers["cache-control"]).toBe("no-cache");
+    expect(titleMark.headers["x-content-type-options"]).toBe("nosniff");
     const background = await call(port, { method: "GET", path: "/assets/bearing-expedition.png" });
     expect(background.status).toBe(200);
     expect(background.headers["content-type"]).toBe("image/png");

@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { lstat, readFile, readdir, realpath, writeFile } from "node:fs/promises";
 import { isAbsolute, posix, relative, resolve } from "node:path";
-import { createAgentAdapter, type ProcessActivity, type ProcessRunner } from "../adapters/adapters.js";
+import { BUILTIN_ROUTES, createAgentAdapter, type ProcessActivity, type ProcessRunner, type RouteDescriptor } from "../adapters/adapters.js";
 import type { ResolvedRun, Selection } from "../profile/profile.js";
 import { setBearingsWorkspace } from "./repository-map.js";
 
@@ -38,9 +38,15 @@ export interface JourneyActivity {
   readonly status?: string;
   readonly tool?: string;
 }
+export interface NextStageEstimate {
+  readonly stage: JourneyStage | "execute";
+  readonly minMinutes: number;
+  readonly maxMinutes: number;
+  readonly basis: string;
+}
 export type JourneyResult =
-  | { readonly status: "question"; readonly question: string; readonly questions?: readonly string[]; readonly tokens: number }
-  | { readonly status: "action"; readonly summary: string; readonly artifacts: readonly string[]; readonly tokens: number; readonly planningReview?: PlanningReview }
+  | { readonly status: "question"; readonly question: string; readonly questions?: readonly string[]; readonly tokens: number; readonly nextStageEstimate?: NextStageEstimate }
+  | { readonly status: "action"; readonly summary: string; readonly artifacts: readonly string[]; readonly tokens: number; readonly planningReview?: PlanningReview; readonly nextStageEstimate?: NextStageEstimate }
   | { readonly status: "failure"; readonly code: JourneyFailureCode; readonly tokens: number };
 
 const STAGE_COMMAND: Readonly<Record<JourneyStage, string>> = {
@@ -55,12 +61,13 @@ const STAGE_COMMAND: Readonly<Record<JourneyStage, string>> = {
 const STAGE_BOUNDARY: Readonly<Record<JourneyStage, string>> = {
   "set-bearings": "Create or resume only the plan directory, plan-spec.md stub, prompts directory, and repository map. Do not grill, design, draft implementation.md, or implement the work.",
   "gather-supplies": "Use the complete owner Q&A and update only the validated plan specification. Do not run design, draft implementation.md, or implement the work. Return an action receipt whose artifacts include the validated plan-spec.md path.",
-  "map-route": "Produce valid complete or amended design.md and seit.md, including Use Cases and Communication Flows, Interface Option Check, OOPDSA Implementation Design, SEIT per-slice verification, and cross-cutting checks. Generate the baseline review.html, then stop at the design-driven-build handoff. Do not invoke $to-plan, write implementation.md, or execute implementation. A successful action receipt must include design.md, seit.md, and the baseline review.html in the validated plan directory.",
-  "draft-implementation": "Draft implementation.md without executing any slice. Every slice must name its Implementation role, the exact onboarding Agent model route, its Agent reasoning level, Ponytail mode, Required lint/static-analysis, and Review path. The Review path must use the harness-native reviewer when available or the Surveyor fallback when unavailable; do not use standard gate or gate-review. Regenerate the existing review HTML so it embeds the complete route map or plan specification, design.md, seit.md, and implementation.md. A successful action receipt must include both implementation.md and the regenerated review HTML.",
-  "execute-explorer": "Execute the approved implementation plan with Explorer and honor the recorded review cadence. Return only paths that actually exist.",
-  "execute-expedition": "Execute the approved implementation plan with Expedition and honor the recorded review cadence. Return only paths that actually exist.",
+  "map-route": "Invoke $design-driven-build. Before writing any design artifact, stop at its normal owner lens-approval question when lens approval is not already recorded in the prior owner Q&A. After approval, produce valid complete or amended design.md and seit.md, including Use Cases and Communication Flows, Interface Option Check, OOPDSA Implementation Design, SEIT per-slice verification, and cross-cutting checks. Generate the baseline review.html, then stop at the design-driven-build handoff. Do not invoke $to-plan, write implementation.md, or execute implementation. A successful action receipt must include design.md, seit.md, and the baseline review.html in the validated plan directory.",
+  "draft-implementation": "Draft implementation.md without executing any slice. Every coding implementation slice must name its Implementation role, a task-appropriate supported Agent model route, its supported Agent reasoning level, Ponytail mode, Required lint/static-analysis, and Review path. Preserve those per-slice assignments for execution; do not replace them with onboarding settings. Use Ponytail full only for approved coding implementation slices, and Ponytail off for planning, design, and review. The Review path must use the harness-native reviewer when available or the Surveyor fallback when unavailable; do not use standard gate or gate-review. Regenerate the existing review HTML so it embeds the complete route map or plan specification, design.md, seit.md, and implementation.md. A successful action receipt must include both implementation.md and the regenerated review HTML.",
+  "execute-explorer": "Execute the approved implementation plan with Explorer and honor each recorded slice model route, reasoning level, Ponytail mode, and review cadence. Do not overwrite slice assignments with onboarding settings. Return only paths that actually exist.",
+  "execute-expedition": "Execute the approved implementation plan with Expedition and honor each recorded slice model route, reasoning level, Ponytail mode, and review cadence. Do not overwrite slice assignments with onboarding settings. Return only paths that actually exist.",
   review: "Perform a read-only review of the integrated uncommitted work. Do not modify files. Return existing evidence paths relevant to the review.",
 };
+function nextStage(stage: JourneyStage): NextStageEstimate["stage"] { return stage === "set-bearings" ? "gather-supplies" : stage === "gather-supplies" ? "map-route" : stage === "map-route" ? "draft-implementation" : stage === "draft-implementation" ? "execute" : "review"; }
 const MAX_TEXT = 4096;
 const MAX_QA = 64;
 const RESERVED_POST_PLAN_QA = 2;
@@ -112,27 +119,54 @@ function prompt(request: JourneyRequest, planDirectory: string | undefined): str
       : " Ask one owner question only when a decision blocks honest progress.";
   const boundary = gatheringQuestions ? "Read and inspect only. Do not create or modify files during question discovery." : STAGE_BOUNDARY[request.stage];
   const reviewCadence = request.stage === "execute-explorer" || request.stage === "execute-expedition" ? ["Read the prior owner Q&A for the recorded Review cadence (each slice, each phase, or end) and enforce that cadence during execution. Use the harness-native reviewer when available and the read-only Surveyor fallback only when no native reviewer is available."] : [];
+  const cleanupSetting = [...request.priorOwnerQa].reverse().find((entry) => entry.question === "Cleanup merged worktrees")?.answer ?? "on";
+  const cleanupPolicy = request.stage === "execute-explorer" || request.stage === "execute-expedition"
+    ? [cleanupSetting === "off"
+      ? "Preserve every temporary worktree and branch; the owner disabled automatic cleanup."
+      : `Cleanup merged worktrees is on. Merge only through the approved integration or phase gate. Before removing a temporary worktree, prove that it is clean, its branch commit is merged into the integration branch, and no active review, retry, or recovery reference needs it. ${request.stage === "execute-explorer" ? "Clean eligible worktrees after each completed phase." : "Keep parallel lanes until the entire phase is integrated, then clean eligible worktrees."} Delete only the corresponding proven-merged temporary branch. Never force-remove a worktree or branch. Preserve every dirty, unmerged, failed, or blocked lane and report its path and branch with a Resume or Resolve next action.`]
+    : [];
+  const nextActionStage = nextStage(request.stage);
+  const selectedRoute = BUILTIN_ROUTES.find((route) => route.provider === request.selection.provider && (route.model === "*" || route.model === request.selection.model));
+  const routeCatalog = BUILTIN_ROUTES.map((route) => {
+    const model = route === selectedRoute && request.selection.model !== "*" ? `${route.provider} ${request.selection.model}` : route.model === "*" ? `${route.provider} agent default` : route.id;
+    return `${model} [${route.reasoningLevels.join(", ")}]`;
+  }).join("; ");
+  const estimateGuidance = request.stage === "gather-supplies" && request.gatherMode === "apply"
+    ? "Estimate the entire upcoming Map the Route phase, including design.md, seit.md, baseline review.html, implementation.md, final review generation, validation, and all required agent round trips. Do not estimate from repository inspection size alone."
+    : request.stage === "map-route"
+      ? "When asking a blocking design question, estimate all remaining Map the Route work after the answer, including design, SEIT, review generation, implementation drafting, validation, and required agent round trips."
+      : "Estimate the complete next phase, including required artifacts, validation, and agent round trips—not only repository inspection.";
   return [
     "You are a bounded Bearing journey agent. Work only inside the supplied repository and existing authority.",
     `Stage: ${request.stage}. Explicitly invoke ${STAGE_COMMAND[request.stage]} for this stage.${grilling}`,
     `Stage boundary: ${boundary}`,
     `Work goal: ${JSON.stringify(request.workGoal)}`,
-    `The onboarding selection ${JSON.stringify(request.selection)} applies to every role and child. Do not substitute a different provider, model, or reasoning route.`,
+    `The onboarding selection ${JSON.stringify(request.selection)} governs this top-level planning agent and the Explorer/Navigator session. Keep it for planning, design, and review. Implementation.md may record task-appropriate supported model routes and reasoning levels per coding slice; execution must honor those recorded assignments instead of overwriting them.`,
+    `Accepted implementation route labels and supported reasoning levels: ${routeCatalog}. Use only one of these exact labels and one of its bracketed reasoning levels. Prefer the selected route ${JSON.stringify(selectedRoute ? (request.selection.model === "*" ? `${selectedRoute.provider} agent default` : `${selectedRoute.provider} ${request.selection.model}`) : `${request.selection.provider} ${request.selection.model}`)} when another route is not demonstrably available.`,
+    `Estimate guidance: ${estimateGuidance}`,
     `Prior owner Q&A: ${JSON.stringify(request.priorOwnerQa)}`,
     ...reviewCadence,
+    ...cleanupPolicy,
     `Validated plan directory: ${planDirectory ? JSON.stringify(planDirectory) : "none"}`,
     ...(planDirectory && request.stage !== "set-bearings" ? [`Repository map: ${JSON.stringify(`${planDirectory}/prompts/repository-map.md`)}. Reuse this bounded inventory before rediscovering the repository; perform only bounded live verification when necessary.`] : []),
     ...(request.reviewPrompt ? [`Review guidance: ${JSON.stringify(request.reviewPrompt)}`] : []),
     "Do not claim completion without actual work and evidence in this agent receipt. Do not invent artifacts, routes, sessions, or authority.",
     gatheringQuestions
-      ? 'End the final assistant message with exactly one single-line envelope: BEARING_RESULT {"kind":"questions","questions":["first question","second question"]}. Use an empty array when no owner decisions are needed.'
+      ? 'End the final assistant message with exactly one single-line envelope: BEARING_RESULT {"kind":"questions","questions":["first question","second question"],"nextStageEstimate":{"stage":"gather-supplies","minMinutes":MINIMUM_INTEGER,"maxMinutes":MAXIMUM_INTEGER,"basis":"specific workload basis"}}. Replace the uppercase placeholders with your honest integer estimate; do not copy a canned duration. Use an empty array when no owner decisions are needed. The optional estimate covers the remaining Gather Supplies apply/write step; omit it when you cannot honestly estimate it.'
       : request.stage === "gather-supplies" && request.gatherMode === "apply"
-        ? 'End the final assistant message with exactly one single-line envelope: BEARING_RESULT {"kind":"action","summary":"what actually happened","artifacts":["relative/existing/path"]}.'
-        : 'End the final assistant message with exactly one single-line envelope: BEARING_RESULT {"kind":"question","question":"one blocking question"} or BEARING_RESULT {"kind":"action","summary":"what actually happened","artifacts":["relative/existing/path"]}.',
+        ? 'End the final assistant message with exactly one single-line envelope: BEARING_RESULT {"kind":"action","summary":"what actually happened","artifacts":["relative/existing/path"],"nextStageEstimate":{"stage":"map-route","minMinutes":MINIMUM_INTEGER,"maxMinutes":MAXIMUM_INTEGER,"basis":"specific full-phase workload basis"}}. Replace the uppercase placeholders with your honest integer estimate; do not copy a canned duration. The optional estimate covers the complete Map the Route phase; omit it when you cannot honestly estimate it.'
+        : `End the final assistant message with exactly one single-line envelope: BEARING_RESULT {"kind":"question","question":"one blocking question","nextStageEstimate":{"stage":"${request.stage}","minMinutes":MINIMUM_INTEGER,"maxMinutes":MAXIMUM_INTEGER,"basis":"specific remaining-work basis"}} or BEARING_RESULT {"kind":"action","summary":"what actually happened","artifacts":["relative/existing/path"],"nextStageEstimate":{"stage":"${nextActionStage}","minMinutes":MINIMUM_INTEGER,"maxMinutes":MAXIMUM_INTEGER,"basis":"specific full-phase workload basis"}}. Replace the uppercase placeholders with honest integer estimates; do not copy a canned duration. A question estimate covers all work remaining in the same stage after the answer. Omit nextStageEstimate when you cannot honestly estimate it.`,
   ].join("\n");
 }
 
-type Envelope = { readonly kind: "question"; readonly question: string } | { readonly kind: "questions"; readonly questions: readonly string[] } | { readonly kind: "action"; readonly summary: string; readonly artifacts: readonly string[] };
+type Envelope = { readonly kind: "question"; readonly question: string; readonly nextStageEstimate?: NextStageEstimate } | { readonly kind: "questions"; readonly questions: readonly string[]; readonly nextStageEstimate?: NextStageEstimate } | { readonly kind: "action"; readonly summary: string; readonly artifacts: readonly string[]; readonly nextStageEstimate?: NextStageEstimate };
+function estimate(value: unknown): value is NextStageEstimate {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return false;
+  const item = value as Record<string, unknown>;
+  return Object.keys(item).length === 4 && typeof item.stage === "string" && (item.stage === "execute" || item.stage in STAGE_COMMAND) &&
+    typeof item.minMinutes === "number" && Number.isSafeInteger(item.minMinutes) && item.minMinutes >= 1 && item.minMinutes <= 1_440 &&
+    typeof item.maxMinutes === "number" && Number.isSafeInteger(item.maxMinutes) && item.maxMinutes >= item.minMinutes && item.maxMinutes <= 1_440 && text(item.basis, 280);
+}
 function envelope(value: string, maxQuestions = MAX_QA - 1): Envelope | "missing" | "malformed" {
   const line = value.trim().split(/\r?\n/).at(-1) ?? "";
   const prefix = "BEARING_RESULT ";
@@ -143,9 +177,9 @@ function envelope(value: string, maxQuestions = MAX_QA - 1): Envelope | "missing
     const parsed = JSON.parse(body) as unknown;
     if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) return "malformed";
     const record = parsed as Record<string, unknown>;
-    if (record.kind === "question" && Object.keys(record).length === 2 && text(record.question)) return { kind: "question", question: record.question };
-    if (record.kind === "questions" && Object.keys(record).length === 2 && Array.isArray(record.questions) && record.questions.length <= maxQuestions && record.questions.every((question) => text(question)) && new Set(record.questions).size === record.questions.length) return { kind: "questions", questions: record.questions as string[] };
-    if (record.kind === "action" && Object.keys(record).length === 3 && text(record.summary) && Array.isArray(record.artifacts) && record.artifacts.length > 0 && record.artifacts.length <= MAX_ARTIFACTS && record.artifacts.every(pathText) && new Set(record.artifacts).size === record.artifacts.length) return { kind: "action", summary: record.summary, artifacts: record.artifacts as string[] };
+    if (record.kind === "question" && Object.keys(record).every((key) => ["kind", "question", "nextStageEstimate"].includes(key)) && [2, 3].includes(Object.keys(record).length) && text(record.question) && (record.nextStageEstimate === undefined || estimate(record.nextStageEstimate))) return { kind: "question", question: record.question, ...(record.nextStageEstimate ? { nextStageEstimate: record.nextStageEstimate } : {}) };
+    if (record.kind === "questions" && Object.keys(record).every((key) => ["kind", "questions", "nextStageEstimate"].includes(key)) && [2, 3].includes(Object.keys(record).length) && Array.isArray(record.questions) && record.questions.length <= maxQuestions && record.questions.every((question) => text(question)) && new Set(record.questions).size === record.questions.length && (record.nextStageEstimate === undefined || estimate(record.nextStageEstimate))) return { kind: "questions", questions: record.questions as string[], ...(record.nextStageEstimate ? { nextStageEstimate: record.nextStageEstimate } : {}) };
+    if (record.kind === "action" && Object.keys(record).every((key) => ["kind", "summary", "artifacts", "nextStageEstimate"].includes(key)) && [3, 4].includes(Object.keys(record).length) && text(record.summary) && Array.isArray(record.artifacts) && record.artifacts.length > 0 && record.artifacts.length <= MAX_ARTIFACTS && record.artifacts.every(pathText) && new Set(record.artifacts).size === record.artifacts.length && (record.nextStageEstimate === undefined || estimate(record.nextStageEstimate))) return { kind: "action", summary: record.summary, artifacts: record.artifacts as string[], ...(record.nextStageEstimate ? { nextStageEstimate: record.nextStageEstimate } : {}) };
     return "malformed";
   } catch { return "malformed"; }
 }
@@ -215,6 +249,19 @@ async function designReviewArtifacts(root: string, planDirectory: string | undef
   return ["design.md", "seit.md", reviewName].map((name) => posix.join(planDirectory, name));
 }
 
+function routeLabel(value: string): string { return value.toLowerCase().replace(/[^a-z0-9]+/g, ""); }
+
+function planningRoute(value: string, selection: Selection): RouteDescriptor | undefined {
+  const label = routeLabel(value);
+  const selected = BUILTIN_ROUTES.find((route) => route.provider === selection.provider && (route.model === "*" || route.model === selection.model));
+  const matches = BUILTIN_ROUTES.filter((route) => {
+    const labels = [route.id, route.provider, `${route.executable} ${route.id}`, ...(route.model === "*" ? [`${route.id} agent default`, `${route.provider} agent default`] : [route.model, `${route.executable} ${route.model}`])].map(routeLabel);
+    const selectedLabels = route === selected && selection.model !== "*" ? [selection.model, `${route.id} ${selection.model}`, `${route.provider} ${selection.model}`, `${route.executable} ${selection.model}`].map(routeLabel) : [];
+    return labels.includes(label) || selectedLabels.includes(label);
+  });
+  return matches.length === 1 ? matches[0] : undefined;
+}
+
 async function planningReview(root: string, planDirectory: string | undefined, selection: Selection): Promise<PlanningReview | undefined> {
   if (!planDirectory) return undefined;
   const directory = resolve(root, planDirectory), names = await readdir(directory);
@@ -222,13 +269,15 @@ async function planningReview(root: string, planDirectory: string | undefined, s
   const reviewName = names.find((name) => name === "review.html" || /^[A-Za-z0-9][A-Za-z0-9._-]*-route-review\.html$/.test(name));
   if (!planName || !reviewName || !names.includes("design.md") || !names.includes("seit.md") || !names.includes("implementation.md")) return undefined;
   const sourceNames = [planName, "design.md", "seit.md", "implementation.md"];
+  if (!(await Promise.all([...sourceNames, reviewName].map((name) => containedPath(root, posix.join(planDirectory, name))))).every(Boolean)) return undefined;
+  const reviewPath = resolve(directory, reviewName);
+  if (!(await lstat(reviewPath)).isFile()) return undefined;
   const [plan, design, seit, implementation, review] = await Promise.all([...sourceNames, reviewName].map(async (name) => {
     const content = await readFile(resolve(directory, name), "utf8");
     if (!content.trim() || Buffer.byteLength(content) > MAX_PLANNING_ARTIFACT) throw new Error("invalid planning artifact");
     return content;
   }));
   if (!completeArtifact(design, "design", ["Use Cases and Communication Flows", "Interface Option Check", "OOPDSA Implementation Design"]) || !completeArtifact(seit, "seit", ["Per-slice Verification and Validation Matrix", "Cross-cutting Checks"])) return undefined;
-  if (![plan, design, seit, implementation].every((source) => review.includes(escaped(source.trim())))) return undefined;
 
   const headings = [...implementation.matchAll(/^###\s+(Slice\b[^\r\n]*)/gmi)];
   if (!headings.length) return undefined;
@@ -239,11 +288,13 @@ async function planningReview(root: string, planDirectory: string | undefined, s
     const role = field(section, "Implementation role"), model = field(section, "Agent model route"), reasoning = field(section, "Agent reasoning level");
     const ponytail = field(section, "Ponytail mode"), validation = field(section, "Required lint/static-analysis"), reviewPath = field(section, "Review path");
     if (!role || !model || !reasoning || !ponytail || !validation || !reviewPath) return undefined;
-    const selectedRoute = selection.model === "*" ? selection.provider : selection.model;
-    const normalizedReasoning = reasoning.replace(/[.!?]+$/, "").trim();
-    if (!model.toLowerCase().includes(selectedRoute.toLowerCase()) || normalizedReasoning.toLowerCase() !== selection.reasoning.toLowerCase()) return undefined;
+    const route = planningRoute(model, selection), normalizedReasoning = reasoning.replace(/[.!?]+$/, "").trim();
+    if (!route || !route.reasoningLevels.includes(normalizedReasoning.toLowerCase()) || !["full", "off"].includes(ponytail.toLowerCase().replace(/[.!?]+$/, "").trim())) return undefined;
     assignments.push({ slice: headings[index][1].trim(), role, model, reasoning: normalizedReasoning });
   }
+  const completed = completeReview(review, sourceNames.map((name, index) => [name, [plan, design, seit, implementation][index]] as [string, string]));
+  if (Buffer.byteLength(completed) > MAX_PLANNING_ARTIFACT) return undefined;
+  if (completed !== review) await writeFile(reviewPath, completed, "utf8");
   return { phases: [...implementation.matchAll(/^##\s+Phase\b/gmi)].length, slices: assignments.length, assignments };
 }
 
@@ -346,11 +397,13 @@ export class JourneyService {
     if (parsed === "malformed") return { status: "failure", code: "result_malformed", tokens };
     if (parsed.kind === "questions") {
       if (request.stage !== "gather-supplies" || request.gatherMode !== "questions") return { status: "failure", code: "result_malformed", tokens };
+      if (parsed.nextStageEstimate && parsed.nextStageEstimate.stage !== "gather-supplies") return { status: "failure", code: "result_malformed", tokens };
       const questions = [...parsed.questions.filter((question) => question.toLowerCase() !== "anything else?"), "Anything else?"];
-      return { status: "question", question: questions[0], questions, tokens };
+      return { status: "question", question: questions[0], questions, tokens, ...(parsed.nextStageEstimate ? { nextStageEstimate: parsed.nextStageEstimate } : {}) };
     }
-    if (parsed.kind === "question") return request.stage === "gather-supplies" && request.gatherMode !== undefined ? { status: "failure", code: "result_malformed", tokens } : this.cancelled.has(request.runId) ? { status: "failure", code: "cancelled", tokens } : { status: "question", question: parsed.question, tokens };
+    if (parsed.kind === "question") return request.stage === "gather-supplies" && request.gatherMode !== undefined || parsed.nextStageEstimate && parsed.nextStageEstimate.stage !== request.stage ? { status: "failure", code: "result_malformed", tokens } : this.cancelled.has(request.runId) ? { status: "failure", code: "cancelled", tokens } : { status: "question", question: parsed.question, tokens, ...(parsed.nextStageEstimate ? { nextStageEstimate: parsed.nextStageEstimate } : {}) };
     if (request.stage === "gather-supplies" && request.gatherMode === "questions") return { status: "failure", code: "result_malformed", tokens };
+    if (parsed.nextStageEstimate && parsed.nextStageEstimate.stage !== nextStage(request.stage)) return { status: "failure", code: "result_malformed", tokens };
     for (const artifact of parsed.artifacts) {
       if (!await containedPath(repositoryPath, artifact)) return { status: "failure", code: "artifact_invalid", tokens };
       if (this.cancelled.has(request.runId)) return { status: "failure", code: "cancelled", tokens };
@@ -359,11 +412,12 @@ export class JourneyService {
     const review = request.stage === "draft-implementation" ? await planningReview(repositoryPath, planDirectory, request.selection).catch(() => undefined) : undefined;
     if (this.cancelled.has(request.runId)) return { status: "failure", code: "cancelled", tokens };
     if (request.stage === "draft-implementation" && !review) return { status: "failure", code: "artifact_invalid", tokens };
-    return { status: "action", summary: parsed.summary, artifacts: parsed.artifacts, tokens, ...(review ? { planningReview: review } : {}) };
+    return { status: "action", summary: parsed.summary, artifacts: parsed.artifacts, tokens, ...(review ? { planningReview: review } : {}), ...(parsed.nextStageEstimate ? { nextStageEstimate: parsed.nextStageEstimate } : {}) };
   }
 
   private async executeMapRoute(request: JourneyRequest): Promise<JourneyResult> {
     let designArtifacts: readonly string[] | undefined;
+    let designEstimate: NextStageEstimate | undefined;
     try {
       const repositoryPath = await realpath(request.repositoryPath);
       const planDirectory = request.planDirectory === undefined ? undefined : await containedPath(repositoryPath, request.planDirectory, true);
@@ -375,6 +429,7 @@ export class JourneyService {
       const design = await this.executeOnce(request, "map-route");
       tokens += design.tokens;
       if (design.status !== "action") return design;
+      designEstimate = design.nextStageEstimate;
       try { designArtifacts = await designReviewArtifacts(request.repositoryPath, request.planDirectory, true, () => this.cancelled.has(request.runId)); }
       catch { designArtifacts = undefined; }
       if (this.cancelled.has(request.runId)) return { status: "failure", code: "cancelled", tokens };
@@ -392,7 +447,7 @@ export class JourneyService {
     if (implementation.status !== "action") return { ...implementation, tokens };
     const artifacts = [...new Set([...designArtifacts, ...implementation.artifacts])];
     const reviews = artifacts.filter((path) => posix.extname(path) === ".html");
-    return { ...implementation, artifacts: [...artifacts.filter((path) => posix.extname(path) !== ".html"), ...reviews], tokens };
+    return { ...implementation, artifacts: [...artifacts.filter((path) => posix.extname(path) !== ".html"), ...reviews], tokens, ...(implementation.nextStageEstimate ?? designEstimate ? { nextStageEstimate: implementation.nextStageEstimate ?? designEstimate } : {}) };
   }
 
   async execute(request: JourneyRequest): Promise<JourneyResult> {
