@@ -37,8 +37,10 @@ The packaged repo-local plugin provides an explicit `/bearing` entrypoint. In a
 Codex session where this package is available, use `/bearing` to ask Codex to
 start the existing local Bearing CLI from the current repository, keep it
 running, report its loopback URL, and begin the planning-first journey. It does
-not launch automatically, install software, publish a marketplace entry, or
-change Codex native collaboration behavior.
+not launch on SessionStart, install software, publish a marketplace entry, or
+change Codex native collaboration behavior. After an explicit `/bearing`
+invocation, the CLI's default `start` command best-effort opens the browser
+automatically.
 
 ## First launch
 

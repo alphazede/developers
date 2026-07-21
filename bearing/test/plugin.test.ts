@@ -24,7 +24,9 @@ describe("Bearing Codex plugin contract", () => {
     expect(command).toContain("explicitly invokes /bearing");
     expect(command).toContain("installed `bearing` executable");
     expect(command).toContain("bearing/dist/cli.js");
-    expect(command).toContain("start --no-open");
+    expect(command).toContain("with `start`");
+    expect(command).not.toContain("start --no-open");
+    expect(command).toContain("best-effort opens the browser automatically");
     expect(command).toContain("loopback URL");
     expect(command).toContain("Do not launch on SessionStart");
     expect(command).toContain("Codex native collaboration mode");
@@ -36,7 +38,18 @@ describe("Bearing Codex plugin contract", () => {
     expect(skill).toContain("- developer");
     expect(skill).toContain("- public");
     expect(skill).toContain("explicit `/bearing` request");
+    expect(skill).toContain("with `start`");
+    expect(skill).not.toContain("start --no-open");
+    expect(skill).toContain("best-effort opens the browser automatically");
     expect(skill).toContain("planning-first journey");
     expect(skill).toContain("Do not use");
+  });
+
+  it("documents explicit browser launch without SessionStart ambiguity", async () => {
+    const readme = await read("../README.md");
+    expect(readme).toContain("not launch on SessionStart");
+    expect(readme).toContain("After an explicit `/bearing`\ninvocation");
+    expect(readme).toContain("best-effort opens the browser\nautomatically");
+    expect(readme).not.toContain("does\nnot launch automatically");
   });
 });
