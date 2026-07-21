@@ -423,7 +423,7 @@ describe("repository-first onboarding HTTP", () => {
     const running = call(port, "POST", "/api/v1/journey", { runId: "browser-stop-ambiguous", stage: "gather-supplies", workGoal: "Do not hide partial writes" }, cookie);
     await started;
     expect((await call(port, "POST", "/api/v1/journey/control", { runId: "browser-stop-ambiguous", action: "stop" }, cookie)).status).toBe(200);
-    expect(JSON.parse((await running).body)).toMatchObject({ status: "failure", code: "adapter_failed" });
+    expect(JSON.parse((await running).body)).toMatchObject({ status: "failure", code: "interrupted" });
   });
 
   it("restores a durable journey checkpoint after repository reselection", async () => {
@@ -613,7 +613,7 @@ describe("repository-first onboarding HTTP", () => {
     const running = call(port, "POST", "/api/v1/journey", { runId: "browser-steer-ambiguous", stage: "gather-supplies", workGoal: "Do not duplicate writes" }, cookie);
     await started;
     await call(port, "POST", "/api/v1/journey/control", { runId: "browser-steer-ambiguous", action: "steer", instruction: "Change direction" }, cookie);
-    expect(JSON.parse((await running).body)).toMatchObject({ status: "failure", code: "adapter_failed" });
+    expect(JSON.parse((await running).body)).toMatchObject({ status: "failure", code: "interrupted" });
     expect(calls).toHaveLength(1);
   });
 });
