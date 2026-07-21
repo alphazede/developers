@@ -48,7 +48,7 @@ const STAGE_BOUNDARY: Readonly<Record<JourneyStage, string>> = {
   "set-bearings": "Create or resume only the plan directory, plan-spec.md stub, and prompts directory. Do not grill, design, draft implementation.md, or implement the work. A successful action receipt must include the relative plan-spec.md path.",
   "gather-supplies": "Use the complete owner Q&A and update only the validated plan specification. Do not run design, draft implementation.md, or implement the work. Return an action receipt whose artifacts include the validated plan-spec.md path.",
   "map-route": "Create only design.md, seit.md, and the generated review HTML in the validated plan directory. Do not draft implementation.md or implement the work. A successful action receipt must include all three relative paths.",
-  "draft-implementation": "Draft implementation.md without executing any slice. Every slice must name its Implementation role, the exact onboarding Agent model route, its Agent reasoning level, Ponytail mode, Required lint/static-analysis, and Review path. Regenerate the existing review HTML so it embeds the complete route map or plan specification, design.md, seit.md, and implementation.md. A successful action receipt must include both implementation.md and the regenerated review HTML.",
+  "draft-implementation": "Draft implementation.md without executing any slice. Every slice must name its Implementation role, the exact onboarding Agent model route, its Agent reasoning level, Ponytail mode, Required lint/static-analysis, and Review path. The Review path must use the harness-native reviewer when available or the Surveyor fallback when unavailable; do not use standard gate or gate-review. Regenerate the existing review HTML so it embeds the complete route map or plan specification, design.md, seit.md, and implementation.md. A successful action receipt must include both implementation.md and the regenerated review HTML.",
   "execute-explorer": "Execute the approved implementation plan with Explorer and honor the recorded review cadence. Return only paths that actually exist.",
   "execute-expedition": "Execute the approved implementation plan with Expedition and honor the recorded review cadence. Return only paths that actually exist.",
   review: "Perform a read-only review of the integrated uncommitted work. Do not modify files. Return existing evidence paths relevant to the review.",
@@ -180,8 +180,9 @@ async function planningReview(root: string, planDirectory: string | undefined, s
     const ponytail = field(section, "Ponytail mode"), validation = field(section, "Required lint/static-analysis"), reviewPath = field(section, "Review path");
     if (!role || !model || !reasoning || !ponytail || !validation || !reviewPath) return undefined;
     const selectedRoute = selection.model === "*" ? selection.provider : selection.model;
-    if (!model.toLowerCase().includes(selectedRoute.toLowerCase()) || reasoning.toLowerCase() !== selection.reasoning.toLowerCase()) return undefined;
-    assignments.push({ slice: headings[index][1].trim(), role, model, reasoning });
+    const normalizedReasoning = reasoning.replace(/[.!?]+$/, "").trim();
+    if (!model.toLowerCase().includes(selectedRoute.toLowerCase()) || normalizedReasoning.toLowerCase() !== selection.reasoning.toLowerCase()) return undefined;
+    assignments.push({ slice: headings[index][1].trim(), role, model, reasoning: normalizedReasoning });
   }
   return { phases: [...implementation.matchAll(/^##\s+Phase\b/gmi)].length, slices: assignments.length, assignments };
 }

@@ -36,7 +36,7 @@ function completed(text: string, tokens = 5): ProcessResult {
 
 async function writePlanningPackage(root: string, directory = "docs/plans/import"): Promise<void> {
   const plan = "# Plan\n", design = "# Design\n", seit = "# SEIT\n";
-  const implementation = "# Implementation\n\n## Phase 1 — Build\n\n### Slice 1.1 — Import\n\n**Implementation role.** Backend Engineer\n\n**Agent model route.** Codex agent default\n\n**Agent reasoning level.** medium\n\n**Ponytail mode.** full\n\n**Review path.** native review\n\n**Required lint/static-analysis.** pnpm test\n";
+  const implementation = "# Implementation\n\n## Phase 1 — Build\n\n### Slice 1.1 — Import\n\n**Implementation role.** Backend Engineer\n\n**Agent model route.** Codex agent default\n\n**Agent reasoning level.** medium.\n\n**Ponytail mode.** full\n\n**Review path.** native review\n\n**Required lint/static-analysis.** pnpm test\n";
   const escape = (value: string) => value.trim().replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;");
   await mkdir(join(root, directory), { recursive: true });
   await Promise.all([["plan-spec.md", plan], ["design.md", design], ["seit.md", seit], ["implementation.md", implementation], ["review.html", `<html><body>${[plan, design, seit, implementation].map((value) => `<pre>${escape(value)}</pre>`).join("")}</body></html>`]].map(([name, content]) => writeFile(join(root, directory, name), content)));
@@ -174,6 +174,7 @@ describe("JourneyService", () => {
     expect(await new JourneyService(runner).execute(input)).toEqual({ status: "action", summary: "Implementation plan drafted.", artifacts: ["docs/plans/import/implementation.md", "docs/plans/import/review.html"], tokens: 11, planningReview: { phases: 1, slices: 1, assignments: [{ slice: "Slice 1.1 — Import", role: "Backend Engineer", model: "Codex agent default", reasoning: "medium" }] } });
     expect(runner.calls[0].stdin).toContain("docs/plans/import");
     expect(runner.calls[0].stdin).toMatch(/Regenerate the existing review HTML.*implementation\.md/);
+    expect(runner.calls[0].stdin).toContain("do not use standard gate or gate-review");
   });
 
   it("rejects an implementation package that omits assignments or the complete embedded sources", async () => {
