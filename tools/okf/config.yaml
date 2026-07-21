@@ -8,6 +8,8 @@ frontmatter:
     - okf_status
     - tags
   optional:
+    - name
+    - description
     - public_boundary
     - freshness
   status_values:
