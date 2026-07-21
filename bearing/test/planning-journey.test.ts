@@ -41,14 +41,20 @@ function completed(text: string, tokens = 5): ProcessResult {
   return { exitCode: 0, events: [{ type: "item.completed", data: { content: text } }], usage: { tokens } };
 }
 
-async function writePlanningPackage(root: string, directory = "docs/plans/import"): Promise<void> {
-  const plan = "# Plan\n";
-  const design = "---\ntype: design\nstatus: complete\n---\n\n## Use Cases and Communication Flows\n\nComplete flow.\n\n## Interface Option Check\n\ninterface_options: not needed - fixture\n\n## OOPDSA Implementation Design\n\nComplete contract.\n";
-  const seit = "---\ntype: seit\nstatus: complete\n---\n\n## Per-slice Verification and Validation Matrix\n\nComplete matrix.\n\n## Cross-cutting Checks\n\nComplete checks.\n";
-  const implementation = "# Implementation\n\n## Phase 1 — Build\n\n### Slice 1.1 — Import\n\n**Implementation role.** Backend Engineer\n\n**Agent model route.** Codex agent default\n\n**Agent reasoning level.** medium.\n\n**Ponytail mode.** full\n\n**Review path.** native review\n\n**Required lint/static-analysis.** pnpm test\n";
-  const escape = (value: string) => value.trim().replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;");
+const planFixture = "# Plan\n";
+const designFixture = "---\ntype: design\nstatus: complete\n---\n\n## Use Cases and Communication Flows\n\nComplete flow.\n\n## Interface Option Check\n\ninterface_options: not needed - fixture\n\n## OOPDSA Implementation Design\n\nComplete contract.\n";
+const seitFixture = "---\ntype: seit\nstatus: complete\n---\n\n## Per-slice Verification and Validation Matrix\n\nComplete matrix.\n\n## Cross-cutting Checks\n\nComplete checks.\n";
+const implementationFixture = "# Implementation\n\n## Phase 1 — Build\n\n### Slice 1.1 — Import\n\n**Implementation role.** Backend Engineer\n\n**Agent model route.** Codex agent default\n\n**Agent reasoning level.** medium.\n\n**Ponytail mode.** full\n\n**Review path.** native review\n\n**Required lint/static-analysis.** pnpm test\n";
+const escapeFixture = (value: string) => value.trim().replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;");
+
+async function writeDesignPackage(root: string, directory = "docs/plans/import"): Promise<void> {
   await mkdir(join(root, directory), { recursive: true });
-  await Promise.all([["plan-spec.md", plan], ["design.md", design], ["seit.md", seit], ["implementation.md", implementation], ["review.html", `<html><body>${[plan, design, seit, implementation].map((value) => `<pre>${escape(value)}</pre>`).join("")}</body></html>`]].map(([name, content]) => writeFile(join(root, directory, name), content)));
+  await Promise.all([["plan-spec.md", planFixture], ["design.md", designFixture], ["seit.md", seitFixture], ["review.html", `<html><body>${[planFixture, designFixture, seitFixture].map((value) => `<pre>${escapeFixture(value)}</pre>`).join("")}</body></html>`]].map(([name, content]) => writeFile(join(root, directory, name), content)));
+}
+
+async function writePlanningPackage(root: string, directory = "docs/plans/import"): Promise<void> {
+  await writeDesignPackage(root, directory);
+  await Promise.all([["implementation.md", implementationFixture], ["review.html", `<html><body>${[planFixture, designFixture, seitFixture, implementationFixture].map((value) => `<pre>${escapeFixture(value)}</pre>`).join("")}</body></html>`]].map(([name, content]) => writeFile(join(root, directory, name), content)));
 }
 
 describe("JourneyService", () => {
@@ -316,14 +322,51 @@ describe("JourneyService", () => {
     expect(runner.calls[0].stdin).toContain("do not use standard gate or gate-review");
   });
 
-  it("accepts Map the Route only as one complete gated planning package", async () => {
+  it("resumes a validated design baseline and drafts implementation in a separate call", async () => {
     const input = await request({ stage: "map-route", planDirectory: "docs/plans/import" });
     await writePlanningPackage(input.repositoryPath);
     const runner = new StubRunner(completed('BEARING_RESULT {"kind":"action","summary":"Route and implementation drafted.","artifacts":["docs/plans/import/design.md","docs/plans/import/seit.md","docs/plans/import/implementation.md","docs/plans/import/review.html"]}'));
     expect(await new JourneyService(runner).execute(input)).toMatchObject({ status: "action", planningReview: { phases: 1, slices: 1 } });
     expect(runner.calls).toHaveLength(1);
-    expect(runner.calls[0].stdin).toMatch(/\$design-driven-build first[\s\S]*\$to-plan/);
-    expect(runner.calls[0].stdin).toMatch(/Interface Option Check[\s\S]*OOPDSA[\s\S]*implementation\.md/);
+    expect(runner.calls[0].stdin).toContain("Explicitly invoke $to-plan");
+    expect(runner.calls[0].stdin).not.toContain("$design-driven-build");
+  });
+
+  it("sequences Map the Route across the design stop boundary while keeping one activity stage", async () => {
+    const input = await request({ stage: "map-route", planDirectory: "docs/plans/import" });
+    await mkdir(join(input.repositoryPath, "docs/plans/import"), { recursive: true });
+    await writeFile(join(input.repositoryPath, "docs/plans/import/plan-spec.md"), planFixture);
+    const calls: ProcessInvocation[] = [];
+    const runner: ProcessRunner = {
+      executableAvailable: () => true,
+      run: async (invocation) => {
+        calls.push(invocation);
+        if (calls.length === 1) {
+          await writeDesignPackage(input.repositoryPath);
+          return completed('BEARING_RESULT {"kind":"action","summary":"Design complete.","artifacts":["docs/plans/import/design.md","docs/plans/import/seit.md","docs/plans/import/review.html"]}', 7);
+        }
+        await writePlanningPackage(input.repositoryPath);
+        return completed('BEARING_RESULT {"kind":"action","summary":"Implementation drafted.","artifacts":["docs/plans/import/implementation.md","docs/plans/import/review.html"]}', 11);
+      },
+    };
+    const service = new JourneyService(runner);
+
+    expect(await service.execute(input)).toMatchObject({ status: "action", summary: "Implementation drafted.", tokens: 18, planningReview: { phases: 1, slices: 1 } });
+    expect(calls).toHaveLength(2);
+    expect(calls[0].stdin).toMatch(/Explicitly invoke \$design-driven-build[\s\S]*Do not invoke \$to-plan/);
+    expect(calls[0].stdin).not.toContain("draft implementation.md and regenerate");
+    expect(calls[1].stdin).toContain("Explicitly invoke $to-plan");
+    expect(service.activityTrail(input.runId).map((entry) => entry.kind)).toEqual(["stage.started", "design.ready", "implementation-draft.started"]);
+  });
+
+  it("returns a blocking question from the implementation-draft call without rerunning valid design", async () => {
+    const input = await request({ stage: "map-route", planDirectory: "docs/plans/import" });
+    await writeDesignPackage(input.repositoryPath);
+    const runner = new StubRunner(completed('BEARING_RESULT {"kind":"question","question":"How should rollback slices be grouped?"}', 13));
+
+    expect(await new JourneyService(runner).execute(input)).toEqual({ status: "question", question: "How should rollback slices be grouped?", tokens: 13 });
+    expect(runner.calls).toHaveLength(1);
+    expect(runner.calls[0].stdin).toContain("Explicitly invoke $to-plan");
   });
 
   it("rejects an implementation package that omits assignments or the complete embedded sources", async () => {

@@ -46,7 +46,7 @@ export type JourneyResult =
 const STAGE_COMMAND: Readonly<Record<JourneyStage, string>> = {
   "set-bearings": "$to-plan",
   "gather-supplies": "$grill-with-docs",
-  "map-route": "$design-driven-build first, then $to-plan",
+  "map-route": "$design-driven-build",
   "draft-implementation": "$to-plan",
   "execute-explorer": "$conductor-orchestrate",
   "execute-expedition": "$ultimate-loop",
@@ -55,7 +55,7 @@ const STAGE_COMMAND: Readonly<Record<JourneyStage, string>> = {
 const STAGE_BOUNDARY: Readonly<Record<JourneyStage, string>> = {
   "set-bearings": "Create or resume only the plan directory, plan-spec.md stub, prompts directory, and repository map. Do not grill, design, draft implementation.md, or implement the work.",
   "gather-supplies": "Use the complete owner Q&A and update only the validated plan specification. Do not run design, draft implementation.md, or implement the work. Return an action receipt whose artifacts include the validated plan-spec.md path.",
-  "map-route": "Explicitly invoke $design-driven-build first. Produce valid complete or amended design.md and seit.md, including Use Cases and Communication Flows, Interface Option Check, OOPDSA Implementation Design, SEIT per-slice verification, and cross-cutting checks. Only after those gates pass, explicitly invoke $to-plan to draft implementation.md and regenerate review.html. Do not execute implementation. A successful action receipt must include design.md, seit.md, implementation.md, and review.html in the validated plan directory.",
+  "map-route": "Produce valid complete or amended design.md and seit.md, including Use Cases and Communication Flows, Interface Option Check, OOPDSA Implementation Design, SEIT per-slice verification, and cross-cutting checks. Generate the baseline review.html, then stop at the design-driven-build handoff. Do not invoke $to-plan, write implementation.md, or execute implementation. A successful action receipt must include design.md, seit.md, and the baseline review.html in the validated plan directory.",
   "draft-implementation": "Draft implementation.md without executing any slice. Every slice must name its Implementation role, the exact onboarding Agent model route, its Agent reasoning level, Ponytail mode, Required lint/static-analysis, and Review path. The Review path must use the harness-native reviewer when available or the Surveyor fallback when unavailable; do not use standard gate or gate-review. Regenerate the existing review HTML so it embeds the complete route map or plan specification, design.md, seit.md, and implementation.md. A successful action receipt must include both implementation.md and the regenerated review HTML.",
   "execute-explorer": "Execute the approved implementation plan with Explorer and honor the recorded review cadence. Return only paths that actually exist.",
   "execute-expedition": "Execute the approved implementation plan with Expedition and honor the recorded review cadence. Return only paths that actually exist.",
@@ -156,7 +156,7 @@ function stageArtifactsValid(stage: JourneyStage, artifacts: readonly string[], 
   const routeReview = (path: string): boolean => posix.basename(path) === "review.html" || /^[A-Za-z0-9][A-Za-z0-9._-]*-route-review\.html$/.test(posix.basename(path));
   if (stage === "set-bearings") return artifacts.some(planSpec) && artifacts.some((path) => posix.basename(path) === "repository-map.md" && posix.dirname(posix.dirname(path)) === posix.dirname(artifacts.find(planSpec) ?? ""));
   if (stage === "gather-supplies") return artifacts.some((path) => inPlan(path) && planSpec(path));
-  if (stage === "map-route") return ["design.md", "seit.md", "implementation.md"].every((name) => artifacts.some((path) => inPlan(path) && posix.basename(path) === name)) && artifacts.some((path) => inPlan(path) && routeReview(path));
+  if (stage === "map-route") return ["design.md", "seit.md"].every((name) => artifacts.some((path) => inPlan(path) && posix.basename(path) === name)) && artifacts.some((path) => inPlan(path) && routeReview(path));
   if (stage === "draft-implementation") return artifacts.some((path) => inPlan(path) && posix.basename(path) === "implementation.md") && artifacts.some((path) => inPlan(path) && routeReview(path));
   return true;
 }
@@ -171,6 +171,24 @@ function field(section: string, name: string): string | undefined {
 function completeArtifact(content: string, type: string, headings: readonly string[]): boolean {
   if (!new RegExp(`^---[\\s\\S]*^type:\\s*${type}\\s*$[\\s\\S]*^status:\\s*(?:complete|amended)\\s*$[\\s\\S]*^---\\s*$`, "mi").test(content)) return false;
   return headings.every((heading) => new RegExp(`^##\\s+${heading.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\s*\\n\\s*\\S`, "mi").test(content));
+}
+
+async function designReviewArtifacts(root: string, planDirectory: string | undefined): Promise<readonly string[] | undefined> {
+  if (!planDirectory) return undefined;
+  const directory = resolve(root, planDirectory), names = await readdir(directory);
+  const planName = names.find((name) => name === "plan-spec.md" || /^[A-Za-z0-9][A-Za-z0-9._-]*-route-map\.md$/.test(name));
+  const reviewName = names.find((name) => name === "review.html" || /^[A-Za-z0-9][A-Za-z0-9._-]*-route-review\.html$/.test(name));
+  if (!planName || !reviewName || !names.includes("design.md") || !names.includes("seit.md")) return undefined;
+  const sourceNames = [planName, "design.md", "seit.md"];
+  if (!(await Promise.all([...sourceNames, reviewName].map((name) => containedPath(root, posix.join(planDirectory, name))))).every(Boolean)) return undefined;
+  const [plan, design, seit, review] = await Promise.all([...sourceNames, reviewName].map(async (name) => {
+    const content = await readFile(resolve(directory, name), "utf8");
+    if (!content.trim() || Buffer.byteLength(content) > MAX_PLANNING_ARTIFACT) throw new Error("invalid planning artifact");
+    return content;
+  }));
+  if (!completeArtifact(design, "design", ["Use Cases and Communication Flows", "Interface Option Check", "OOPDSA Implementation Design"]) || !completeArtifact(seit, "seit", ["Per-slice Verification and Validation Matrix", "Cross-cutting Checks"])) return undefined;
+  if (![plan, design, seit].every((source) => review.includes(escaped(source.trim())))) return undefined;
+  return ["design.md", "seit.md", reviewName].map((name) => posix.join(planDirectory, name));
 }
 
 async function planningReview(root: string, planDirectory: string | undefined, selection: Selection): Promise<PlanningReview | undefined> {
@@ -236,7 +254,7 @@ export class JourneyService {
     if (current.trail.length > MAX_ACTIVITY_TRAIL) current.trail.shift();
   }
 
-  private async executeOnce(request: JourneyRequest): Promise<JourneyResult> {
+  private async executeOnce(request: JourneyRequest, activityStage = request.stage, recordStageStart = true): Promise<JourneyResult> {
     if (!validRequest(request)) return { status: "failure", code: "input_invalid", tokens: 0 };
     let repositoryPath: string;
     try {
@@ -248,15 +266,15 @@ export class JourneyService {
     const projected = request.run.roles.find((role) => request.stage === "review" ? role.role === "surveyor" && !role.authority.write : role.role === "crewmate" && role.executor && role.authority.write);
     if (!projected) return { status: "failure", code: "crewmate_unavailable", tokens: 0 };
     if (!sameSelection(request.selection, projected.selection) || request.run.roles.some((role) => !sameSelection(role.selection, request.selection))) return { status: "failure", code: "selection_mismatch", tokens: 0 };
-    this.beginStage(request.runId, request.stage);
-    this.recordActivity(request.runId, request.stage, { kind: "stage.started", status: "running" });
+    this.beginStage(request.runId, activityStage);
+    if (recordStageStart) this.recordActivity(request.runId, activityStage, { kind: "stage.started", status: "running" });
     if (request.stage === "set-bearings") {
       if (this.cancelled.has(request.runId)) return { status: "failure", code: "cancelled", tokens: 0 };
       try {
-        this.recordActivity(request.runId, request.stage, { kind: "repository-map.started", status: "running" });
+        this.recordActivity(request.runId, activityStage, { kind: "repository-map.started", status: "running" });
         const workspace = await setBearingsWorkspace(repositoryPath, request.workGoal, planDirectory);
         if (!workspace || !(await Promise.all(workspace.artifacts.map((artifact) => containedPath(repositoryPath, artifact)))).every(Boolean) || !stageArtifactsValid(request.stage, workspace.artifacts, workspace.directory) || this.cancelled.has(request.runId)) return { status: "failure", code: this.cancelled.has(request.runId) ? "cancelled" : "artifact_invalid", tokens: 0 };
-        this.recordActivity(request.runId, request.stage, { kind: "workspace.ready", status: workspace.resumed ? "resumed" : "created" });
+        this.recordActivity(request.runId, activityStage, { kind: "workspace.ready", status: workspace.resumed ? "resumed" : "created" });
         return { status: "action", summary: workspace.resumed ? "Bearings resumed locally." : "Bearings set locally.", artifacts: workspace.artifacts, tokens: 0 };
       } catch { return { status: "failure", code: "artifact_invalid", tokens: 0 }; }
     }
@@ -269,7 +287,7 @@ export class JourneyService {
     if (request.stage === "review" && request.selection.provider === "codex") {
       const modelArgs = request.selection.model === "*" ? [] : ["-m", request.selection.model];
       let result;
-      try { result = await this.runner.run({ routeId: "codex", executable: "codex", args: ["exec", "review", "--uncommitted", "--json", ...modelArgs, "-c", `model_reasoning_effort="${request.selection.reasoning}"`, "-c", 'approval_policy="never"', "-c", 'sandbox_mode="read-only"', "--ephemeral"], stdin: "", cwd: repositoryPath, timeoutMs: projected.limits.timeoutMs, runId: processRunId, onActivity: (activity) => this.recordActivity(request.runId, request.stage, activity) }); }
+      try { result = await this.runner.run({ routeId: "codex", executable: "codex", args: ["exec", "review", "--uncommitted", "--json", ...modelArgs, "-c", `model_reasoning_effort="${request.selection.reasoning}"`, "-c", 'approval_policy="never"', "-c", 'sandbox_mode="read-only"', "--ephemeral"], stdin: "", cwd: repositoryPath, timeoutMs: projected.limits.timeoutMs, runId: processRunId, onActivity: (activity) => this.recordActivity(request.runId, activityStage, activity) }); }
       catch { return { status: "failure", code: "adapter_failed", tokens: 0 }; }
       const reportedTokens = result.usage && Number.isSafeInteger(result.usage.tokens) && result.usage.tokens >= 0 ? result.usage.tokens : 0;
       if (this.cancelled.has(request.runId) && result.unknownSideEffect) return { status: "failure", code: "interrupted", tokens: reportedTokens };
@@ -285,7 +303,7 @@ export class JourneyService {
       let receipt;
       const questionDiscovery = request.stage === "gather-supplies" && request.gatherMode === "questions";
       const planningSession = request.stage === "gather-supplies" || request.stage === "map-route" || request.stage === "draft-implementation";
-      try { receipt = await adapter.execute({ runId: processRunId, repositoryPath, role: { ...projected, sessionId: planningSession ? projected.sessionId : null, authority: { ...projected.authority, write: questionDiscovery ? false : projected.authority.write, network: request.selection.provider === "agy", externalAction: false }, toolAllow: questionDiscovery ? projected.toolAllow.filter((tool) => !/write|edit/i.test(tool)) : projected.toolAllow }, task: { prompt: taskPrompt }, onActivity: (activity) => this.recordActivity(request.runId, request.stage, activity), ...(request.stage === "execute-expedition" ? { allowSubagents: true } : {}) }); }
+      try { receipt = await adapter.execute({ runId: processRunId, repositoryPath, role: { ...projected, sessionId: planningSession ? projected.sessionId : null, authority: { ...projected.authority, write: questionDiscovery ? false : projected.authority.write, network: request.selection.provider === "agy", externalAction: false }, toolAllow: questionDiscovery ? projected.toolAllow.filter((tool) => !/write|edit/i.test(tool)) : projected.toolAllow }, task: { prompt: taskPrompt }, onActivity: (activity) => this.recordActivity(request.runId, activityStage, activity), ...(request.stage === "execute-expedition" ? { allowSubagents: true } : {}) }); }
       catch { return { status: "failure", code: "adapter_failed", tokens: 0 }; }
       if (receipt.status !== "completed") return { status: "failure", code: this.cancelled.has(request.runId) && (receipt.status === "blocked_reconcile" || receipt.failure === "unknown_side_effect") ? "interrupted" : receipt.failure === "token_budget" ? "token_budget" : receipt.failure === "cancelled" ? "cancelled" : "adapter_failed", tokens: receipt.usage.tokens };
       tokens = receipt.usage.tokens;
@@ -314,14 +332,46 @@ export class JourneyService {
       if (this.cancelled.has(request.runId)) return { status: "failure", code: "cancelled", tokens };
     }
     if (!stageArtifactsValid(request.stage, parsed.artifacts, planDirectory)) return { status: "failure", code: "artifact_invalid", tokens };
-    const review = request.stage === "map-route" || request.stage === "draft-implementation" ? await planningReview(repositoryPath, planDirectory, request.selection).catch(() => undefined) : undefined;
+    const review = request.stage === "draft-implementation" ? await planningReview(repositoryPath, planDirectory, request.selection).catch(() => undefined) : undefined;
     if (this.cancelled.has(request.runId)) return { status: "failure", code: "cancelled", tokens };
-    if ((request.stage === "map-route" || request.stage === "draft-implementation") && !review) return { status: "failure", code: "artifact_invalid", tokens };
+    if (request.stage === "draft-implementation" && !review) return { status: "failure", code: "artifact_invalid", tokens };
     return { status: "action", summary: parsed.summary, artifacts: parsed.artifacts, tokens, ...(review ? { planningReview: review } : {}) };
   }
 
+  private async executeMapRoute(request: JourneyRequest): Promise<JourneyResult> {
+    let designArtifacts: readonly string[] | undefined;
+    try {
+      const repositoryPath = await realpath(request.repositoryPath);
+      const planDirectory = request.planDirectory === undefined ? undefined : await containedPath(repositoryPath, request.planDirectory, true);
+      if (repositoryPath === request.repositoryPath && planDirectory) designArtifacts = await designReviewArtifacts(repositoryPath, planDirectory);
+    } catch { /* executeOnce returns the canonical validation failure below */ }
+
+    let tokens = 0;
+    if (!designArtifacts) {
+      const design = await this.executeOnce(request, "map-route");
+      tokens += design.tokens;
+      if (design.status !== "action") return design;
+      try { designArtifacts = await designReviewArtifacts(request.repositoryPath, request.planDirectory); }
+      catch { designArtifacts = undefined; }
+      if (!designArtifacts) return { status: "failure", code: "artifact_invalid", tokens };
+      this.recordActivity(request.runId, "map-route", { kind: "design.ready", status: "completed" });
+    } else {
+      this.beginStage(request.runId, "map-route");
+      this.recordActivity(request.runId, "map-route", { kind: "stage.started", status: "running" });
+      this.recordActivity(request.runId, "map-route", { kind: "design.ready", status: "resumed" });
+    }
+
+    this.recordActivity(request.runId, "map-route", { kind: "implementation-draft.started", status: "running" });
+    const implementation = await this.executeOnce({ ...request, stage: "draft-implementation" }, "map-route", false);
+    tokens += implementation.tokens;
+    if (implementation.status !== "action") return { ...implementation, tokens };
+    const artifacts = [...new Set([...designArtifacts, ...implementation.artifacts])];
+    const reviews = artifacts.filter((path) => posix.extname(path) === ".html");
+    return { ...implementation, artifacts: [...artifacts.filter((path) => posix.extname(path) !== ".html"), ...reviews], tokens };
+  }
+
   async execute(request: JourneyRequest): Promise<JourneyResult> {
-    try { return await this.executeOnce(request); }
+    try { return request.stage === "map-route" ? await this.executeMapRoute(request) : await this.executeOnce(request); }
     finally { this.active.delete(request.runId); this.cancelled.delete(request.runId); }
   }
 }

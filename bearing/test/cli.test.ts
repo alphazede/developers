@@ -34,18 +34,23 @@ afterEach(async () => {
 
 describe("parseStartArgs", () => {
   it("accepts `start`", () => {
-    expect(parseStartArgs(["start"])).toEqual({ ok: true, noOpen: false, overrides: {} });
+    expect(parseStartArgs(["start"])).toEqual({ ok: true, detach: false, noOpen: false, overrides: {} });
   });
 
   it("accepts `start --no-open`", () => {
-    expect(parseStartArgs(["start", "--no-open"])).toEqual({ ok: true, noOpen: true, overrides: {} });
+    expect(parseStartArgs(["start", "--no-open"])).toEqual({ ok: true, detach: false, noOpen: true, overrides: {} });
+  });
+
+  it("accepts `start --detach`", () => {
+    expect(parseStartArgs(["start", "--detach"])).toEqual({ ok: true, detach: true, noOpen: false, overrides: {} });
   });
 
   it("parses every approved shared override in spaced and equals forms", () => {
-    expect(parseStartArgs(["start", "--agent", "bear", "--provider=codex", "--model", "gpt-5.6-sol", "--reasoning=medium", "--tools", "read,search", "--exclude-tools=write", "--no-session", "--offline", "--timeout=5000", "--max-turns", "7", "--budget=900"])).toEqual({
+    expect(parseStartArgs(["start", "--agent", "bear", "--provider=codex", "--model", "gpt-5.6-sol", "--reasoning=medium", "--tools", "read,search", "--exclude-tools=write", "--no-session", "--offline", "--timeout=600000", "--max-turns", "7", "--budget=900"])).toEqual({
       ok: true,
+      detach: false,
       noOpen: false,
-      overrides: { agentRef: "bear", provider: "codex", model: "gpt-5.6-sol", reasoning: "medium", tools: ["read", "search"], excludedTools: ["write"], noSession: true, offline: true, timeoutMs: 5000, maxTurns: 7, budget: { tokens: 900 } },
+      overrides: { agentRef: "bear", provider: "codex", model: "gpt-5.6-sol", reasoning: "medium", tools: ["read", "search"], excludedTools: ["write"], noSession: true, offline: true, timeoutMs: 600000, maxTurns: 7, budget: { tokens: 900 } },
     });
   });
 
@@ -74,6 +79,7 @@ describe("parseStartArgs", () => {
       ["start", "--tools", "read,write", "--exclude-tools", "write"],
       ["start", "--reasoning", "maximum"],
       ["start", "--timeout", "0"],
+      ["start", "--timeout", "2100001"],
       ["start", "--max-turns=-1"],
       ["start", "--budget", "9007199254740992"],
       ["start", "--provider"],
@@ -96,6 +102,23 @@ describe("parseStartArgs", () => {
 });
 
 describe("run launcher", () => {
+  it("detaches through the portable child launcher and prints its URL", async () => {
+    const ctx = newCtx();
+    const launched: string[][] = [];
+    const server = await run(["start", "--detach", "--no-open"], {
+      ...ctx.d,
+      launchDetached: async (args) => {
+        launched.push(args);
+        return "http://127.0.0.1:43210/#cap=abc123";
+      },
+    });
+
+    expect(server).toBeUndefined();
+    expect(launched).toEqual([["start", "--no-open"]]);
+    expect(ctx.out).toEqual(["http://127.0.0.1:43210/#cap=abc123\n"]);
+    expect(ctx.opened).toEqual([]);
+  });
+
   it("binds loopback, prints the URL, and opens the browser exactly once", async () => {
     const ctx = newCtx();
     const server = await run(["start"], ctx.d);

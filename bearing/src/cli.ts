@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { createServer, type Server } from "node:http";
 import { spawn, type ChildProcess } from "node:child_process";
-import { pathToFileURL } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { NodeProcessRunner } from "./adapters/process-runner.js";
 import { REASONING_LEVELS } from "./onboarding/readiness.js";
 import type { RunOverrides } from "./profile/profile.js";
@@ -10,7 +10,8 @@ import {
   createRequestHandler,
 } from "./server/local-session.js";
 
-const USAGE = "usage: bearing start [--no-open] [safe shared overrides]\n";
+const USAGE = "usage: bearing start [--detach] [--no-open] [safe shared overrides]\n";
+const DETACHED_CHILD = "BEARING_DETACHED_CHILD";
 
 export interface Writer {
   write(s: string): boolean;
@@ -23,12 +24,16 @@ export interface LauncherDeps {
   stderr?: Writer;
   /** Called with a nonzero code on invalid arguments. */
   exit?: (code: number) => void;
+  /** Launches the persistent child for `--detach`; injectable for tests. */
+  launchDetached?: (args: string[]) => Promise<string>;
+  /** Reports readiness from the persistent child to its parent process. */
+  notifyReady?: (url: string) => void;
 }
 
-export type ParseResult = { ok: true; noOpen: boolean; overrides: RunOverrides } | { ok: false };
+export type ParseResult = { ok: true; detach: boolean; noOpen: boolean; overrides: RunOverrides } | { ok: false };
 
 const VALUE_FLAGS = new Set(["agent", "provider", "model", "reasoning", "decision-depth", "tools", "exclude-tools", "timeout", "max-turns", "budget"]);
-const BOOLEAN_FLAGS = new Set(["no-open", "no-session", "offline"]);
+const BOOLEAN_FLAGS = new Set(["detach", "no-open", "no-session", "offline"]);
 const REASONING = new Set<string>(REASONING_LEVELS);
 const DECISION_DEPTH = new Set(["focused", "standard", "deep"]);
 const PER_ROLE = /^(navigator|explorer|crewmate|surveyor)[:=]/i;
@@ -72,12 +77,13 @@ export function parseStartArgs(args: string[]): ParseResult {
   const decisionDepth = values.get("decision-depth");
   const tools = typeof values.get("tools") === "string" ? toolList(values.get("tools") as string) : undefined;
   const excludedTools = typeof values.get("exclude-tools") === "string" ? toolList(values.get("exclude-tools") as string) : undefined;
-  const timeoutMs = typeof values.get("timeout") === "string" ? positiveInteger(values.get("timeout") as string, 300_000) : undefined;
+  const timeoutMs = typeof values.get("timeout") === "string" ? positiveInteger(values.get("timeout") as string, 2_100_000) : undefined;
   const maxTurns = typeof values.get("max-turns") === "string" ? positiveInteger(values.get("max-turns") as string, 20) : undefined;
   const budget = typeof values.get("budget") === "string" ? positiveInteger(values.get("budget") as string, Number.MAX_SAFE_INTEGER) : undefined;
   if ((reasoning !== undefined && (typeof reasoning !== "string" || !REASONING.has(reasoning))) || (decisionDepth !== undefined && (typeof decisionDepth !== "string" || !DECISION_DEPTH.has(decisionDepth))) || (values.has("tools") && !tools) || (values.has("exclude-tools") && !excludedTools) || (tools && excludedTools && tools.some((tool) => excludedTools.includes(tool))) || (values.has("timeout") && !timeoutMs) || (values.has("max-turns") && !maxTurns) || (values.has("budget") && !budget)) return { ok: false };
   return {
     ok: true,
+    detach: values.has("detach"),
     noOpen: values.has("no-open"),
     overrides: {
       ...(typeof values.get("agent") === "string" ? { agentRef: values.get("agent") as string } : {}),
@@ -94,6 +100,49 @@ export function parseStartArgs(args: string[]): ParseResult {
       ...(budget ? { budget: { tokens: budget } } : {}),
     },
   };
+}
+
+type DetachedSpawn = (
+  command: string,
+  args: string[],
+  options: { detached: true; stdio: ["ignore", "ignore", "ignore", "ipc"]; env: NodeJS.ProcessEnv },
+) => ChildProcess;
+
+/** Start a platform-neutral detached copy and wait until it reports its URL. */
+export function defaultLaunchDetached(
+  args: string[],
+  spawnFn: DetachedSpawn = spawn,
+): Promise<string> {
+  const child = spawnFn(process.execPath, [fileURLToPath(import.meta.url), ...args], {
+    detached: true,
+    stdio: ["ignore", "ignore", "ignore", "ipc"],
+    env: { ...process.env, [DETACHED_CHILD]: "1" },
+  });
+  return new Promise<string>((resolve, reject) => {
+    let settled = false;
+    const finish = (error?: Error, url?: string) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timeout);
+      child.removeAllListeners();
+      child.unref();
+      if (error) reject(error);
+      else resolve(url!);
+    };
+    const timeout = setTimeout(() => {
+      child.kill();
+      finish(new Error("detached launch did not become ready"));
+    }, 10_000);
+    timeout.unref();
+    child.once("error", (error) => finish(error));
+    child.once("exit", (code) => finish(new Error(`detached launch exited before ready (${code ?? "signal"})`)));
+    child.on("message", (message: unknown) => {
+      if (typeof message !== "object" || message === null) return;
+      const result = message as { type?: string; url?: string; error?: string };
+      if (result.type === "bearing-ready" && typeof result.url === "string") finish(undefined, result.url);
+      else if (result.type === "bearing-error") finish(new Error(result.error ?? "detached launch failed"));
+    });
+  });
 }
 
 export function defaultOpenBrowser(
@@ -144,6 +193,14 @@ export function run(args: string[], deps: LauncherDeps = {}): Promise<Server | u
     return Promise.resolve(undefined);
   }
 
+  if (parsed.detach) {
+    const childArgs = args.filter((arg) => arg !== "--detach");
+    return (deps.launchDetached ?? defaultLaunchDetached)(childArgs).then((url) => {
+      stdout.write(`${url}\n`);
+      return undefined;
+    });
+  }
+
   return new Promise<Server>((resolve, reject) => {
     const server = createServer();
     server.on("error", reject);
@@ -161,13 +218,24 @@ export function run(args: string[], deps: LauncherDeps = {}): Promise<Server | u
       const url = `http://${boundHost}/#cap=${session.capability}`;
       stdout.write(`${url}\n`);
       if (!parsed.noOpen) openBrowser(url);
+      deps.notifyReady?.(url);
       resolve(server);
     });
   });
 }
 
 function main(argv: string[]): void {
-  run(argv).catch((err: unknown) => {
+  const detachedChild = process.env[DETACHED_CHILD] === "1" && typeof process.send === "function";
+  const deps: LauncherDeps = detachedChild ? {
+    stdout: { write: () => true },
+    notifyReady: (url) => {
+      process.send?.({ type: "bearing-ready", url }, () => process.disconnect());
+    },
+  } : {};
+  run(argv, deps).catch((err: unknown) => {
+    if (detachedChild) {
+      process.send?.({ type: "bearing-error", error: String(err) }, () => process.disconnect());
+    }
     process.stderr.write(`bearing: ${String(err)}\n`);
     process.exit(1);
   });

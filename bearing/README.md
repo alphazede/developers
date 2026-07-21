@@ -29,18 +29,33 @@ node dist/cli.js start
 node dist/cli.js start --no-open
 ```
 
-Keep that terminal running while using the control room. The URL contains a one-time capability in its fragment; do not share it.
+Keep the terminal running when using either foreground command above. For an
+agent-launched session that must survive the launching turn, use the
+portable detached mode. It prints the child server's URL and opens the browser
+once:
+
+```sh
+node dist/cli.js start --detach
+```
+
+The URL contains a one-time capability in its fragment; do not share it.
 
 ## Codex plugin
 
-The packaged repo-local plugin provides an explicit `/bearing` entrypoint. In a
-Codex session where this package is available, use `/bearing` to ask Codex to
-start the existing local Bearing CLI from the current repository, keep it
-running, report its loopback URL, and begin the planning-first journey. It does
-not launch on SessionStart, install software, publish a marketplace entry, or
-change Codex native collaboration behavior. After an explicit `/bearing`
-invocation, the CLI's default `start` command best-effort opens the browser
-automatically.
+The packaged repo-local plugin provides the `bearing` skill. In a Codex session
+where this package is installed, invoke `$bearing` or ask Codex to use the
+Bearing skill. Codex starts the existing local Bearing CLI in persistent mode
+from the current
+repository, keeps it running, reports its loopback URL, and begins the
+planning-first journey. It does not launch on SessionStart, install software,
+publish a marketplace entry, or change Codex native collaboration behavior.
+After an explicit invocation, the CLI's default `start` command best-effort
+opens the browser automatically.
+
+If the active Codex sandbox blocks the loopback listener, Codex asks for owner
+approval to rerun only the Bearing CLI launch with host escalation. That launch
+exception does not weaken the sandbox, tools, authority, or isolation of agents
+Bearing starts for repository work.
 
 ## First launch
 
@@ -86,6 +101,7 @@ The CLI accepts only the following bounded overrides:
 
 | Flag | Accepted value or effect |
 |---|---|
+| `--detach` | Keep the local server alive after the launching process exits. |
 | `--no-open` | Do not open a browser. |
 | `--agent` | Shared agent reference. |
 | `--provider`, `--model` | Shared route selection; never per-role. |
@@ -94,7 +110,7 @@ The CLI accepts only the following bounded overrides:
 | `--tools`, `--exclude-tools` | Bounded comma-separated tool names. |
 | `--no-session` | Disable provider session persistence for the run. |
 | `--offline` | Remove network authority for the run. |
-| `--timeout` | Positive milliseconds, at most `300000`. |
+| `--timeout` | Positive milliseconds, at most `2100000` (35 minutes). |
 | `--max-turns` | Positive count, at most `20`. |
 | `--budget` | Optional positive safe-integer per-call token ceiling. No ceiling is imposed by default. |
 

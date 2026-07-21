@@ -8,31 +8,17 @@ describe("Bearing Codex plugin contract", () => {
     const manifest = JSON.parse(await read("../.codex-plugin/plugin.json"));
     expect(manifest).toMatchObject({
       name: "bearing",
-      version: "0.1.0",
       skills: "./skills/",
       author: { name: "AlphaZede" },
       interface: { developerName: "AlphaZede" },
     });
+    expect(manifest.version).toMatch(/^0\.1\.0(?:\+codex\.\d{14})?$/);
     const packageJson = JSON.parse(await read("../package.json"));
     expect(packageJson.files).toEqual(expect.arrayContaining([
-      ".codex-plugin/", "commands/", "skills/",
+      ".codex-plugin/", "skills/",
     ]));
-  });
-
-  it("keeps /bearing explicit and local", async () => {
-    const command = await read("../commands/bearing.toml");
-    expect(command).toContain("explicitly invokes /bearing");
-    expect(command).toContain("installed `bearing` executable");
-    expect(command).toContain("`../../dist/cli.js` relative to that skill's `SKILL.md` directory");
-    expect(command).toContain("never resolve the fallback from the current or target repository");
-    expect(command).toContain("instead of scanning other filesystem roots");
-    expect(command.indexOf("installed `bearing` executable")).toBeLessThan(command.indexOf("`../../dist/cli.js`"));
-    expect(command).toContain("with `start`");
-    expect(command).not.toContain("start --no-open");
-    expect(command).toContain("best-effort opens the browser automatically");
-    expect(command).toContain("loopback URL");
-    expect(command).toContain("Do not launch on SessionStart");
-    expect(command).toContain("Codex native collaboration mode");
+    expect(packageJson.files).not.toContain("commands/");
+    await expect(read("../commands/bearing.toml")).rejects.toMatchObject({ code: "ENOENT" });
   });
 
   it("limits the skill to explicit planning-first launches", async () => {
@@ -40,23 +26,30 @@ describe("Bearing Codex plugin contract", () => {
     expect(skill).toContain("name: bearing");
     expect(skill).toContain("- developer");
     expect(skill).toContain("- public");
-    expect(skill).toContain("explicit `/bearing` request");
-    expect(skill).toContain("keep\nPATH first");
-    expect(skill).toContain("`../../dist/cli.js` relative to this `SKILL.md`\ndirectory");
-    expect(skill).toContain("Never resolve the fallback from the current\nor target repository");
+    expect(skill).toContain("explicitly invokes `$bearing`");
+    expect(skill).toContain("asks to use the Bearing\nskill");
+    expect(skill).toContain("keep PATH first");
+    expect(skill).toContain("`../../dist/cli.js` relative to this `SKILL.md` directory");
+    expect(skill).toContain("Never\nresolve the fallback from the current or target repository");
     expect(skill).toContain("filesystem-wide plugin discovery");
-    expect(skill).toContain("with `start`");
+    expect(skill).toContain("with `start --detach`");
     expect(skill).not.toContain("start --no-open");
     expect(skill).toContain("best-effort opens the browser automatically");
     expect(skill).toContain("planning-first journey");
+    expect(skill).toContain("ask\nthe owner to approve rerunning the same launch command with host escalation");
+    expect(skill).toContain("Limit that escalation to the Bearing CLI listener");
+    expect(skill).toContain("do not weaken the sandbox,\ntools, authority, or isolation of any agent Bearing launches");
     expect(skill).toContain("Do not use");
   });
 
   it("documents explicit browser launch without SessionStart ambiguity", async () => {
     const readme = await read("../README.md");
     expect(readme).toContain("not launch on SessionStart");
-    expect(readme).toContain("After an explicit `/bearing`\ninvocation");
-    expect(readme).toContain("best-effort opens the browser\nautomatically");
+    expect(readme).toContain("invoke `$bearing` or ask Codex to use the\nBearing skill");
+    expect(readme).toContain("After an explicit invocation");
+    expect(readme).toContain("best-effort\nopens the browser automatically");
+    expect(readme).toContain("asks for owner\napproval to rerun only the Bearing CLI launch with host escalation");
+    expect(readme).toContain("does not weaken the sandbox, tools, authority, or isolation of agents\nBearing starts");
     expect(readme).not.toContain("does\nnot launch automatically");
   });
 });

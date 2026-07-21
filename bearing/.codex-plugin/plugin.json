@@ -1,6 +1,6 @@
 {
   "name": "bearing",
-  "version": "0.1.0",
+  "version": "0.1.0+codex.20260721053953",
   "description": "Launch Bearing's local planning-first repository workflow.",
   "author": {
     "name": "AlphaZede",
@@ -16,8 +16,13 @@
     "longDescription": "Launch Bearing from the current repository and begin its planning-first journey.",
     "developerName": "AlphaZede",
     "category": "Developer Tools",
-    "capabilities": ["Local workflow", "Planning"],
-    "defaultPrompt": ["Start Bearing for this repository's planning journey."],
+    "capabilities": [
+      "Local workflow",
+      "Planning"
+    ],
+    "defaultPrompt": [
+      "Start Bearing for this repository's planning journey."
+    ],
     "brandColor": "#2563EB"
   }
 }

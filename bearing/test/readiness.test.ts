@@ -41,6 +41,7 @@ describe("readiness service", () => {
     if (detected.status === "blocked") return;
     expect(detected.verified).toBe(false);
     expect(detected.run.roles.every((role) => role.limits.tokenBudget === Number.MAX_SAFE_INTEGER)).toBe(true);
+    expect(detected.run.roles.every((role) => role.limits.timeoutMs === 2_100_000)).toBe(true);
     expect(new Set(detected.run.roles.map((role) => JSON.stringify(role.selection))).size).toBe(1);
     expect(new Set(detected.run.roles.map((role) => role.identity)).size).toBe(4);
     expect(new Set(detected.run.roles.map((role) => JSON.stringify(role.authority))).size).toBe(4);

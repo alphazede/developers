@@ -70,7 +70,7 @@ const BASE_PROFILE: AgentProfile = (() => {
     enabledSkills: [],
     context: "off",
     systemPromptRef: "bearing/default",
-    limits: { timeoutMs: 300_000, maxTurns: 20, maxTools: 100, maxRetries: 1, maxConcurrency: 1, maxDelegation: 2, tokenBudget: Number.MAX_SAFE_INTEGER },
+    limits: { timeoutMs: 2_100_000, maxTurns: 20, maxTools: 100, maxRetries: 1, maxConcurrency: 1, maxDelegation: 2, tokenBudget: Number.MAX_SAFE_INTEGER },
     session: { persistence: "persistent", resume: "allowed", fork: "allowed" },
     structuredEvents: true,
     fallbackEnabled: false,
