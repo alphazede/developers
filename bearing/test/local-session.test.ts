@@ -351,6 +351,11 @@ describe("GET / native page and fragment secrecy", () => {
     expect(r.body).toContain('stop.textContent = "Stop"');
     expect(r.body).toContain('fetch("/api/v1/journey/control"');
     expect(r.body).toContain('"Git: " + body.changedFiles + " changed "');
+    expect(r.body).toContain('fetch("/api/v1/git-diff?path="');
+    expect(r.body).toContain('className = "diff-add"');
+    expect(r.body).toContain('id="journey-question-box" hidden');
+    expect(r.body).toContain('id="planning-answer-form" hidden');
+    expect(r.body).toContain('<button class="primary" type="submit">Continue</button>');
     expect(r.body).toContain('classList.toggle("busy"');
     expect(r.body).toContain('@keyframes panel-in');
     expect(r.body).toContain('@keyframes compass-spin');

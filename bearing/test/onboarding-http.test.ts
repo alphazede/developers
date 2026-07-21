@@ -1,4 +1,5 @@
 import { createServer, request, type Server } from "node:http";
+import { execFileSync } from "node:child_process";
 import { access, mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -73,6 +74,34 @@ async function recordPlanningApproval(port: string, cookie: string, runId: strin
 }
 
 describe("repository-first onboarding HTTP", () => {
+  it("lists changed files and serves authenticated red-green diff data", async () => {
+    const root = await mkdtemp(join(tmpdir(), "bearing-git-diff-")); roots.push(root);
+    execFileSync("git", ["init", "-q"], { cwd: root });
+    await writeFile(join(root, "tracked.txt"), "before\n");
+    execFileSync("git", ["add", "tracked.txt"], { cwd: root });
+    execFileSync("git", ["-c", "user.name=Bearing Test", "-c", "user.email=bearing@example.invalid", "commit", "-qm", "baseline"], { cwd: root });
+    await writeFile(join(root, "tracked.txt"), "after\n");
+    await writeFile(join(root, "new.txt"), "new line\n");
+    const server = createServer(); await new Promise<void>((resolve) => server.listen({ host: "127.0.0.1", port: 0 }, resolve)); servers.push(server);
+    const address = server.address(); if (!address || typeof address === "string") throw new Error("missing address");
+    const port = String(address.port), session = new LocalSessionService(`127.0.0.1:${port}`), cookie = await authenticate(port, session);
+    server.on("request", createRequestHandler(session));
+    await call(port, "POST", "/api/v1/repository", { path: root }, cookie);
+    const status = JSON.parse((await call(port, "GET", "/api/v1/history", undefined, cookie)).body);
+    expect(status.changedFiles).toBeGreaterThanOrEqual(2);
+    expect(status.gitChanges).toEqual(expect.arrayContaining([
+      expect.objectContaining({ path: "tracked.txt", additions: 1, deletions: 1 }),
+      expect.objectContaining({ path: "new.txt", status: "??", additions: null, deletions: null }),
+    ]));
+    expect((await call(port, "GET", "/api/v1/git-diff?path=tracked.txt")).status).toBe(401);
+    const tracked = await call(port, "GET", "/api/v1/git-diff?path=tracked.txt", undefined, cookie);
+    expect(tracked.status).toBe(200);
+    expect(JSON.parse(tracked.body).diff).toMatch(/-before[\s\S]*\+after/);
+    const added = await call(port, "GET", "/api/v1/git-diff?path=new.txt", undefined, cookie);
+    expect(JSON.parse(added.body).diff).toContain("+new line");
+    expect((await call(port, "GET", "/api/v1/git-diff?path=..%2Fsecret", undefined, cookie)).status).toBe(404);
+  });
+
   it("serves authenticated repository options and rejects cross-origin reads", async () => {
     const root = await mkdtemp(join(tmpdir(), "bearing-options-")); roots.push(root);
     const choice = { options: async () => ({ platform: "linux" as const, linuxDistro: "Test Linux", current: { path: root, source: "cwd" as const }, browse: { available: false } }), resolve: async () => ({ result: "selected" as const, candidate: root, source: "cwd" as const }) };
