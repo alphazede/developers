@@ -11,10 +11,14 @@ tags:
 
 # Bearing
 
-Use only for an explicit `/bearing` request. From the current repository, run
-the installed `bearing` executable or the package-local `bearing/dist/cli.js`
-with `start`; keep the local server alive and report its loopback URL. Bearing
-best-effort opens the browser automatically. Then follow Bearing's planning-first journey.
+Use only for an explicit `/bearing` request. From the current repository, keep
+PATH first and run the installed `bearing` executable with `start` when it is
+available. Otherwise resolve `../../dist/cli.js` relative to this `SKILL.md`
+directory, run that absolute path with Node and `start`, keep the local server
+alive, and report its loopback URL. Never resolve the fallback from the current
+or target repository. Bearing best-effort opens the browser automatically.
+Then follow Bearing's planning-first journey.
 
 Do not use for ordinary planning, SessionStart, software installation, runtime
-reimplementation, remote actions, or changes to Codex native collaboration.
+reimplementation, filesystem-wide plugin discovery, target-repository changes,
+remote actions, or changes to Codex native collaboration.

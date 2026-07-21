@@ -23,7 +23,10 @@ describe("Bearing Codex plugin contract", () => {
     const command = await read("../commands/bearing.toml");
     expect(command).toContain("explicitly invokes /bearing");
     expect(command).toContain("installed `bearing` executable");
-    expect(command).toContain("bearing/dist/cli.js");
+    expect(command).toContain("`../../dist/cli.js` relative to that skill's `SKILL.md` directory");
+    expect(command).toContain("never resolve the fallback from the current or target repository");
+    expect(command).toContain("instead of scanning other filesystem roots");
+    expect(command.indexOf("installed `bearing` executable")).toBeLessThan(command.indexOf("`../../dist/cli.js`"));
     expect(command).toContain("with `start`");
     expect(command).not.toContain("start --no-open");
     expect(command).toContain("best-effort opens the browser automatically");
@@ -38,6 +41,10 @@ describe("Bearing Codex plugin contract", () => {
     expect(skill).toContain("- developer");
     expect(skill).toContain("- public");
     expect(skill).toContain("explicit `/bearing` request");
+    expect(skill).toContain("keep\nPATH first");
+    expect(skill).toContain("`../../dist/cli.js` relative to this `SKILL.md`\ndirectory");
+    expect(skill).toContain("Never resolve the fallback from the current\nor target repository");
+    expect(skill).toContain("filesystem-wide plugin discovery");
     expect(skill).toContain("with `start`");
     expect(skill).not.toContain("start --no-open");
     expect(skill).toContain("best-effort opens the browser automatically");

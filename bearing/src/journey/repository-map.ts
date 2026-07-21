@@ -1,4 +1,4 @@
-import { mkdir, readdir, realpath, writeFile } from "node:fs/promises";
+import { lstat, mkdir, readdir, realpath, writeFile } from "node:fs/promises";
 import { basename, isAbsolute, relative, resolve } from "node:path";
 
 const MAX_DEPTH = 4;
@@ -9,6 +9,15 @@ const SENSITIVE = /(^|[._-])(env|secret|credential|token|password|private)([._-]
 function inside(root: string, path: string): boolean {
   const relation = relative(root, path);
   return relation !== "" && !relation.startsWith("..") && !isAbsolute(relation);
+}
+
+async function containedDirectory(root: string, directory: string): Promise<string | undefined> {
+  try {
+    const info = await lstat(directory);
+    if (!info.isDirectory() || info.isSymbolicLink()) return undefined;
+    const canonical = await realpath(directory);
+    return inside(root, canonical) ? canonical : undefined;
+  } catch { return undefined; }
 }
 
 function slug(value: string): string {
@@ -68,8 +77,7 @@ export async function setBearingsWorkspace(repository: string, goal: string, exi
   if (existingDirectory) {
     if (!/^docs\/plans\/\d{4}-\d{2}-\d{2}-[a-z0-9]+(?:-[a-z0-9]+)*$/.test(existingDirectory)) return undefined;
     directory = resolve(repository, existingDirectory);
-    try { if (!inside(repository, await realpath(directory))) return undefined; }
-    catch { return undefined; }
+    if (!await containedDirectory(repository, directory)) return undefined;
     resumed = true;
   } else {
     const date = new Date().toISOString().slice(0, 10);
@@ -83,11 +91,15 @@ export async function setBearingsWorkspace(repository: string, goal: string, exi
   }
   const relativeDirectory = relative(repository, directory).replaceAll("\\", "/");
   const planSpec = resolve(directory, "plan-spec.md");
-  const map = resolve(directory, "prompts/repository-map.md");
+  const prompts = resolve(directory, "prompts");
+  try { await mkdir(prompts); }
+  catch (error: unknown) { if (!(error instanceof Error) || !("code" in error) || error.code !== "EEXIST") throw error; }
+  const canonicalDirectory = await containedDirectory(repository, directory);
+  if (!canonicalDirectory || !await containedDirectory(canonicalDirectory, prompts)) return undefined;
+  const map = resolve(prompts, "repository-map.md");
   try {
     await writeFile(planSpec, `---\ntype: plan-spec\nname: ${slug(goal)}\nstatus: pre-grill-draft\ndate: ${new Date().toISOString().slice(0, 10)}\napplies_to: ${slug(basename(repository))}\n---\n`, { flag: "wx" });
   } catch (error: unknown) { if (!(error instanceof Error) || !("code" in error) || error.code !== "EEXIST") throw error; }
-  await mkdir(resolve(directory, "prompts"), { recursive: true });
   try { await writeFile(map, mapText(repository, await inventory(repository)), { flag: "wx" }); }
   catch (error: unknown) {
     if (!(error instanceof Error) || !("code" in error) || error.code !== "EEXIST") throw error;

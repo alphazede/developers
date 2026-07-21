@@ -110,6 +110,19 @@ describe("JourneyService", () => {
     expect(runner.calls).toHaveLength(0);
   });
 
+  it("rejects a resumed prompts symlink before writing inside or outside the plan", async () => {
+    const input = await request({ stage: "set-bearings", workGoal: "Keep resumed maps contained" });
+    const planDirectory = "docs/plans/2026-07-20-contained-resume";
+    const outside = await realpath(await mkdtemp(join(tmpdir(), "bearing-map-outside-"))); roots.push(outside);
+    await mkdir(join(input.repositoryPath, planDirectory), { recursive: true });
+    await symlink(outside, join(input.repositoryPath, planDirectory, "prompts"));
+    const service = new JourneyService(new StubRunner(completed('BEARING_RESULT {"kind":"question","question":"unused"}')));
+
+    expect(await service.execute({ ...input, planDirectory })).toEqual({ status: "failure", code: "artifact_invalid", tokens: 0 });
+    await expect(readFile(join(outside, "repository-map.md"), "utf8")).rejects.toMatchObject({ code: "ENOENT" });
+    await expect(readFile(join(input.repositoryPath, planDirectory, "plan-spec.md"), "utf8")).rejects.toMatchObject({ code: "ENOENT" });
+  });
+
   it("keeps a bounded safe server-ordered activity trail and resets it for a new stage", async () => {
     const runner: ProcessRunner = {
       executableAvailable: () => true,
