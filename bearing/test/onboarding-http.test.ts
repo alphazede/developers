@@ -545,6 +545,16 @@ describe("repository-first onboarding HTTP", () => {
     await call(port, "POST", "/api/v1/readiness", { provider: "codex", model: "*", reasoning: "medium" }, cookie);
     const status = JSON.parse((await call(port, "GET", "/api/v1/journey/browser-old-0/status", undefined, cookie)).body);
     expect(status.run).toMatchObject({ runId: "browser-old-0", goal: "Remember run 0", stage: "set-bearings", status: "waiting" });
+    expect(status.activityTrail).toHaveLength(3);
+    expect(status.activityTrail.map((entry: { kind: string }) => entry.kind)).toEqual(["stage.started", "repository-map.started", "workspace.ready"]);
+    expect(status.activityTrail.map((entry: { sequence: number }) => entry.sequence)).toEqual([1, 2, 3]);
+    expect(status.activityTrail.every((entry: Record<string, unknown>) => Object.keys(entry).every((key) => ["sequence", "recordedAt", "kind", "status", "tool"].includes(key)))).toBe(true);
+    expect(JSON.stringify(status.activityTrail)).not.toMatch(/Remember run|browser-old|plans|repositoryPath|prompt|args|stderr/i);
+    const other = JSON.parse((await call(port, "GET", "/api/v1/journey/browser-old-8/status", undefined, cookie)).body);
+    expect(other.activityTrail).toHaveLength(3);
+    const listing = JSON.parse((await call(port, "GET", "/api/v1/history", undefined, cookie)).body);
+    expect(listing).not.toHaveProperty("activityTrail");
+    expect(listing.history.every((entry: Record<string, unknown>) => !("activityTrail" in entry))).toBe(true);
   });
 
   it("restarts a safely cancelled phase with owner steering", async () => {

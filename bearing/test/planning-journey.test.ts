@@ -100,9 +100,47 @@ describe("JourneyService", () => {
     const map = await readFile(join(input.repositoryPath, result.artifacts[0]), "utf8");
     expect(map).toContain("`package.json`");
     expect(map).not.toMatch(/API_KEY|not-for-the-map|node_modules|\.bearing|\.env/);
+    expect(service.activityTrail(input.runId).map(({ kind, status }) => [kind, status])).toEqual([
+      ["stage.started", "running"],
+      ["repository-map.started", "running"],
+      ["workspace.ready", "created"],
+    ]);
     const resumed = await service.execute({ ...input, planDirectory: result.artifacts[1].replace(/\/plan-spec\.md$/, "") });
     expect(resumed).toMatchObject({ status: "action", summary: "Bearings resumed locally.", artifacts: result.artifacts, tokens: 0 });
     expect(runner.calls).toHaveLength(0);
+  });
+
+  it("keeps a bounded safe server-ordered activity trail and resets it for a new stage", async () => {
+    const runner: ProcessRunner = {
+      executableAvailable: () => true,
+      run: async (invocation) => {
+        if (invocation.args.includes("review")) {
+          invocation.onActivity?.({ sequence: 999, kind: "turn.completed", status: "completed" });
+          return completed("No findings.");
+        }
+        for (let index = 0; index < 22; index += 1) invocation.onActivity?.({ sequence: 900 + index, kind: "tool.started", status: "running", tool: "Read" });
+        invocation.onActivity?.({ sequence: 999, kind: "turn.completed", status: "sk-abcdefgh", tool: "private/source" } as never);
+        return completed('BEARING_RESULT {"kind":"question","question":"Continue?"}');
+      },
+    };
+    const service = new JourneyService(runner);
+    const input = await request({ priorOwnerQa: [] });
+    expect((await service.execute(input)).status).toBe("question");
+    const first = service.activityTrail(input.runId);
+    expect(first).toHaveLength(20);
+    expect(first.map((entry) => entry.sequence)).toEqual(Array.from({ length: 20 }, (_, index) => index + 5));
+    expect(first.every((entry) => !Number.isNaN(Date.parse(entry.recordedAt)))).toBe(true);
+    expect(JSON.stringify(first)).not.toMatch(/sk-abcdefgh|private|source|900|999/);
+    expect(first.at(-1)).toMatchObject({ kind: "turn.completed" });
+
+    expect((await service.execute({ ...input, stage: "review" })).status).toBe("action");
+    const review = service.activityTrail(input.runId);
+    expect(review[0]).toMatchObject({ sequence: 1, kind: "stage.started", status: "running" });
+    expect(review.at(-1)).toMatchObject({ kind: "turn.completed" });
+    expect(review).toHaveLength(2);
+    expect((await service.execute({ ...input, runId: "journey-isolated", stage: "gather-supplies" })).status).toBe("question");
+    expect(service.activityTrail(input.runId)).toEqual(review);
+    expect(service.activityTrail("journey-isolated")).toHaveLength(20);
   });
 
   it("returns one owner question and builds the skill-specific bounded prompt", async () => {

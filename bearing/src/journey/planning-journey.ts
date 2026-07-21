@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { lstat, readFile, readdir, realpath } from "node:fs/promises";
 import { isAbsolute, posix, relative, resolve } from "node:path";
-import { createAgentAdapter, type ProcessRunner } from "../adapters/adapters.js";
+import { createAgentAdapter, type ProcessActivity, type ProcessRunner } from "../adapters/adapters.js";
 import type { ResolvedRun, Selection } from "../profile/profile.js";
 import { setBearingsWorkspace } from "./repository-map.js";
 
@@ -31,6 +31,13 @@ export interface PlanningReview {
   readonly slices: number;
   readonly assignments: readonly PlanningAssignment[];
 }
+export interface JourneyActivity {
+  readonly sequence: number;
+  readonly recordedAt: string;
+  readonly kind: string;
+  readonly status?: string;
+  readonly tool?: string;
+}
 export type JourneyResult =
   | { readonly status: "question"; readonly question: string; readonly questions?: readonly string[]; readonly tokens: number }
   | { readonly status: "action"; readonly summary: string; readonly artifacts: readonly string[]; readonly tokens: number; readonly planningReview?: PlanningReview }
@@ -59,6 +66,9 @@ const MAX_QA = 64;
 const RESERVED_POST_PLAN_QA = 2;
 const MAX_ARTIFACTS = 32;
 const MAX_ENVELOPE_BYTES = 512 * 1024;
+const MAX_ACTIVITY_TRAIL = 20;
+const SAFE_ACTIVITY_VALUE = /^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$/;
+const SECRET_ACTIVITY = /(?:\b(?:api[_ -]?key|secret|token|password|authorization)\s*[=:]\s*|\bBearer\s+|\bsk-[A-Za-z0-9_-]{8,}|\bAKIA[A-Z0-9]{16})[^\s,;]*/i;
 
 function text(value: unknown, max = MAX_TEXT): value is string {
   return typeof value === "string" && value.length > 0 && value.length <= max && value === value.trim() && !/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/.test(value);
@@ -199,9 +209,32 @@ async function planningReview(root: string, planDirectory: string | undefined, s
 export class JourneyService {
   private readonly active = new Map<string, string>();
   private readonly cancelled = new Set<string>();
+  private readonly activity = new Map<string, { stage: JourneyStage; nextSequence: number; trail: JourneyActivity[] }>();
   constructor(private readonly runner: ProcessRunner) {}
 
   cancel(runId: string): void { this.cancelled.add(runId); const processRunId = this.active.get(runId); if (processRunId) void this.runner.cancel?.(processRunId); }
+
+  activityTrail(runId: string): readonly JourneyActivity[] {
+    return (this.activity.get(runId)?.trail ?? []).map((entry) => ({ ...entry }));
+  }
+
+  private beginStage(runId: string, stage: JourneyStage): void {
+    const current = this.activity.get(runId);
+    if (current?.stage === stage) return;
+    this.activity.set(runId, { stage, nextSequence: 1, trail: [] });
+  }
+
+  private recordActivity(runId: string, stage: JourneyStage, source: Pick<ProcessActivity, "kind" | "status" | "tool">): void {
+    const current = this.activity.get(runId);
+    if (!current || current.stage !== stage) return;
+    const safe = (value: string | undefined): string | undefined => value && SAFE_ACTIVITY_VALUE.test(value) && !SECRET_ACTIVITY.test(value) ? value : undefined;
+    const kind = safe(source.kind);
+    if (!kind) return;
+    const status = safe(source.status), tool = safe(source.tool);
+    current.trail.push({ sequence: current.nextSequence, recordedAt: new Date().toISOString(), kind, ...(status ? { status } : {}), ...(tool ? { tool } : {}) });
+    current.nextSequence += 1;
+    if (current.trail.length > MAX_ACTIVITY_TRAIL) current.trail.shift();
+  }
 
   private async executeOnce(request: JourneyRequest): Promise<JourneyResult> {
     if (!validRequest(request)) return { status: "failure", code: "input_invalid", tokens: 0 };
@@ -215,11 +248,15 @@ export class JourneyService {
     const projected = request.run.roles.find((role) => request.stage === "review" ? role.role === "surveyor" && !role.authority.write : role.role === "crewmate" && role.executor && role.authority.write);
     if (!projected) return { status: "failure", code: "crewmate_unavailable", tokens: 0 };
     if (!sameSelection(request.selection, projected.selection) || request.run.roles.some((role) => !sameSelection(role.selection, request.selection))) return { status: "failure", code: "selection_mismatch", tokens: 0 };
+    this.beginStage(request.runId, request.stage);
+    this.recordActivity(request.runId, request.stage, { kind: "stage.started", status: "running" });
     if (request.stage === "set-bearings") {
       if (this.cancelled.has(request.runId)) return { status: "failure", code: "cancelled", tokens: 0 };
       try {
+        this.recordActivity(request.runId, request.stage, { kind: "repository-map.started", status: "running" });
         const workspace = await setBearingsWorkspace(repositoryPath, request.workGoal, planDirectory);
         if (!workspace || !(await Promise.all(workspace.artifacts.map((artifact) => containedPath(repositoryPath, artifact)))).every(Boolean) || !stageArtifactsValid(request.stage, workspace.artifacts, workspace.directory) || this.cancelled.has(request.runId)) return { status: "failure", code: this.cancelled.has(request.runId) ? "cancelled" : "artifact_invalid", tokens: 0 };
+        this.recordActivity(request.runId, request.stage, { kind: "workspace.ready", status: workspace.resumed ? "resumed" : "created" });
         return { status: "action", summary: workspace.resumed ? "Bearings resumed locally." : "Bearings set locally.", artifacts: workspace.artifacts, tokens: 0 };
       } catch { return { status: "failure", code: "artifact_invalid", tokens: 0 }; }
     }
@@ -232,7 +269,7 @@ export class JourneyService {
     if (request.stage === "review" && request.selection.provider === "codex") {
       const modelArgs = request.selection.model === "*" ? [] : ["-m", request.selection.model];
       let result;
-      try { result = await this.runner.run({ routeId: "codex", executable: "codex", args: ["exec", "review", "--uncommitted", "--json", ...modelArgs, "-c", `model_reasoning_effort="${request.selection.reasoning}"`, "-c", 'approval_policy="never"', "-c", 'sandbox_mode="read-only"', "--ephemeral"], stdin: "", cwd: repositoryPath, timeoutMs: projected.limits.timeoutMs, runId: processRunId }); }
+      try { result = await this.runner.run({ routeId: "codex", executable: "codex", args: ["exec", "review", "--uncommitted", "--json", ...modelArgs, "-c", `model_reasoning_effort="${request.selection.reasoning}"`, "-c", 'approval_policy="never"', "-c", 'sandbox_mode="read-only"', "--ephemeral"], stdin: "", cwd: repositoryPath, timeoutMs: projected.limits.timeoutMs, runId: processRunId, onActivity: (activity) => this.recordActivity(request.runId, request.stage, activity) }); }
       catch { return { status: "failure", code: "adapter_failed", tokens: 0 }; }
       if (!result.usage || !Number.isSafeInteger(result.usage.tokens) || result.usage.tokens < 0) return { status: "failure", code: "adapter_failed", tokens: 0 };
       if (result.usage.tokens > projected.limits.tokenBudget) return { status: "failure", code: "token_budget", tokens: result.usage.tokens };
@@ -246,7 +283,7 @@ export class JourneyService {
       let receipt;
       const questionDiscovery = request.stage === "gather-supplies" && request.gatherMode === "questions";
       const planningSession = request.stage === "gather-supplies" || request.stage === "map-route" || request.stage === "draft-implementation";
-      try { receipt = await adapter.execute({ runId: processRunId, repositoryPath, role: { ...projected, sessionId: planningSession ? projected.sessionId : null, authority: { ...projected.authority, write: questionDiscovery ? false : projected.authority.write, network: request.selection.provider === "agy", externalAction: false }, toolAllow: questionDiscovery ? projected.toolAllow.filter((tool) => !/write|edit/i.test(tool)) : projected.toolAllow }, task: { prompt: taskPrompt }, ...(request.stage === "execute-expedition" ? { allowSubagents: true } : {}) }); }
+      try { receipt = await adapter.execute({ runId: processRunId, repositoryPath, role: { ...projected, sessionId: planningSession ? projected.sessionId : null, authority: { ...projected.authority, write: questionDiscovery ? false : projected.authority.write, network: request.selection.provider === "agy", externalAction: false }, toolAllow: questionDiscovery ? projected.toolAllow.filter((tool) => !/write|edit/i.test(tool)) : projected.toolAllow }, task: { prompt: taskPrompt }, onActivity: (activity) => this.recordActivity(request.runId, request.stage, activity), ...(request.stage === "execute-expedition" ? { allowSubagents: true } : {}) }); }
       catch { return { status: "failure", code: "adapter_failed", tokens: 0 }; }
       if (receipt.status !== "completed") return { status: "failure", code: receipt.failure === "token_budget" ? "token_budget" : receipt.failure === "cancelled" ? "cancelled" : "adapter_failed", tokens: receipt.usage.tokens };
       tokens = receipt.usage.tokens;
