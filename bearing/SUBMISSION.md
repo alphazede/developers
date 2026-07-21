@@ -42,23 +42,27 @@ Use one real recorded journey. Honest time-compression may remove waiting, but c
 | Evidence | Current local result |
 |---|---|
 | `pnpm typecheck` | PASS. |
-| `pnpm test` | PASS: 25 files, 267 tests. |
-| `pnpm test:integration` | PASS: 5 files, 57 tests. |
+| `pnpm test` | PASS: 26 files, 315 tests. |
+| `pnpm test:integration` | PASS: 5 files, 64 tests. |
 | `pnpm build` | PASS. |
-| `npm pack --dry-run --json` | PASS: 57 files, limited to allowlisted content plus npm-required `package.json`; no TypeScript source, tests, private plans, transcripts, secrets, or unintended generated files observed. |
-| `pnpm eval:native` | PASS: 336 synthetic cells created and cleaned; machinery validation only, not provider evidence. |
+| `pnpm audit --audit-level=moderate` | PASS: no known vulnerabilities. |
+| Semgrep (`p/owasp-top-ten`, `p/github-actions`) | PASS: 103 rules across 32 tracked source, manifest, and workflow files; zero findings. |
+| `npm pack --dry-run --json` | PASS: 60 files and an 11.7 MB tarball, limited to allowlisted content plus npm-required `package.json`; no TypeScript source, tests, private plans, transcripts, secrets, or unintended generated files observed. |
+| Clean tarball install and installed CLI smoke | PASS: installed `@alphazede/bearing@0.1.0` into an empty npm project, launched the npm-created `bearing` executable, and served the Bearing page on loopback. |
+| `pnpm eval:native` | PASS: 504 synthetic cells created and cleaned; machinery validation only, not provider evidence. |
 | Real browser journey | Selected-harness stages, durable owner Q&A, retryable loading/failure states, crew/cadence choice, native review boundary, and contained artifact serving are implemented and covered by focused integration tests. |
 | Three fictional workflows | Deterministic provider-disabled projections with local evidence reports. |
 
 ## Submission provenance
 
 - Frozen pre-submission baseline: `6a7b892969c16c75dbe6a5e810e1d19d05323f0e`
+- Release-candidate implementation commit: `18a6e1a64847836625104203db510cad8e3861e7`
 - Qualifying development-session reference: retained locally, not published
-- Dated submission commit SHA: **PENDING**
+- Final submission/release tag commit: **PENDING MERGE AND TAG**
 - Hosted CI URLs: **PENDING**
 - `/feedback` Session ID: **PENDING**
-- Real four-route evaluation: **PENDING**
+- Real six-route provider evaluation: **PENDING**
 - Scanned SkillsBench panel: **PENDING**
 - Owner video URL: **PENDING**
 
-The native 336-cell result is synthetic machinery validation. It is not provider evidence and cannot authorize skill changes. No SkillsBench execution, hosted CI result, publication, deployment, or completed owner video evidence is claimed in this packet.
+The native 504-cell result is synthetic machinery validation. It is not provider evidence and cannot authorize skill changes. No SkillsBench execution, hosted CI result, publication, deployment, or completed owner video evidence is claimed in this packet.

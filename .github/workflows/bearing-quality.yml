@@ -5,10 +5,12 @@ on:
     paths:
       - 'bearing/**'
       - '.github/workflows/bearing-quality.yml'
+      - '.github/workflows/bearing-publish.yml'
   pull_request:
     paths:
       - 'bearing/**'
       - '.github/workflows/bearing-quality.yml'
+      - '.github/workflows/bearing-publish.yml'
 
 permissions:
   contents: read

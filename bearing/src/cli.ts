@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { createServer, type Server } from "node:http";
 import { spawn, type ChildProcess } from "node:child_process";
+import { realpathSync } from "node:fs";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { NodeProcessRunner } from "./adapters/process-runner.js";
 import { REASONING_LEVELS } from "./onboarding/readiness.js";
@@ -241,6 +242,13 @@ function main(argv: string[]): void {
   });
 }
 
-const invokedDirectly =
-  import.meta.url === pathToFileURL(process.argv[1] ?? "").href;
-if (invokedDirectly) main(process.argv.slice(2));
+export function isDirectInvocation(executablePath = process.argv[1]): boolean {
+  if (!executablePath) return false;
+  try {
+    return import.meta.url === pathToFileURL(realpathSync(executablePath)).href;
+  } catch {
+    return false;
+  }
+}
+
+if (isDirectInvocation()) main(process.argv.slice(2));

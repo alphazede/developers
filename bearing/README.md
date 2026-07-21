@@ -11,19 +11,45 @@ tags:
 
 Bearing is a local browser control room for planning agent work, recording owner decisions, and presenting evidence about what was completed, corrected, blocked, or left unperformed. It is a Work & Productivity hackathon project for founders and small teams that need bounded asynchronous work without surrendering approval or review authority.
 
-This is a `0.1.0` pre-release. It is a local demonstration package, not a hosted service, published npm package, deployed product, or claim that any provider route is ready on your machine.
+This is the initial public `0.1.0` release. It is a working local tool, not a hosted service or a claim that every provider route is ready on your machine.
 
-## Install, build, and start locally
+## Install and start
 
-Bearing requires Node.js 22 or newer. From this package directory:
+Bearing requires Node.js 22 or newer. After the npm release is available, either install the CLI globally or run it without a permanent installation:
 
 ```sh
-corepack pnpm install --frozen-lockfile
+npm install --global @alphazede/bearing
+bearing start
+```
+
+```sh
+npx --yes @alphazede/bearing start
+```
+
+Global installation supports all start modes:
+
+```sh
+bearing start --no-open
+bearing start --detach
+```
+
+`npx` supports the same start modes:
+
+```sh
+npx --yes @alphazede/bearing start --no-open
+npx --yes @alphazede/bearing start --detach
+```
+
+To run from a source checkout, use the `bearing/` package directory and invoke `node dist/cli.js` directly:
+
+```sh
+corepack enable
+pnpm install --frozen-lockfile
 pnpm build
 node dist/cli.js start
 ```
 
-`start` binds an ephemeral port on `127.0.0.1`, prints the local URL, and opens the default browser. To print the URL without opening a browser:
+The global and `npx` commands above invoke the installed `bearing` executable; source-checkout commands invoke `node dist/cli.js`. `start` binds an ephemeral port on `127.0.0.1`, prints the local URL, and opens the default browser. For a source checkout, print the URL without opening a browser:
 
 ```sh
 node dist/cli.js start --no-open
@@ -72,7 +98,7 @@ The main browser flow uses the selected, readiness-verified harness; it is not a
 2. **Gather Supplies** asks the selected agent to inspect the repository once and return all important owner questions. Bearing presents them one at a time without another model call, appends **Anything else?**, then sends the complete answer set back in one writing call. Choose **End questions** at any point to write from the answers already collected and explicitly recorded assumptions.
 3. **Map the Route** produces the design, SEIT, and self-contained review baseline, then Bearing drafts `implementation.md`.
 4. **Review your route** verifies each slice's role, selected model route, and reasoning level. The regenerated review HTML embeds the complete planning package; every source artifact also opens through a contained authenticated link. The owner can request changes or approve the route, and implementation cannot start before approval.
-5. The owner chooses **Explorer** or **Expedition** plus Surveyor review cadence. Explorer uses fewer sessions; Expedition enables bounded subagents for parallel lanes.
+5. The owner chooses **Explorer** or **Expedition**, Surveyor review cadence, and whether clean merged temporary worktrees should be removed automatically. By default, cleanup removes only clean, proven-merged temporary worktrees and their corresponding proven-merged temporary branches; dirty, blocked, failed, or unmerged lanes are retained for recovery. Bearing has no arbitrary repository delete controls.
 6. The selected harness executes the approved route. Bearing then invokes native review where supported, with a read-only Surveyor fallback, and presents cumulative validated artifacts.
 
 While a real agent call is pending, Bearing shows the stable public phase name, an indeterminate moving trail, honest helper text, elapsed time, and only artifacts already validated by completed results. It does not invent percentages, activity details, or an ETA. Failures remain retryable and do not become success claims.
@@ -136,7 +162,7 @@ The real journey presents contained authenticated links for validated planning M
 
 Bearing's evaluator uses matched control/treatment arms, exact route identity, three trials per case/arm/route, retained failures, and route-level verdicts that fail closed on missing, duplicate, drifting, or regressing cells.
 
-The current native characterization command creates and cleans **336 synthetic local cells** across 14 positive/negative cases, two arms, four route descriptors, and three trials. Its passing verdict validates matrix and aggregation machinery only: it is not provider evidence and cannot authorize skill changes. The separate pinned eight-task SkillsBench v1.1 ingestion path requires a scanned external checkout and complete attested provider results; that panel has not been executed or verified for this submission. A real four-route evaluation is also pending.
+The current native characterization command creates and cleans **504 synthetic local cells** across 14 positive/negative cases, two arms, six route descriptors, and three trials. Its passing verdict validates matrix and aggregation machinery only: it is not provider evidence and cannot authorize skill changes. The separate pinned eight-task SkillsBench v1.1 ingestion path requires a scanned external checkout and complete attested provider results; that panel has not been executed or verified for this submission. A real six-route provider evaluation is also pending.
 
 ## Provenance of the work
 
@@ -145,7 +171,7 @@ AlphaZede's underlying workflow skills, planning conventions, and bounded-agent 
 ## Platform assumptions and limitations
 
 - Node.js 22+ and a writable local filesystem are required. `package.json` pins pnpm 10.33.0.
-- Browser opening uses `open` on macOS, `cmd /c start` on Windows, and `xdg-open` on other platforms; use `--no-open` when that integration is unavailable. Cross-platform packaging is implemented but not certified here.
+- Browser opening uses `open` on macOS, `cmd /c start` on Windows, and `xdg-open` on other platforms; use `--no-open` when that integration is unavailable. Publishing the npm package does not require Windows or macOS code signing. Native Windows, macOS, Linux, and WSL smoke tests remain release certification work.
 - The server is single-user and loopback-only. There are no hosted accounts, remote telemetry, production deployment, support SLA, or multi-user authorization boundary.
 - The native UI is intentionally small. The real staged journey launches the selected harness, but it does not provide a general-purpose terminal, arbitrary workflow editor, full-state export, or delete controls.
 - Tutorial and showcase providers are intentionally disabled; they remain deterministic fixtures. Real journey readiness and effective isolation depend on the selected local harness and its attestation, and may be unavailable.

@@ -3,8 +3,12 @@ import { get } from "node:http";
 import type { Server } from "node:http";
 import { EventEmitter } from "node:events";
 import type { ChildProcess } from "node:child_process";
+import { mkdtemp, rm, symlink } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import type { LauncherDeps } from "../src/cli";
-import { defaultOpenBrowser, parseStartArgs, run } from "../src/cli";
+import { defaultOpenBrowser, isDirectInvocation, parseStartArgs, run } from "../src/cli";
 
 function newCtx() {
   const out: string[] = [];
@@ -25,11 +29,25 @@ function newCtx() {
 }
 
 const servers: Server[] = [];
+const roots: string[] = [];
 afterEach(async () => {
   while (servers.length) {
     const s = servers.pop()!;
     await new Promise<void>((resolve) => s.close(() => resolve()));
   }
+  await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })));
+});
+
+describe("direct invocation", () => {
+  it("recognizes a symlinked executable target but not an unrelated path", async () => {
+    const root = await mkdtemp(join(tmpdir(), "bearing-cli-"));
+    roots.push(root);
+    const executable = join(root, "bearing");
+    await symlink(fileURLToPath(new URL("../src/cli.ts", import.meta.url)), executable);
+
+    expect(isDirectInvocation(executable)).toBe(true);
+    expect(isDirectInvocation(fileURLToPath(import.meta.url))).toBe(false);
+  });
 });
 
 describe("parseStartArgs", () => {
