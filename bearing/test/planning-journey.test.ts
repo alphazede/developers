@@ -16,6 +16,13 @@ class StubRunner implements ProcessRunner {
   async run(invocation: ProcessInvocation): Promise<ProcessResult> { this.calls.push(invocation); return this.result; }
 }
 
+class QueueRunner implements ProcessRunner {
+  readonly calls: ProcessInvocation[] = [];
+  constructor(private readonly results: readonly ProcessResult[]) {}
+  executableAvailable(): boolean { return true; }
+  async run(invocation: ProcessInvocation): Promise<ProcessResult> { this.calls.push(invocation); return this.results[this.calls.length - 1] ?? { exitCode: 1 }; }
+}
+
 function resolved(selection: Selection): ResolvedRun {
   const parsed = parseAgentProfile({ schemaVersion: 1, agentRef: "bearing/journey", profileRef: "bearing/journey-v1", credentialAccountRef: "environment", roles: ["navigator", "explorer", "crewmate", "surveyor"], toolAllow: ["read", "search", "write"], toolDeny: ["external-action"], authority: { read: true, write: true, network: true, workspace: true, externalAction: false }, enabledSkills: [], context: "off", systemPromptRef: "bearing/journey", limits: { timeoutMs: 1000, maxTurns: 4, maxTools: 10, maxRetries: 1, maxConcurrency: 1, maxDelegation: 1, tokenBudget: 500_000 }, session: { persistence: "persistent", resume: "allowed", fork: "allowed" }, structuredEvents: true, fallbackEnabled: false, isolation: "off", selection });
   if (!parsed.ok) throw new Error(parsed.code);
@@ -119,6 +126,25 @@ describe("JourneyService", () => {
     expect(runner.calls[0].args).not.toContain("workspace-write");
     expect(runner.calls[0].stdin).toMatch(/return every important unresolved owner question together/i);
     expect(runner.calls[0].stdin).toMatch(/Do not create or modify files during question discovery/i);
+  });
+
+  it("reuses only the matching Codex planning thread", async () => {
+    const thread = "123e4567-e89b-12d3-a456-426614174000";
+    const question = completed('BEARING_RESULT {"kind":"questions","questions":["Continue?"]}');
+    const runner = new QueueRunner([{ ...question, providerSessionId: thread }, question, question, question]);
+    const service = new JourneyService(runner);
+    const input = await request({ gatherMode: "questions", priorOwnerQa: [] });
+    expect((await service.execute(input)).status).toBe("question");
+    expect((await service.execute({ ...input, runId: "journey-2" })).status).toBe("question");
+    const changedSelection = { provider: "codex", model: "gpt-5.6-terra", reasoning: "medium" } as const;
+    expect((await service.execute({ ...input, runId: "journey-3", selection: changedSelection, run: resolved(changedSelection) })).status).toBe("question");
+    const otherRoot = await realpath(await mkdtemp(join(tmpdir(), "bearing-journey-other-"))); roots.push(otherRoot);
+    expect((await service.execute({ ...input, runId: "journey-4", repositoryPath: otherRoot })).status).toBe("question");
+    expect(runner.calls[0]?.args).not.toContain("resume");
+    expect(runner.calls[1]?.args).toEqual(expect.arrayContaining(["exec", "resume", thread]));
+    expect(runner.calls[2]?.args).not.toContain("resume");
+    expect(runner.calls[3]?.args).not.toContain("resume");
+    expect(runner.calls[0]?.args).toContain("read-only");
   });
 
   it("accepts a large valid question batch and reserves capacity for prior answers and the final check", async () => {

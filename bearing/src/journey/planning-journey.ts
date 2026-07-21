@@ -239,7 +239,8 @@ export class JourneyService {
       if (!adapter) return { status: "failure", code: "crewmate_unavailable", tokens: 0 };
       let receipt;
       const questionDiscovery = request.stage === "gather-supplies" && request.gatherMode === "questions";
-      try { receipt = await adapter.execute({ runId: processRunId, repositoryPath, role: { ...projected, sessionId: null, authority: { ...projected.authority, write: questionDiscovery ? false : projected.authority.write, network: request.selection.provider === "agy", externalAction: false }, toolAllow: questionDiscovery ? projected.toolAllow.filter((tool) => !/write|edit/i.test(tool)) : projected.toolAllow }, task: { prompt: taskPrompt }, ...(request.stage === "execute-expedition" ? { allowSubagents: true } : {}) }); }
+      const planningSession = request.stage === "gather-supplies" || request.stage === "map-route" || request.stage === "draft-implementation";
+      try { receipt = await adapter.execute({ runId: processRunId, repositoryPath, role: { ...projected, sessionId: planningSession ? projected.sessionId : null, authority: { ...projected.authority, write: questionDiscovery ? false : projected.authority.write, network: request.selection.provider === "agy", externalAction: false }, toolAllow: questionDiscovery ? projected.toolAllow.filter((tool) => !/write|edit/i.test(tool)) : projected.toolAllow }, task: { prompt: taskPrompt }, ...(request.stage === "execute-expedition" ? { allowSubagents: true } : {}) }); }
       catch { return { status: "failure", code: "adapter_failed", tokens: 0 }; }
       if (receipt.status !== "completed") return { status: "failure", code: receipt.failure === "token_budget" ? "token_budget" : receipt.failure === "cancelled" ? "cancelled" : "adapter_failed", tokens: receipt.usage.tokens };
       tokens = receipt.usage.tokens;
