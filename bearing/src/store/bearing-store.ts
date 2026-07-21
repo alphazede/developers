@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from "node:crypto";
 import type { Dirent } from "node:fs";
-import { mkdir, open, readFile, readdir, rename, stat } from "node:fs/promises";
+import { mkdir, open, readFile, readdir, rename, rm, stat } from "node:fs/promises";
 import { join, resolve } from "node:path";
 
 import {
@@ -155,6 +155,18 @@ export class BearingStore {
       return { runId: entry.name, title: created.payload.title, goal: created.payload.goal, updatedAt: state.events.at(-1)?.recordedAt ?? created.recordedAt, ...(state.pendingDecision ? { pendingQuestion: state.pendingDecision.question } : {}), ...(answered ? { checkpointAnswer: answered.payload.answer as string } : {}), ...(state.journeyCheckpoint ? { checkpoint: state.journeyCheckpoint } : {}) } satisfies StoredRunSummary;
     }));
     return summaries.filter((entry): entry is StoredRunSummary => entry !== undefined).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)).slice(0, Math.max(0, Math.min(limit, 50)));
+  }
+
+  async delete(runId: string): Promise<void> {
+    this.assertRunId(runId);
+    await this.serialized(runId, () => rm(this.runDir(runId), { recursive: true, force: true }));
+  }
+
+  async clear(): Promise<void> {
+    let entries: Dirent[];
+    try { entries = await readdir(this.runsRoot, { withFileTypes: true }); }
+    catch (error) { if (isMissing(error)) return; throw error; }
+    await Promise.all(entries.filter((entry) => entry.isDirectory() && RUN_ID_RE.test(entry.name)).map((entry) => this.delete(entry.name)));
   }
 
   private async applyUnlocked(command: CommandEnvelopeV1): Promise<StoreApplyResult> {

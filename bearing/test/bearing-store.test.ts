@@ -132,6 +132,17 @@ describe("restart and serialization", () => {
     expect(await store(dir).list()).toEqual([expect.objectContaining({ runId: RUN, title: "Title", goal: "Goal", updatedAt: "2026-07-19T12:00:00.000Z" })]);
   });
 
+  it("deletes one history entry or clears all entries", async () => {
+    const dir = await root();
+    const durable = store(dir);
+    await durable.apply(command("create-1", "createWorkRequest", 0));
+    await durable.apply({ ...command("create-2", "createWorkRequest", 0), runId: "run-2" });
+    await durable.delete(RUN);
+    expect((await durable.list()).map((entry) => entry.runId)).toEqual(["run-2"]);
+    await durable.clear();
+    expect(await durable.list()).toEqual([]);
+  });
+
   it("restores idempotency, conflicts, and pending decisions", async () => {
     const dir = await root();
     const first = store(dir);

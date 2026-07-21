@@ -102,6 +102,30 @@ describe("repository-first onboarding HTTP", () => {
     expect((await call(port, "GET", "/api/v1/git-diff?path=..%2Fsecret", undefined, cookie)).status).toBe(404);
   });
 
+  it("deletes selected or all repository history without deleting generated files", async () => {
+    const root = await mkdtemp(join(tmpdir(), "bearing-history-delete-")); roots.push(root);
+    const artifact = join(root, "docs", "plans", "keep.md");
+    await mkdir(join(root, "docs", "plans"), { recursive: true });
+    await writeFile(artifact, "keep\n");
+    const server = createServer(); await new Promise<void>((resolve) => server.listen({ host: "127.0.0.1", port: 0 }, resolve)); servers.push(server);
+    const address = server.address(); if (!address || typeof address === "string") throw new Error("missing address");
+    const port = String(address.port), session = new LocalSessionService(`127.0.0.1:${port}`), cookie = await authenticate(port, session), origin = `http://127.0.0.1:${port}`;
+    server.on("request", createRequestHandler(session));
+    await call(port, "POST", "/api/v1/repository", { path: root }, cookie);
+    await postOwnerCommand(port, cookie, "history-one", "createWorkRequest", { title: "One", goal: "One" });
+    await postOwnerCommand(port, cookie, "history-two", "createWorkRequest", { title: "Two", goal: "Two" });
+
+    expect((await call(port, "DELETE", "/api/v1/history/history-one", undefined, undefined, { origin })).status).toBe(401);
+    expect((await call(port, "DELETE", "/api/v1/history/history-one", undefined, cookie, { origin: "https://evil.example" })).status).toBe(403);
+    expect((await call(port, "DELETE", "/api/v1/history/history-one", undefined, cookie, { origin })).status).toBe(200);
+    expect(JSON.parse((await call(port, "GET", "/api/v1/history", undefined, cookie)).body).history.map((entry: { runId: string }) => entry.runId)).toEqual(["history-two"]);
+    await access(artifact);
+
+    expect((await call(port, "DELETE", "/api/v1/history", undefined, cookie, { origin })).status).toBe(200);
+    expect(JSON.parse((await call(port, "GET", "/api/v1/history", undefined, cookie)).body).history).toEqual([]);
+    await access(artifact);
+  });
+
   it("serves authenticated repository options and rejects cross-origin reads", async () => {
     const root = await mkdtemp(join(tmpdir(), "bearing-options-")); roots.push(root);
     const choice = { options: async () => ({ platform: "linux" as const, linuxDistro: "Test Linux", current: { path: root, source: "cwd" as const }, browse: { available: false } }), resolve: async () => ({ result: "selected" as const, candidate: root, source: "cwd" as const }) };
@@ -356,6 +380,8 @@ describe("repository-first onboarding HTTP", () => {
     await started;
     const history = JSON.parse((await call(port, "GET", "/api/v1/history", undefined, cookie)).body);
     expect(history.history).toEqual([expect.objectContaining({ runId: "browser-busy", goal: "Hold the route", status: "running", busy: true })]);
+    expect((await call(port, "DELETE", "/api/v1/history/browser-busy", undefined, cookie, { origin: `http://127.0.0.1:${port}` })).status).toBe(409);
+    expect((await call(port, "DELETE", "/api/v1/history", undefined, cookie, { origin: `http://127.0.0.1:${port}` })).status).toBe(409);
     const blocked = await call(port, "POST", "/api/v1/repository", { path: root }, cookie);
     expect(blocked.status).toBe(409);
     expect(JSON.parse(blocked.body)).toEqual({ status: "blocked", code: "journey_in_progress" });

@@ -362,6 +362,10 @@ describe("GET / native page and fragment secrecy", () => {
     expect(r.body).toContain('changeRepository.textContent = activeJourney ? "Return to journey" : "Keep current"');
     expect(r.body).toContain('document.getElementById("launch-bearing").disabled = false;');
     expect(r.body).toContain('history-button');
+    expect(r.body).toContain('id="clear-history"');
+    expect(r.body).toContain('remove.textContent = "Delete"');
+    expect(r.body).toContain('method: "DELETE"');
+    expect(r.body).toContain("Generated files will stay in the repository.");
     expect(r.body).toContain('input.placeholder = "Steer this phase');
     expect(r.body).toContain('steer.textContent = "Steer"');
     expect(r.body).toContain('stop.textContent = "Stop"');
