@@ -271,9 +271,11 @@ export class JourneyService {
       let result;
       try { result = await this.runner.run({ routeId: "codex", executable: "codex", args: ["exec", "review", "--uncommitted", "--json", ...modelArgs, "-c", `model_reasoning_effort="${request.selection.reasoning}"`, "-c", 'approval_policy="never"', "-c", 'sandbox_mode="read-only"', "--ephemeral"], stdin: "", cwd: repositoryPath, timeoutMs: projected.limits.timeoutMs, runId: processRunId, onActivity: (activity) => this.recordActivity(request.runId, request.stage, activity) }); }
       catch { return { status: "failure", code: "adapter_failed", tokens: 0 }; }
+      const reportedTokens = result.usage && Number.isSafeInteger(result.usage.tokens) && result.usage.tokens >= 0 ? result.usage.tokens : 0;
+      if (this.cancelled.has(request.runId) && result.unknownSideEffect) return { status: "failure", code: "interrupted", tokens: reportedTokens };
+      if (result.cancelled) return { status: "failure", code: "cancelled", tokens: reportedTokens };
       if (!result.usage || !Number.isSafeInteger(result.usage.tokens) || result.usage.tokens < 0) return { status: "failure", code: "adapter_failed", tokens: 0 };
       if (result.usage.tokens > projected.limits.tokenBudget) return { status: "failure", code: "token_budget", tokens: result.usage.tokens };
-      if (result.cancelled) return { status: "failure", code: "cancelled", tokens: result.usage.tokens };
       if (result.exitCode !== 0 || result.timedOut || result.unknownSideEffect || !Array.isArray(result.events)) return { status: "failure", code: "adapter_failed", tokens: result.usage.tokens };
       tokens = result.usage.tokens;
       events = result.events;
@@ -285,7 +287,7 @@ export class JourneyService {
       const planningSession = request.stage === "gather-supplies" || request.stage === "map-route" || request.stage === "draft-implementation";
       try { receipt = await adapter.execute({ runId: processRunId, repositoryPath, role: { ...projected, sessionId: planningSession ? projected.sessionId : null, authority: { ...projected.authority, write: questionDiscovery ? false : projected.authority.write, network: request.selection.provider === "agy", externalAction: false }, toolAllow: questionDiscovery ? projected.toolAllow.filter((tool) => !/write|edit/i.test(tool)) : projected.toolAllow }, task: { prompt: taskPrompt }, onActivity: (activity) => this.recordActivity(request.runId, request.stage, activity), ...(request.stage === "execute-expedition" ? { allowSubagents: true } : {}) }); }
       catch { return { status: "failure", code: "adapter_failed", tokens: 0 }; }
-      if (receipt.status !== "completed") return { status: "failure", code: receipt.failure === "token_budget" ? "token_budget" : receipt.failure === "cancelled" ? "cancelled" : "adapter_failed", tokens: receipt.usage.tokens };
+      if (receipt.status !== "completed") return { status: "failure", code: this.cancelled.has(request.runId) && (receipt.status === "blocked_reconcile" || receipt.failure === "unknown_side_effect") ? "interrupted" : receipt.failure === "token_budget" ? "token_budget" : receipt.failure === "cancelled" ? "cancelled" : "adapter_failed", tokens: receipt.usage.tokens };
       tokens = receipt.usage.tokens;
       events = receipt.events;
     }

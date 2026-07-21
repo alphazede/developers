@@ -78,6 +78,39 @@ describe("JourneyService", () => {
     expect(await service.execute(input)).toEqual({ status: "failure", code: "cancelled", tokens: 5 });
   });
 
+  it("marks owner cancellation with uncertain side effects as interrupted only", async () => {
+    const input = await request();
+    let service!: JourneyService;
+    const uncertain: ProcessRunner = {
+      executableAvailable: () => true,
+      run: async (invocation) => {
+        invocation.onActivity?.({ sequence: 1, kind: "tool.started", status: "running", tool: "Write" });
+        service.cancel(input.runId);
+        return { unknownSideEffect: true };
+      },
+    };
+    service = new JourneyService(uncertain);
+    expect(await service.execute(input)).toEqual({ status: "failure", code: "interrupted", tokens: 0 });
+
+    const cleanInput = await request({ runId: "clean-cancel" });
+    let cleanService!: JourneyService;
+    const clean: ProcessRunner = {
+      executableAvailable: () => true,
+      run: async () => { cleanService.cancel(cleanInput.runId); return { cancelled: true }; },
+    };
+    cleanService = new JourneyService(clean);
+    expect(await cleanService.execute(cleanInput)).toEqual({ status: "failure", code: "cancelled", tokens: 0 });
+
+    const nativeInput = await request({ runId: "native-interrupted", stage: "review" });
+    let nativeService!: JourneyService;
+    const native: ProcessRunner = { executableAvailable: () => true, run: async () => { nativeService.cancel(nativeInput.runId); return { unknownSideEffect: true }; } };
+    nativeService = new JourneyService(native);
+    expect(await nativeService.execute(nativeInput)).toEqual({ status: "failure", code: "interrupted", tokens: 0 });
+
+    const ordinary = new JourneyService(new StubRunner({ unknownSideEffect: true }));
+    expect(await ordinary.execute(await request())).toEqual({ status: "failure", code: "adapter_failed", tokens: 0 });
+  });
+
   it("sets bearings locally once, with a bounded reusable map and no process call", async () => {
     const input = await request({ stage: "set-bearings", workGoal: "Add safe account import" });
     await mkdir(join(input.repositoryPath, "node_modules", "hidden"), { recursive: true });
