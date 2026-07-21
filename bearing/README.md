@@ -31,6 +31,15 @@ node dist/cli.js start --no-open
 
 Keep that terminal running while using the control room. The URL contains a one-time capability in its fragment; do not share it.
 
+## Codex plugin
+
+The packaged repo-local plugin provides an explicit `/bearing` entrypoint. In a
+Codex session where this package is available, use `/bearing` to ask Codex to
+start the existing local Bearing CLI from the current repository, keep it
+running, report its loopback URL, and begin the planning-first journey. It does
+not launch automatically, install software, publish a marketplace entry, or
+change Codex native collaboration behavior.
+
 ## First launch
 
 1. Choose one absolute path to a writable local repository. Bearing initializes or resumes `.bearing/` inside that repository; credentials remain outside it.

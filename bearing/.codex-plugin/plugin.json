@@ -1,0 +1,23 @@
+{
+  "name": "bearing",
+  "version": "0.1.0",
+  "description": "Launch Bearing's local planning-first repository workflow.",
+  "author": {
+    "name": "AlphaZede",
+    "url": "https://github.com/alphazede"
+  },
+  "homepage": "https://github.com/alphazede/developers/tree/main/bearing",
+  "repository": "https://github.com/alphazede/developers",
+  "license": "MIT",
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Bearing",
+    "shortDescription": "Local planning-first repository workflow.",
+    "longDescription": "Launch Bearing from the current repository and begin its planning-first journey.",
+    "developerName": "AlphaZede",
+    "category": "Developer Tools",
+    "capabilities": ["Local workflow", "Planning"],
+    "defaultPrompt": ["Start Bearing for this repository's planning journey."],
+    "brandColor": "#2563EB"
+  }
+}

@@ -20,7 +20,10 @@
   "files": [
     "dist/",
     "assets/",
+    ".codex-plugin/",
+    "commands/",
     "fixtures/fictional-b2b/",
+    "skills/",
     "README.md",
     "LICENSE",
     "SUBMISSION.md"

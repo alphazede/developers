@@ -35,6 +35,7 @@ coverage:
     - AGENTS.md
     - README.md
     - bearing/README.md
+    - bearing/skills/bearing/SKILL.md
     - bran/README.md
   legacy_docs:
     - az-sports-dev/AGENTS.md
