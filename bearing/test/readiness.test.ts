@@ -1,4 +1,7 @@
 import { describe, expect, it } from "vitest";
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { ReadinessService } from "../src/onboarding/readiness.js";
 
 describe("readiness service", () => {
@@ -11,7 +14,8 @@ describe("readiness service", () => {
     expect(checks).toBe(6);
   });
 
-  it("discovers models from the selected repository", async () => {
+  it("discovers models only for the selected route and reuses its repository cache", async () => {
+    const repository = await mkdtemp(join(tmpdir(), "bearing-readiness-"));
     const repositories: string[] = [];
     const inspection = {
       executableAvailable: () => true,
@@ -21,9 +25,14 @@ describe("readiness service", () => {
       },
     };
     const service = new ReadinessService(inspection);
-    expect(service.inspect("/selected/repository")).toHaveLength(6);
-    expect((await service.check({ provider: "opencode", model: "repo/model", reasoning: "high" }, "/selected/repository")).status).toBe("detected");
-    expect(repositories).toEqual(Array(7).fill("/selected/repository"));
+    try {
+      expect(service.inspect(repository)).toHaveLength(6);
+      expect(repositories).toEqual([]);
+      expect(service.discover("opencode", repository)).toMatchObject([{ model: "repo/model" }]);
+      expect(repositories).toEqual([repository]);
+      expect((await service.check({ provider: "opencode", model: "repo/model", reasoning: "high" }, repository)).status).toBe("detected");
+      expect(repositories).toEqual([repository]);
+    } finally { await rm(repository, { recursive: true, force: true }); }
   });
 
   it("uses one shared selection across distinct roles and distinguishes detected from verified", async () => {

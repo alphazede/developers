@@ -248,6 +248,8 @@ describe("GET / native page and fragment secrecy", () => {
     expect(r.body).toContain("main{padding:28px 16px 56px}");
     expect(r.body).toContain("/api/v1/repository");
     expect(r.body).toContain("/api/v1/routes");
+    expect(r.body).toContain('"/api/v1/routes/" + encodeURIComponent(route.id) + "/models"');
+    expect(r.body).toContain("Loading model choices for ");
     expect(r.body).toContain('id="detected-routes"');
     expect(r.body).toContain('Choose a discovered model and a reasoning level');
     expect(r.body).toContain('id="model-choice"');

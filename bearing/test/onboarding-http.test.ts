@@ -200,6 +200,34 @@ describe("repository-first onboarding HTTP", () => {
     expect(readiness.body.length).toBeLessThan(16_384);
   });
 
+  it("discovers one selected route on demand and reuses its cached choices", async () => {
+    const root = await mkdtemp(join(tmpdir(), "bearing-route-models-")); roots.push(root);
+    const server = createServer(); await new Promise<void>((resolve) => server.listen({ host: "127.0.0.1", port: 0 }, resolve)); servers.push(server);
+    const address = server.address(); if (!address || typeof address === "string") throw new Error("missing address");
+    const port = String(address.port), session = new LocalSessionService(`127.0.0.1:${port}`), cookie = await authenticate(port, session);
+    let modelOptions = 0;
+    server.on("request", createRequestHandler(session, undefined, { routeInspection: {
+      executableAvailable: () => true,
+      modelOptions: () => { modelOptions += 1; return [{ model: "gpt-5.6-terra", label: "ignored", reasoningLevels: ["medium"], defaultReasoning: "medium" }]; },
+    } }));
+    expect((await call(port, "GET", "/api/v1/routes/codex/models", undefined, cookie)).status).toBe(409);
+    await call(port, "POST", "/api/v1/repository", { path: root }, cookie);
+    const routes = await call(port, "GET", "/api/v1/routes", undefined, cookie);
+    expect(routes.status).toBe(200);
+    expect(JSON.parse(routes.body).routes[0]).not.toHaveProperty("models");
+    expect(modelOptions).toBe(0);
+    expect((await call(port, "GET", "/api/v1/routes/codex/models")).status).toBe(401);
+    expect((await call(port, "GET", "/api/v1/routes/codex/models?x=1", undefined, cookie)).status).toBe(404);
+    expect((await call(port, "GET", "/api/v1/routes/CODEX/models", undefined, cookie)).status).toBe(404);
+    expect((await call(port, "GET", "/api/v1/routes/unknown/models", undefined, cookie)).status).toBe(404);
+    const models = await call(port, "GET", "/api/v1/routes/codex/models", undefined, cookie);
+    expect(models.status).toBe(200);
+    expect(JSON.parse(models.body).models).toEqual([{ model: "gpt-5.6-terra", label: "gpt-5.6-terra", reasoningLevels: ["medium"], defaultReasoning: "medium" }]);
+    expect(modelOptions).toBe(1);
+    expect((await call(port, "POST", "/api/v1/readiness", { provider: "codex", model: "gpt-5.6-terra", reasoning: "medium" }, cookie)).status).toBe(200);
+    expect(modelOptions).toBe(1);
+  });
+
   it("rejects malformed selection and returns the stable unavailable repair", async () => {
     const { port, session } = await launch(false);
     const cookie = await authenticate(port, session);
