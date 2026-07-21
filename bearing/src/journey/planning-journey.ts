@@ -3,6 +3,7 @@ import { lstat, readFile, readdir, realpath } from "node:fs/promises";
 import { isAbsolute, posix, relative, resolve } from "node:path";
 import { createAgentAdapter, type ProcessRunner } from "../adapters/adapters.js";
 import type { ResolvedRun, Selection } from "../profile/profile.js";
+import { setBearingsWorkspace } from "./repository-map.js";
 
 export type JourneyStage = "set-bearings" | "gather-supplies" | "map-route" | "draft-implementation" | "execute-explorer" | "execute-expedition" | "review";
 export interface OwnerAnswer { readonly question: string; readonly answer: string; }
@@ -45,7 +46,7 @@ const STAGE_COMMAND: Readonly<Record<JourneyStage, string>> = {
   review: "native harness review (`/review` or `codex exec review`); use the Surveyor fallback only when no native reviewer is available",
 };
 const STAGE_BOUNDARY: Readonly<Record<JourneyStage, string>> = {
-  "set-bearings": "Create or resume only the plan directory, plan-spec.md stub, and prompts directory. Do not grill, design, draft implementation.md, or implement the work. A successful action receipt must include the relative plan-spec.md path.",
+  "set-bearings": "Create or resume only the plan directory, plan-spec.md stub, prompts directory, and repository map. Do not grill, design, draft implementation.md, or implement the work.",
   "gather-supplies": "Use the complete owner Q&A and update only the validated plan specification. Do not run design, draft implementation.md, or implement the work. Return an action receipt whose artifacts include the validated plan-spec.md path.",
   "map-route": "Create only design.md, seit.md, and the generated review HTML in the validated plan directory. Do not draft implementation.md or implement the work. A successful action receipt must include all three relative paths.",
   "draft-implementation": "Draft implementation.md without executing any slice. Every slice must name its Implementation role, the exact onboarding Agent model route, its Agent reasoning level, Ponytail mode, Required lint/static-analysis, and Review path. The Review path must use the harness-native reviewer when available or the Surveyor fallback when unavailable; do not use standard gate or gate-review. Regenerate the existing review HTML so it embeds the complete route map or plan specification, design.md, seit.md, and implementation.md. A successful action receipt must include both implementation.md and the regenerated review HTML.",
@@ -110,6 +111,7 @@ function prompt(request: JourneyRequest, planDirectory: string | undefined): str
     `Prior owner Q&A: ${JSON.stringify(request.priorOwnerQa)}`,
     ...reviewCadence,
     `Validated plan directory: ${planDirectory ? JSON.stringify(planDirectory) : "none"}`,
+    ...(planDirectory && request.stage !== "set-bearings" ? [`Repository map: ${JSON.stringify(`${planDirectory}/prompts/repository-map.md`)}. Reuse this bounded inventory before rediscovering the repository; perform only bounded live verification when necessary.`] : []),
     ...(request.reviewPrompt ? [`Review guidance: ${JSON.stringify(request.reviewPrompt)}`] : []),
     "Do not claim completion without actual work and evidence in this agent receipt. Do not invent artifacts, routes, sessions, or authority.",
     gatheringQuestions
@@ -142,7 +144,7 @@ function stageArtifactsValid(stage: JourneyStage, artifacts: readonly string[], 
   const inPlan = (path: string): boolean => planDirectory !== undefined && posix.dirname(path) === planDirectory;
   const planSpec = (path: string): boolean => posix.basename(path) === "plan-spec.md" || /^[A-Za-z0-9][A-Za-z0-9._-]*-route-map\.md$/.test(posix.basename(path));
   const routeReview = (path: string): boolean => posix.basename(path) === "review.html" || /^[A-Za-z0-9][A-Za-z0-9._-]*-route-review\.html$/.test(posix.basename(path));
-  if (stage === "set-bearings") return artifacts.some(planSpec);
+  if (stage === "set-bearings") return artifacts.some(planSpec) && artifacts.some((path) => posix.basename(path) === "repository-map.md" && posix.dirname(posix.dirname(path)) === posix.dirname(artifacts.find(planSpec) ?? ""));
   if (stage === "gather-supplies") return artifacts.some((path) => inPlan(path) && planSpec(path));
   if (stage === "map-route") return ["design.md", "seit.md"].every((name) => artifacts.some((path) => inPlan(path) && posix.basename(path) === name)) && artifacts.some((path) => inPlan(path) && routeReview(path));
   if (stage === "draft-implementation") return artifacts.some((path) => inPlan(path) && posix.basename(path) === "implementation.md") && artifacts.some((path) => inPlan(path) && routeReview(path));
@@ -207,6 +209,14 @@ export class JourneyService {
     const projected = request.run.roles.find((role) => request.stage === "review" ? role.role === "surveyor" && !role.authority.write : role.role === "crewmate" && role.executor && role.authority.write);
     if (!projected) return { status: "failure", code: "crewmate_unavailable", tokens: 0 };
     if (!sameSelection(request.selection, projected.selection) || request.run.roles.some((role) => !sameSelection(role.selection, request.selection))) return { status: "failure", code: "selection_mismatch", tokens: 0 };
+    if (request.stage === "set-bearings") {
+      if (this.cancelled.has(request.runId)) return { status: "failure", code: "cancelled", tokens: 0 };
+      try {
+        const workspace = await setBearingsWorkspace(repositoryPath, request.workGoal, planDirectory);
+        if (!workspace || !(await Promise.all(workspace.artifacts.map((artifact) => containedPath(repositoryPath, artifact)))).every(Boolean) || !stageArtifactsValid(request.stage, workspace.artifacts, workspace.directory) || this.cancelled.has(request.runId)) return { status: "failure", code: this.cancelled.has(request.runId) ? "cancelled" : "artifact_invalid", tokens: 0 };
+        return { status: "action", summary: workspace.resumed ? "Bearings resumed locally." : "Bearings set locally.", artifacts: workspace.artifacts, tokens: 0 };
+      } catch { return { status: "failure", code: "artifact_invalid", tokens: 0 }; }
+    }
     const taskPrompt = prompt(request, planDirectory);
     let tokens = 0;
     let events: unknown;

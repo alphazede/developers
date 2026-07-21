@@ -1,4 +1,4 @@
-import { mkdtemp, mkdir, realpath, rm, symlink, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, readFile, realpath, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -67,6 +67,33 @@ describe("JourneyService", () => {
     };
     service = new JourneyService(runner);
     expect(await service.execute(input)).toEqual({ status: "failure", code: "cancelled", tokens: 5 });
+  });
+
+  it("sets bearings locally once, with a bounded reusable map and no process call", async () => {
+    const input = await request({ stage: "set-bearings", workGoal: "Add safe account import" });
+    await mkdir(join(input.repositoryPath, "node_modules", "hidden"), { recursive: true });
+    await Promise.all([
+      mkdir(join(input.repositoryPath, ".bearing"), { recursive: true }),
+      writeFile(join(input.repositoryPath, "package.json"), '{"name":"fixture"}'),
+      writeFile(join(input.repositoryPath, ".env"), "API_KEY=not-for-the-map"),
+      writeFile(join(input.repositoryPath, "node_modules", "hidden", "secret.txt"), "not-for-the-map"),
+    ]);
+    const runner = new StubRunner(completed('BEARING_RESULT {"kind":"question","question":"unused"}'));
+    const service = new JourneyService(runner);
+    const result = await service.execute(input);
+    expect(result).toMatchObject({ status: "action", summary: "Bearings set locally.", tokens: 0 });
+    expect(runner.calls).toHaveLength(0);
+    if (result.status !== "action") throw new Error("missing local action");
+    expect(result.artifacts).toEqual([
+      expect.stringMatching(/^docs\/plans\/\d{4}-\d{2}-\d{2}-add-safe-account-import\/prompts\/repository-map\.md$/),
+      expect.stringMatching(/^docs\/plans\/\d{4}-\d{2}-\d{2}-add-safe-account-import\/plan-spec\.md$/),
+    ]);
+    const map = await readFile(join(input.repositoryPath, result.artifacts[0]), "utf8");
+    expect(map).toContain("`package.json`");
+    expect(map).not.toMatch(/API_KEY|not-for-the-map|node_modules|\.bearing|\.env/);
+    const resumed = await service.execute({ ...input, planDirectory: result.artifacts[1].replace(/\/plan-spec\.md$/, "") });
+    expect(resumed).toMatchObject({ status: "action", summary: "Bearings resumed locally.", artifacts: result.artifacts, tokens: 0 });
+    expect(runner.calls).toHaveLength(0);
   });
 
   it("returns one owner question and builds the skill-specific bounded prompt", async () => {
@@ -139,8 +166,8 @@ describe("JourneyService", () => {
     expect(runner.calls[0].args).not.toContain("--dangerously-skip-permissions");
   });
 
-  it("covers every stage with its existing skill or command", async () => {
-    const commands = { "set-bearings": "$to-plan", "gather-supplies": "$grill-with-docs", "map-route": "$design-driven-build", "draft-implementation": "$to-plan", "execute-explorer": "$conductor-orchestrate", "execute-expedition": "$ultimate-loop" } as const;
+  it("covers each model-driven stage with its existing skill or command", async () => {
+    const commands = { "gather-supplies": "$grill-with-docs", "map-route": "$design-driven-build", "draft-implementation": "$to-plan", "execute-explorer": "$conductor-orchestrate", "execute-expedition": "$ultimate-loop" } as const;
     for (const [stage, command] of Object.entries(commands) as [Exclude<JourneyStage, "review">, string][]) {
       const runner = new StubRunner(completed('BEARING_RESULT {"kind":"question","question":"Continue?"}'));
       expect((await new JourneyService(runner).execute(await request({ stage }))).status).toBe("question");
@@ -187,7 +214,6 @@ describe("JourneyService", () => {
 
   it("requires each planning action to prove its stage artifacts", async () => {
     const cases: readonly [JourneyStage, string | undefined, readonly string[]][] = [
-      ["set-bearings", undefined, ["docs/plans/import/notes.md"]],
       ["gather-supplies", "docs/plans/import", ["docs/plans/import/notes.md"]],
       ["map-route", "docs/plans/import", ["docs/plans/import/design.md", "docs/plans/import/seit.md"]],
       ["draft-implementation", "docs/plans/import", ["docs/plans/import/notes.md"]],
