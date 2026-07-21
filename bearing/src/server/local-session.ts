@@ -152,7 +152,7 @@ const NATIVE_HTML_TEMPLATE =
   '<style>.model-note{display:flex;align-items:center;justify-content:space-between;gap:12px;color:var(--muted);margin:0 0 12px}.model-note code{color:var(--ink)}.support-note{border-left:3px solid #e3b14f;padding:8px 11px;background:rgba(74,52,15,.35);color:#fff1c7}.route-config{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:14px}.wait-controls{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:8px;margin-top:14px}.wait-controls input{min-width:0}.danger{border-color:#9b3c3c;color:#ffd7d7}.git-count{min-height:24px;padding:0;border:0;background:transparent;color:#aeb6ff;text-decoration:underline;text-underline-offset:3px;white-space:nowrap}.git-count:hover{background:transparent;color:#fff}.git-count:disabled{border:0;background:transparent;color:var(--subtle);text-decoration:none}.git-change-panel{margin:12px 0;border:1px solid var(--line2);border-radius:8px;background:rgba(8,9,10,.82);padding:12px}.git-change-panel h4{margin:0 0 8px}.git-file-list{display:grid;gap:5px}.git-file{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:10px;min-height:32px;padding:5px 8px;text-align:left}.git-file-name{overflow-wrap:anywhere}.diff-add{color:#62d585}.diff-del{color:#ff7878}.diff-hunk{color:#aeb6ff}.git-diff{max-height:320px;overflow:auto;margin:10px 0 0;padding:10px;border-top:1px solid var(--line2);background:#090a0b;color:var(--muted);font:12px/1.45 ui-monospace,SFMono-Regular,Consolas,monospace;white-space:pre-wrap}.git-diff span{display:block}.history-list{display:grid;gap:10px}.history-card{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:14px;align-items:center;border:1px solid var(--line2);border-radius:9px;background:rgba(15,16,17,.45);padding:14px}.history-card strong,.history-card span{display:block}.history-card span{color:var(--subtle);font-size:12px}.nav-action{min-height:32px;padding:3px 9px;border-radius:999px;background:var(--s1);color:var(--muted);font-size:12px}@media(max-width:760px){.route-config{grid-template-columns:1fr}.wait-controls{grid-template-columns:1fr 1fr}.wait-controls input{grid-column:1/-1}.history-card{grid-template-columns:1fr}}</style>\n' +
   '<style>.review-overview{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin:16px 0}.review-overview div{border:1px solid var(--line2);border-radius:9px;background:rgba(15,16,17,.45);padding:12px}.review-overview strong,.review-overview span{display:block}.review-overview strong{font-size:20px}.review-overview span{color:var(--subtle);font-size:12px}.assignment-table{width:100%;border-collapse:collapse;margin:14px 0}.assignment-table th,.assignment-table td{border:1px solid var(--line2);padding:8px;text-align:left;vertical-align:top}.assignment-table th{color:var(--ink)}.blocker-note{border-left:3px solid #e3b14f;background:rgba(74,52,15,.45);padding:12px 14px;color:#fff1c7}.review-change{margin-top:16px}@media(max-width:760px){.review-overview{grid-template-columns:1fr}.assignment-table{display:block;overflow-x:auto}}</style>\n' +
   '<style>.wait-guidance{display:grid;gap:5px;margin:12px 0;padding:10px 12px;border-left:3px solid var(--accent);background:rgba(8,9,10,.48);color:var(--muted);font-size:12px}.wait-guidance strong{color:var(--ink)}.wait-guidance p{margin:0}.wait-slow{color:#fff1c7}.trail-log{margin:8px 0 0;padding-left:20px}.trail-log li{margin:3px 0}.question-help{margin:9px 0 0;color:#c2c8ff;font-size:12px}.glossary-dialog{width:min(680px,calc(100% - 32px));border:1px solid var(--line2);border-radius:12px;background:#101112;color:var(--ink);padding:0;box-shadow:0 20px 70px #000}.glossary-dialog::backdrop{background:rgba(0,0,0,.72);backdrop-filter:blur(3px)}.glossary-dialog .panel-head,.glossary-dialog .panel-body{padding:16px 20px}.glossary-list{grid-template-columns:145px 1fr}.glossary-list dt{color:#c2c8ff}@media(max-width:760px){.glossary-list{grid-template-columns:1fr}.glossary-list dd{margin-bottom:8px}}</style>\n' +
-  '<style>.history-actions{display:flex;gap:8px;align-items:center}.history-clear{color:#ffd7d7}@media(max-width:760px){.history-actions{justify-content:flex-end;flex-wrap:wrap}}</style>\n' +
+  '<style>.history-actions{display:flex;gap:8px;align-items:center}.history-clear{color:#ffd7d7}.question-end{margin-left:auto}@media(max-width:760px){.history-actions{justify-content:flex-end;flex-wrap:wrap}}</style>\n' +
   "</head>\n" +
   "<body>\n" +
   '<header><div class="brand"><span class="brand-mark" aria-hidden="true"></span>Bearing</div><nav class="nav-state" aria-label="Runtime status"><button class="nav-action" id="history-button" type="button" hidden>History</button><button class="repo-switch" id="change-repository" type="button" hidden>Change repository</button><span class="badge local-badge">LOCAL</span><span class="badge">OWNER CONTROLLED</span></nav></header>\n' +
@@ -188,6 +188,7 @@ const NATIVE_HTML_TEMPLATE =
   '  var planningAnswerForm = document.getElementById("planning-answer-form");\n' +
   '  var planningAnswer = document.getElementById("planning-answer");\n' +
   '  var planningSubmit = planningAnswerForm.querySelector("button[type=submit]");\n' +
+  '  var endQuestions = document.createElement("button"); endQuestions.id = "end-questions"; endQuestions.type = "button"; endQuestions.className = "question-end"; endQuestions.textContent = "End questions"; endQuestions.hidden = true; planningSubmit.before(endQuestions);\n' +
   '  var demoPanel = document.getElementById("demo-panel");\n' +
   '  var viewDemo = document.getElementById("view-demo");\n' +
   '  var glossaryDialog = document.getElementById("glossary-dialog");\n' +
@@ -204,6 +205,8 @@ const NATIVE_HTML_TEMPLATE =
   '  var onboardingReady = false;\n' +
   '  var returnPanel = null;\n' +
   '  var currentGoal = ""; var currentStage = "set-bearings"; var journeyMode = ""; var pendingQuestionCount = 0; var elapsedTimer = null; var statusTimer = null; var elapsedStarted = 0; var waitActivityAt = 0; var waitActivitySequence = 0; var waitSignature = ""; var historyReturnPanel = null; var currentGitChanges = [];\n' +
+  '  function syncEndQuestions() { endQuestions.hidden = planningAnswerForm.hidden || currentStage !== "gather-supplies" || document.getElementById("planning-question").textContent === "Anything else?"; if (!endQuestions.hidden) endQuestions.disabled = false; }\n' +
+  '  new MutationObserver(syncEndQuestions).observe(planningAnswerForm, { attributes: true, attributeFilter: ["hidden"] }); new MutationObserver(syncEndQuestions).observe(document.getElementById("planning-question"), { childList: true });\n' +
   '  function setStatus(message, busy) { status.textContent = message; status.classList.toggle("busy", !!busy); }\n' +
   '  function fail(msg) { setStatus("Session could not start: " + msg, false); }\n' +
   '  function requestError(label, r) { throw new Error(label + " (" + r.status + "). Refresh the run state and try again."); }\n' +
@@ -311,6 +314,7 @@ const NATIVE_HTML_TEMPLATE =
   '  planningAnswerForm.addEventListener("submit", function (ev) {\n' +
   '    ev.preventDefault(); if (!planningAnswerForm.reportValidity()) return; var answer = planningAnswer.value.trim(); if (!answer) return; var localNext = currentStage === "gather-supplies" && pendingQuestionCount > 0; planningSubmit.disabled = true; setStatus(localNext ? "Saving your answer..." : "Preparing the route map...", true); readRun(currentRunId).then(function (state) { if (!state.pendingDecision) throw new Error("No owner decision is pending."); return postCommand(currentRunId, state, "recordOwnerAnswer", { decisionId: state.pendingDecision.decisionId, answer: answer }); }).then(function () { invokeJourney(currentStage, { answer: answer }, localNext); }, function (error) { planningSubmit.disabled = false; showError(error); });\n' +
   "  });\n" +
+  '  endQuestions.addEventListener("click", function () { var answer = "Skipped; owner ended questioning early. Use the answers collected so far and record reasonable assumptions."; planningSubmit.disabled = true; endQuestions.disabled = true; setStatus("Ending questions and preparing the route map...", true); readRun(currentRunId).then(function (state) { if (!state.pendingDecision) throw new Error("No owner decision is pending."); return postCommand(currentRunId, state, "recordOwnerAnswer", { decisionId: state.pendingDecision.decisionId, answer: answer }); }).then(function () { invokeJourney("gather-supplies", { answer: answer, endQuestions: true }); }, function (error) { planningSubmit.disabled = false; endQuestions.disabled = false; showError(error); }); });\n' +
   "})();\n" +
   "</script>\n" +
   "</body>\n" +
@@ -362,6 +366,7 @@ interface JourneyBody {
   readonly stage: JourneyStage;
   readonly workGoal?: string;
   readonly answer?: string;
+  readonly endQuestions?: true;
   readonly reviewChange?: string;
   readonly executionMode?: "explorer" | "expedition";
   readonly reviewCadence?: "slice" | "phase" | "end";
@@ -384,12 +389,13 @@ function isJourneyControlBody(v: unknown): v is JourneyControlBody {
 function isJourneyBody(v: unknown): v is JourneyBody {
   if (typeof v !== "object" || v === null || Array.isArray(v)) return false;
   const body = v as Record<string, unknown>;
-  const allowed = new Set(["runId", "stage", "workGoal", "answer", "reviewChange", "executionMode", "reviewCadence"]);
+  const allowed = new Set(["runId", "stage", "workGoal", "answer", "endQuestions", "reviewChange", "executionMode", "reviewCadence"]);
   const stages = new Set<JourneyStage>(["set-bearings", "gather-supplies", "map-route", "draft-implementation", "execute-explorer", "execute-expedition", "review"]);
   return Object.keys(body).every((key) => allowed.has(key)) && /^[A-Za-z0-9_-]{1,128}$/.test(String(body.runId ?? "")) &&
     stages.has(body.stage as JourneyStage) &&
     (body.workGoal === undefined || (typeof body.workGoal === "string" && body.workGoal === body.workGoal.trim() && body.workGoal.length > 0 && body.workGoal.length <= 4096 && !hasUnsafeTextControl(body.workGoal))) &&
     (body.answer === undefined || (typeof body.answer === "string" && body.answer === body.answer.trim() && body.answer.length > 0 && body.answer.length <= 4096 && !hasUnsafeTextControl(body.answer))) &&
+    (body.endQuestions === undefined || (body.endQuestions === true && body.stage === "gather-supplies" && typeof body.answer === "string")) &&
     (body.reviewChange === undefined || (body.stage === "gather-supplies" && typeof body.reviewChange === "string" && body.reviewChange === body.reviewChange.trim() && body.reviewChange.length > 0 && body.reviewChange.length <= 4096 && !hasUnsafeTextControl(body.reviewChange))) &&
     (body.executionMode === undefined || body.executionMode === "explorer" || body.executionMode === "expedition") &&
     (body.reviewCadence === undefined || body.reviewCadence === "slice" || body.reviewCadence === "phase" || body.reviewCadence === "end");
@@ -885,6 +891,7 @@ function handleJourneyPost(req: IncomingMessage, res: ServerResponse, service: L
       state.question = undefined;
       state.questionStage = undefined;
       state.questionDecisionId = undefined;
+      if (value.endQuestions) state.pendingQuestions = [];
       if (value.stage === "gather-supplies" && state.pendingQuestions.length) {
         const question = state.pendingQuestions.shift()!;
         const tokens = state.lastResult?.status === "question" ? state.lastResult.tokens : 0;

@@ -281,6 +281,11 @@ describe("GET / native page and fragment secrecy", () => {
     expect(r.body).toContain('id="journey-phase">SET BEARINGS</span>');
     expect(r.body).toContain('"set-bearings": "Set Bearings"');
     expect(r.body).toContain('id="planning-answer-form"');
+    expect(r.body).toContain('endQuestions.textContent = "End questions"');
+    expect(r.body).toContain('invokeJourney("gather-supplies", { answer: answer, endQuestions: true })');
+    expect(r.body).toContain('currentStage !== "gather-supplies"');
+    expect(r.body).toContain('textContent === "Anything else?"');
+    expect(r.body).toContain('if (!endQuestions.hidden) endQuestions.disabled = false');
     expect(r.body).toContain('<label for="planning-answer">Your answer</label>');
     expect(r.body).toContain('placeholder="Type your answer here…"');
     expect(r.body).toContain('fetch("/api/v1/journey"');

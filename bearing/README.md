@@ -69,7 +69,7 @@ Bearing starts for repository work.
 The main browser flow uses the selected, readiness-verified harness; it is not a canned workflow projection:
 
 1. **Set Bearings** starts the plan and returns validated plan artifacts.
-2. **Gather Supplies** asks the selected agent to inspect the repository once and return all important owner questions. Bearing presents them one at a time without another model call, appends **Anything else?**, then sends the complete answer set back in one writing call.
+2. **Gather Supplies** asks the selected agent to inspect the repository once and return all important owner questions. Bearing presents them one at a time without another model call, appends **Anything else?**, then sends the complete answer set back in one writing call. Choose **End questions** at any point to write from the answers already collected and explicitly recorded assumptions.
 3. **Map the Route** produces the design, SEIT, and self-contained review baseline, then Bearing drafts `implementation.md`.
 4. **Review your route** verifies each slice's role, selected model route, and reasoning level. The regenerated review HTML embeds the complete planning package; every source artifact also opens through a contained authenticated link. The owner can request changes or approve the route, and implementation cannot start before approval.
 5. The owner chooses **Explorer** or **Expedition** plus Surveyor review cadence. Explorer uses fewer sessions; Expedition enables bounded subagents for parallel lanes.

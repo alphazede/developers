@@ -376,6 +376,43 @@ describe("repository-first onboarding HTTP", () => {
     expect(runner.calls[1].stdin).toMatch(/All grilling questions are answered/i);
   });
 
+  it("ends grilling early and writes from the answers collected so far", async () => {
+    const root = await mkdtemp(join(tmpdir(), "bearing-end-grill-")); roots.push(root);
+    const planDirectory = `docs/plans/${new Date().toISOString().slice(0, 10)}-stop-repetitive-planning-questions`;
+    const result = (content: string) => ({ exitCode: 0, events: [{ type: "complete", data: { content } }], usage: { tokens: 1 } });
+    const runner = new SyntheticRunner(undefined, [
+      result(`BEARING_RESULT ${JSON.stringify({ kind: "questions", questions: ["Which users are in scope?", "Which compatibility boundary matters?", "What must be true at launch?"] })}`),
+      result(`BEARING_RESULT ${JSON.stringify({ kind: "action", summary: "Route map written", artifacts: [`${planDirectory}/plan-spec.md`] })}`),
+    ]);
+    const server = createServer(); await new Promise<void>((resolve) => server.listen({ host: "127.0.0.1", port: 0 }, resolve)); servers.push(server);
+    const address = server.address(); if (!address || typeof address === "string") throw new Error("missing address");
+    const port = String(address.port), session = new LocalSessionService(`127.0.0.1:${port}`), cookie = await authenticate(port, session);
+    server.on("request", createRequestHandler(session, undefined, { processRunner: runner, verification: { verify: async () => true } }));
+    const runId = "browser-end-grill", goal = "Stop repetitive planning questions";
+    await call(port, "POST", "/api/v1/repository", { path: root }, cookie);
+    await call(port, "POST", "/api/v1/readiness", { provider: "codex", model: "*", reasoning: "medium" }, cookie);
+    await postOwnerCommand(port, cookie, runId, "createWorkRequest", { title: goal, goal });
+    const journey = (extra: Record<string, unknown> = {}) => call(port, "POST", "/api/v1/journey", { runId, stage: "gather-supplies", workGoal: goal, ...extra }, cookie);
+    expect(JSON.parse((await call(port, "POST", "/api/v1/journey", { runId, stage: "set-bearings", workGoal: goal }, cookie)).body)).toMatchObject({ status: "action" });
+
+    expect(JSON.parse((await journey()).body)).toMatchObject({ status: "question", question: "Which users are in scope?" });
+    let pending = JSON.parse((await call(port, "GET", `/api/v1/runs/${runId}`, undefined, cookie)).body).pendingDecision;
+    await postOwnerCommand(port, cookie, runId, "recordOwnerAnswer", { decisionId: pending.decisionId, answer: "Account owners" });
+    expect(JSON.parse((await journey({ answer: "Account owners" })).body)).toMatchObject({ status: "question", question: "Which compatibility boundary matters?" });
+
+    const earlyStop = "Skipped; owner ended questioning early. Use the answers collected so far and record reasonable assumptions.";
+    pending = JSON.parse((await call(port, "GET", `/api/v1/runs/${runId}`, undefined, cookie)).body).pendingDecision;
+    await postOwnerCommand(port, cookie, runId, "recordOwnerAnswer", { decisionId: pending.decisionId, answer: earlyStop });
+    const completed = await journey({ answer: earlyStop, endQuestions: true });
+    expect(completed.status).toBe(200);
+    expect(JSON.parse(completed.body)).toMatchObject({ status: "action", summary: "Route map written" });
+    expect(runner.calls).toHaveLength(2);
+    expect(runner.calls[1].stdin).toContain('"question":"Which users are in scope?","answer":"Account owners"');
+    expect(runner.calls[1].stdin).toContain(`"question":"Which compatibility boundary matters?","answer":"${earlyStop}"`);
+    expect(runner.calls[1].stdin).not.toContain('"question":"What must be true at launch?","answer"');
+    expect(JSON.parse((await call(port, "GET", `/api/v1/runs/${runId}`, undefined, cookie)).body).pendingDecision).toBeNull();
+  });
+
   it("refuses repository changes while a real journey call is in flight", async () => {
     const root = await mkdtemp(join(tmpdir(), "bearing-busy-")); roots.push(root);
     await mkdir(join(root, "plans", "busy"), { recursive: true });
