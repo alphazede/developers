@@ -8,6 +8,8 @@ frontmatter:
     - okf_status
     - tags
   optional:
+    - name
+    - description
     - public_boundary
     - freshness
   status_values:
@@ -34,6 +36,8 @@ coverage:
   canonical_docs:
     - AGENTS.md
     - README.md
+    - bearing/README.md
+    - bearing/skills/bearing/SKILL.md
     - bran/README.md
   legacy_docs:
     - az-sports-dev/AGENTS.md
