@@ -158,6 +158,14 @@ describe("production process runner", () => {
     expect(JSON.stringify(result)).not.toContain("hunter2");
   });
 
+  it("discovers only a valid Codex thread id from structured output", async () => {
+    const thread = "123e4567-e89b-12d3-a456-426614174000";
+    const h = harness(`{"type":"thread.started","thread_id":"${thread}"}\n{"type":"turn.completed","usage":{"input_tokens":1,"output_tokens":1}}\n`);
+    expect(await h.runner.run({ routeId: "codex", executable: "codex", args: [], stdin: "x", cwd: repositoryPath, timeoutMs: 50, runId: "thread" })).toMatchObject({ providerSessionId: thread, usage: { tokens: 2 } });
+    const invalid = harness('{"type":"thread.started","thread_id":"not-a-thread"}\n{"type":"turn.completed","usage":{"input_tokens":1,"output_tokens":1}}\n');
+    expect((await invalid.runner.run({ routeId: "codex", executable: "codex", args: [], stdin: "x", cwd: repositoryPath, timeoutMs: 50, runId: "invalid-thread" })).providerSessionId).toBeUndefined();
+  });
+
   it("bounds output, rejects malformed JSON, times out, and cancels idempotently", async () => {
     const invocation: ProcessInvocation = { routeId: "codex", executable: "codex", args: [], stdin: "secret", cwd: repositoryPath, timeoutMs: 5, runId: "r" };
     expect(await harness("not json").runner.run(invocation)).toEqual({ unknownSideEffect: true });

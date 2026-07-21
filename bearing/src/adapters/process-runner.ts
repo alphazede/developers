@@ -78,7 +78,7 @@ function safe(value: unknown, depth = 0): unknown {
   return Object.fromEntries(Object.entries(value).slice(0, 64).flatMap(([key, entry]) => EVENT_DATA_KEYS.has(key) && !/key|secret|token|credential|authorization|password/i.test(key) ? [[key, safe(entry, depth + 1)]] : []));
 }
 
-function normalize(stdout: string, routeId: string): { events: readonly unknown[]; usage: { tokens: number } } | undefined {
+function normalize(stdout: string, routeId: string): { events: readonly unknown[]; usage: { tokens: number }; providerSessionId?: string } | undefined {
   const trimmed = stdout.trim();
   if (!trimmed) return undefined;
   let values: unknown[];
@@ -91,8 +91,10 @@ function normalize(stdout: string, routeId: string): { events: readonly unknown[
   }
   if (!values.length || values.length > 1024 || values.some((value) => typeof value !== "object" || value === null || Array.isArray(value))) return undefined;
   let tokens: number | undefined;
+  let providerSessionId: string | undefined;
   const events = values.map((value) => {
     const record = value as Record<string, unknown>;
+    if (routeId === "codex" && record.type === "thread.started" && typeof record.thread_id === "string" && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(record.thread_id)) providerSessionId = record.thread_id;
     const found = tokenUsage(record);
     if (found !== undefined) tokens = routeId === "opencode" ? (tokens ?? 0) + found : found;
     const type = typeof record.type === "string" ? record.type : typeof record.event === "string" ? record.event : "message";
@@ -103,7 +105,7 @@ function normalize(stdout: string, routeId: string): { events: readonly unknown[
     const data = agentMessage ?? partText ?? record.data ?? record.message ?? record.text ?? record.content ?? record.result ?? record.status;
     return { type, ...(data === undefined ? {} : { data: typeof data === "object" && data !== null && !Array.isArray(data) ? safe(data) : { content: safe(data) } }) };
   });
-  return tokens === undefined ? undefined : { events, usage: { tokens } };
+  return tokens === undefined ? undefined : { events, usage: { tokens }, ...(providerSessionId ? { providerSessionId } : {}) };
 }
 
 function mayHaveSideEffect(stdout: string): boolean {

@@ -69,6 +69,30 @@ describe("provider-neutral adapters", () => {
     expect(concreteRunner.calls[0]?.args).toEqual(["exec", "--json", "-m", "gpt-5.6-sol", "-c", 'model_reasoning_effort="high"', "-c", 'approval_policy="never"', "-C", repositoryPath, "-s", "read-only", "--ephemeral", "-"]);
   });
 
+  it("captures and resumes a Codex session while unsupported harnesses stay isolated", async () => {
+    const selection = { provider: "codex", model: "gpt-5.6-sol", reasoning: "medium" };
+    const persistent = role({ selection, session: { persistence: "persistent", resume: "allowed", fork: "allowed" } });
+    const thread = "123e4567-e89b-12d3-a456-426614174000";
+    const runner = new SyntheticRunner(undefined, [
+      { exitCode: 0, events: [{ type: "turn.completed" }], usage: { tokens: 1 }, providerSessionId: thread },
+      { exitCode: 0, events: [{ type: "turn.completed" }], usage: { tokens: 1 } },
+    ]);
+    const first = createAgentAdapter(selection, runner); if (!first) throw new Error("missing Codex adapter");
+    await first.execute({ runId: "first", repositoryPath, role: persistent, task: { prompt: "first" } });
+    const second = createAgentAdapter(selection, runner); if (!second) throw new Error("missing Codex adapter");
+    await second.execute({ runId: "second", repositoryPath, role: persistent, task: { prompt: "second" } });
+    expect(runner.calls[0]?.args).toEqual(expect.arrayContaining(["exec", "--json"]));
+    expect(runner.calls[0]?.args).not.toContain("--ephemeral");
+    expect(runner.calls[1]?.args).toEqual(expect.arrayContaining(["exec", "resume", thread, "--json", 'sandbox_mode="read-only"']));
+
+    const piSelection = { provider: "pi", model: "zai/glm-5.2", reasoning: "low" };
+    const piRunner = new SyntheticRunner();
+    const pi = createAgentAdapter(piSelection, piRunner); if (!pi) throw new Error("missing Pi adapter");
+    await pi.execute({ runId: "pi", repositoryPath, role: role({ selection: piSelection, session: { persistence: "persistent", resume: "allowed", fork: "allowed" } }), task: { prompt: "isolated" } });
+    expect(piRunner.calls[0]?.args).toContain("--no-session");
+    expect(piRunner.calls[0]?.providerSessionId).toBeUndefined();
+  });
+
   it("truthfully resolves isolation modes", async () => {
     expect((await adapter().execute({ runId: "a", repositoryPath, role: role({ isolation: "required" }), task: { prompt: "x" } }))).toMatchObject({ status: "blocked", failure: "isolation_required" });
     expect((await adapter().execute({ runId: "b", repositoryPath, role: role(), task: { prompt: "x" } })).warningCodes).toContain("local_execution_unattested");
