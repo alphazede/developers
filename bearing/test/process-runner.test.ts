@@ -38,6 +38,21 @@ function harness(output?: string, exitCode?: number, errorOutput?: string) {
   return { runner: new NodeProcessRunner(spawn, () => true, (executable, cwd) => ({ executable, cwd })), calls };
 }
 
+function chunkedHarness(chunks: readonly string[]) {
+  const spawn = () => {
+    const child = new EventEmitter() as ChildProcessWithoutNullStreams;
+    Object.assign(child, { pid: undefined, stdin: new PassThrough(), stdout: new PassThrough(), stderr: new PassThrough(), kill: () => true });
+    queueMicrotask(() => {
+      for (const chunk of chunks) child.stdout.write(chunk);
+      child.stdout.end();
+      child.stderr.end();
+      child.emit("close", 0);
+    });
+    return child;
+  };
+  return new NodeProcessRunner(spawn, () => true, (executable, cwd) => ({ executable, cwd }));
+}
+
 async function execute(selection: Selection, overrides: Record<string, unknown> = {}, runOverrides: Record<string, unknown> = {}) {
   const h = harness();
   const adapter = createAgentAdapter(selection, h.runner); if (!adapter) throw new Error("missing adapter");
@@ -112,6 +127,28 @@ describe("production process runner", () => {
     expect(result).toMatchObject({ exitCode: 0, usage: { tokens: 5 }, events: [{ type: "message", data: { content: "ok" } }, { type: "complete" }] });
   });
 
+  it("streams only ordered, allowlisted activity metadata from complete JSONL lines", async () => {
+    const output = '{"type":"tool.started","status":"running","tool":{"name":"Read","arguments":"password=hunter2"},"message":"raw model content","path":"/private/source"}\nnot-json\n{"event":"turn.completed","status":"sk-abcdefgh","name":"private-source","usage":{"input_tokens":2,"output_tokens":3}}';
+    const activities: unknown[] = [];
+    const runner = chunkedHarness([output.slice(0, 19), output.slice(19, 81), output.slice(81)]);
+    const invocation: ProcessInvocation = { routeId: "codex", executable: "codex", args: [], stdin: "private prompt", cwd: repositoryPath, timeoutMs: 50, runId: "activity", onActivity: (event) => activities.push(event) };
+    const result = await runner.run(invocation);
+    expect(activities).toEqual([
+      { sequence: 1, kind: "tool.started", status: "running", tool: "Read" },
+      { sequence: 2, kind: "turn.completed" },
+    ]);
+    expect(JSON.stringify(activities)).not.toMatch(/hunter2|raw model content|private|source|arguments|path|prompt/i);
+
+    const baseline = await harness(output).runner.run({ ...invocation, runId: "baseline", onActivity: undefined });
+    expect(result).toEqual(baseline);
+  });
+
+  it("does not let activity observers change process results", async () => {
+    const output = '{"type":"message","usage":{"total_tokens":1}}\n';
+    const result = await chunkedHarness([output]).run({ routeId: "codex", executable: "codex", args: [], stdin: "x", cwd: repositoryPath, timeoutMs: 50, runId: "observer", onActivity: () => { throw new Error("observer failed"); } });
+    expect(result).toEqual(await harness(output).runner.run({ routeId: "codex", executable: "codex", args: [], stdin: "x", cwd: repositoryPath, timeoutMs: 50, runId: "baseline-observer" }));
+  });
+
   it("parses OpenCode step-finish token usage", async () => {
     const h = harness('{"type":"text","part":{"text":"BEARING_RESULT {\\"kind\\":\\"action\\",\\"summary\\":\\"done\\",\\"artifacts\\":[]}"}}\n{"type":"step_finish","part":{"tokens":{"input":2,"output":3,"reasoning":1}}}\n{"type":"step_finish","part":{"tokens":{"input":4,"output":2,"reasoning":0}}}\n');
     expect(await h.runner.run({ routeId: "opencode", executable: "opencode", args: [], stdin: "x", cwd: repositoryPath, timeoutMs: 50, runId: "opencode-usage" })).toMatchObject({ exitCode: 0, usage: { tokens: 12 }, events: [{ type: "text", data: { content: expect.stringContaining("BEARING_RESULT") } }, { type: "step_finish" }, { type: "step_finish" }] });
@@ -156,6 +193,14 @@ describe("production process runner", () => {
     const result = await h.runner.run({ routeId: "codex", executable: "codex", args: [], stdin: "x", cwd: repositoryPath, timeoutMs: 50, runId: "codex-agent-message" });
     expect(result).toMatchObject({ exitCode: 0, usage: { tokens: 7 }, events: [{ type: "item.completed", data: { content: 'BEARING_RESULT {"kind":"question","question":"Which database? [redacted] please"}' } }, { type: "turn.completed" }] });
     expect(JSON.stringify(result)).not.toContain("hunter2");
+  });
+
+  it("discovers only a valid Codex thread id from structured output", async () => {
+    const thread = "123e4567-e89b-12d3-a456-426614174000";
+    const h = harness(`{"type":"thread.started","thread_id":"${thread}"}\n{"type":"turn.completed","usage":{"input_tokens":1,"output_tokens":1}}\n`);
+    expect(await h.runner.run({ routeId: "codex", executable: "codex", args: [], stdin: "x", cwd: repositoryPath, timeoutMs: 50, runId: "thread" })).toMatchObject({ providerSessionId: thread, usage: { tokens: 2 } });
+    const invalid = harness('{"type":"thread.started","thread_id":"not-a-thread"}\n{"type":"turn.completed","usage":{"input_tokens":1,"output_tokens":1}}\n');
+    expect((await invalid.runner.run({ routeId: "codex", executable: "codex", args: [], stdin: "x", cwd: repositoryPath, timeoutMs: 50, runId: "invalid-thread" })).providerSessionId).toBeUndefined();
   });
 
   it("bounds output, rejects malformed JSON, times out, and cancels idempotently", async () => {

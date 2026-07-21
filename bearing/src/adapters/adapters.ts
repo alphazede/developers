@@ -33,7 +33,8 @@ export const BUILTIN_ROUTES: readonly RouteDescriptor[] = [
 ];
 
 export interface IsolationAttestation { readonly isolated: boolean; readonly evidence: string; }
-export interface ProcessInvocation { readonly routeId: string; readonly executable: string; readonly args: readonly string[]; readonly stdin: string; readonly cwd: string; readonly timeoutMs: number; readonly runId: string; readonly promptFile?: boolean; readonly environment?: Readonly<Record<string, string>>; }
+export interface ProcessActivity { readonly sequence: number; readonly kind: string; readonly status?: string; readonly tool?: string; }
+export interface ProcessInvocation { readonly routeId: string; readonly executable: string; readonly args: readonly string[]; readonly stdin: string; readonly cwd: string; readonly timeoutMs: number; readonly runId: string; readonly sessionKey?: string; readonly providerSessionId?: string; readonly promptFile?: boolean; readonly environment?: Readonly<Record<string, string>>; readonly onActivity?: (activity: ProcessActivity) => void; }
 export interface ProcessResult {
   readonly exitCode?: number;
   readonly timedOut?: boolean;
@@ -44,6 +45,8 @@ export interface ProcessResult {
   readonly sideEffectFree?: boolean;
   readonly events?: unknown;
   readonly usage?: { readonly tokens: number };
+  /** A provider-issued session id discovered from bounded structured output. */
+  readonly providerSessionId?: string;
   readonly error?: unknown;
 }
 
@@ -58,7 +61,7 @@ export interface ProcessRunner {
 
 export interface Inspection { readonly route: RouteDescriptor; readonly available: boolean; readonly capabilities: readonly string[]; }
 export interface Verification { readonly ok: boolean; readonly failure?: "unavailable" | "verification_failed"; }
-export interface ExecuteRequest { readonly runId: string; readonly repositoryPath: string; readonly role: RoleProjection; readonly task: { readonly prompt: string }; readonly fallbackRoute?: string; readonly allowSubagents?: boolean; }
+export interface ExecuteRequest { readonly runId: string; readonly repositoryPath: string; readonly role: RoleProjection; readonly task: { readonly prompt: string }; readonly fallbackRoute?: string; readonly allowSubagents?: boolean; readonly onActivity?: (activity: ProcessActivity) => void; }
 export interface ExecutionReceipt {
   readonly status: ExecutionStatus;
   readonly requestedRoute: string;
@@ -102,6 +105,7 @@ function sanitize(value: unknown, depth = 0): unknown {
 
 class ProcessAgentAdapter implements AgentAdapter {
   private readonly cancelled = new Set<string>();
+  private static readonly sessions = new WeakMap<ProcessRunner, Map<string, string>>();
   constructor(private readonly route: RouteDescriptor, private readonly selection: Selection, private readonly runner: ProcessRunner) {}
   inspect(): Inspection { return { route: this.route, available: this.runner.executableAvailable(this.route.executable), capabilities: [...this.route.capabilities] }; }
   async verify(): Promise<Verification> {
@@ -138,7 +142,8 @@ class ProcessAgentAdapter implements AgentAdapter {
     return mode === "required" ? { state: "blocked", warnings: ["isolation_required"] } : { state: "local", warnings: ["local_execution_unattested"] };
   }
   private async run(request: ExecuteRequest, requested: string, isolation: "attested" | "local" | "off", warnings: readonly string[]): Promise<ExecutionReceipt> {
-    const invocation = buildInvocation(this.route, this.selection, request);
+    const sessionKey = this.sessionKey(request);
+    const invocation = buildInvocation(this.route, this.selection, request, sessionKey ? this.sessions().get(sessionKey) : undefined);
     if (!invocation.ok) return this.receipt("blocked", requested, this.route.id, isolation, [...warnings, ...invocation.warnings], "unsupported_policy", 0, [], 0);
     const effectiveWarnings = [...warnings, ...invocation.warnings];
     let attempts = 0;
@@ -147,11 +152,23 @@ class ProcessAgentAdapter implements AgentAdapter {
       attempts += 1;
       const result = await this.runner.run(invocation.value);
       const failure: FailureClass | undefined = result.unknownSideEffect ? "unknown_side_effect" : result.cancelled || this.cancelled.has(request.runId) ? "cancelled" : result.timedOut ? "timeout" : result.exitCode !== 0 ? "nonzero_exit" : !events(result.events) ? "malformed_output" : result.usage === undefined || !Number.isSafeInteger(result.usage.tokens) || result.usage.tokens < 0 || result.usage.tokens > request.role.limits.tokenBudget ? "token_budget" : undefined;
-      if (!failure) return this.receipt("completed", requested, this.route.id, isolation, effectiveWarnings, undefined, result.usage!.tokens, events(result.events)!, attempts);
+      if (!failure) {
+        if (sessionKey && result.providerSessionId) this.sessions().set(sessionKey, result.providerSessionId);
+        return this.receipt("completed", requested, this.route.id, isolation, effectiveWarnings, undefined, result.usage!.tokens, events(result.events)!, attempts);
+      }
       if (failure === "unknown_side_effect") return this.receipt("blocked_reconcile", requested, this.route.id, isolation, effectiveWarnings, failure, result.usage?.tokens ?? 0, [], attempts);
       if (result.sideEffectFree === true && attempts <= request.role.limits.maxRetries && !this.cancelled.has(request.runId)) continue;
       return this.receipt(failure === "cancelled" ? "cancelled" : "failed", requested, this.route.id, isolation, effectiveWarnings, failure, result.usage?.tokens ?? 0, [], attempts);
     }
+  }
+  private sessions(): Map<string, string> {
+    let sessions = ProcessAgentAdapter.sessions.get(this.runner);
+    if (!sessions) { sessions = new Map(); ProcessAgentAdapter.sessions.set(this.runner, sessions); }
+    return sessions;
+  }
+  private sessionKey(request: ExecuteRequest): string | undefined {
+    if (this.route.provider !== "codex" || request.role.sessionId === null) return undefined;
+    return JSON.stringify([request.role.sessionId, this.route.id, request.repositoryPath, this.selection.model, this.selection.reasoning]);
   }
   private receipt(status: ExecutionStatus, requestedRoute: string, effectiveRoute: string, isolation: ExecutionReceipt["isolation"], warningCodes: readonly string[], failure: FailureClass | undefined, tokens: number, structuredEvents: ExecutionReceipt["events"], attempts: number): ExecutionReceipt {
     return { status, requestedRoute, effectiveRoute, isolation, warningCodes, ...(failure ? { failure, error: { code: failure } } : {}), usage: { tokens }, events: structuredEvents, attempts };
@@ -160,27 +177,27 @@ class ProcessAgentAdapter implements AgentAdapter {
 
 type InvocationBuild = { readonly ok: true; readonly value: ProcessInvocation; readonly warnings: readonly string[] } | { readonly ok: false; readonly warnings: readonly string[] };
 
-function buildInvocation(route: RouteDescriptor, selection: Selection, request: ExecuteRequest): InvocationBuild {
+function buildInvocation(route: RouteDescriptor, selection: Selection, request: ExecuteRequest, providerSessionId?: string): InvocationBuild {
   const role = request.role;
   if (role.authority.externalAction || !role.authority.read || !role.authority.workspace) return { ok: false, warnings: ["authority_unsupported"] };
   if (!route.reasoningLevels.includes(selection.reasoning)) return { ok: false, warnings: ["reasoning_unsupported"] };
   if (!role.authority.write && role.toolAllow.some((tool) => /write|edit|shell|bash/i.test(tool))) return { ok: false, warnings: ["tool_authority_conflict"] };
-  const common = { routeId: route.id, executable: route.executable, stdin: request.task.prompt, cwd: request.repositoryPath, timeoutMs: role.limits.timeoutMs, runId: request.runId };
+  const common = { routeId: route.id, executable: route.executable, stdin: request.task.prompt, cwd: request.repositoryPath, timeoutMs: role.limits.timeoutMs, runId: request.runId, ...(request.onActivity ? { onActivity: request.onActivity } : {}) };
   if (route.provider === "codex") {
     if (role.toolDeny.some((tool) => tool !== "external-action")) return { ok: false, warnings: ["codex_tool_deny_unsupported"] };
     if (role.authority.network) return { ok: false, warnings: ["codex_network_policy_unsupported"] };
-    if (role.sessionId !== null) return { ok: false, warnings: ["codex_session_policy_unsupported"] };
     const sandbox = role.authority.write ? "workspace-write" : "read-only";
     const modelArgs = selection.model === "*" ? [] : ["-m", selection.model];
-    return { ok: true, value: { ...common, args: ["exec", "--json", ...modelArgs, "-c", `model_reasoning_effort="${selection.reasoning}"`, "-c", 'approval_policy="never"', "-C", request.repositoryPath, "-s", sandbox, "--ephemeral", "-"] }, warnings: [] };
+    const session = role.sessionId === null ? {} : { sessionKey: role.sessionId };
+    if (providerSessionId) return { ok: true, value: { ...common, ...session, providerSessionId, args: ["exec", "resume", providerSessionId, "--json", ...modelArgs, "-c", `model_reasoning_effort="${selection.reasoning}"`, "-c", 'approval_policy="never"', "-c", `sandbox_mode="${sandbox}"`, "-"] }, warnings: [] };
+    return { ok: true, value: { ...common, ...session, args: ["exec", "--json", ...modelArgs, "-c", `model_reasoning_effort="${selection.reasoning}"`, "-c", 'approval_policy="never"', "-C", request.repositoryPath, "-s", sandbox, ...(role.sessionId === null ? ["--ephemeral"] : []), "-"] }, warnings: [] };
   }
   if (route.provider === "grok") {
-    if (role.sessionId !== null) return { ok: false, warnings: ["grok_session_policy_unsupported"] };
     const args = [...(request.allowSubagents === true ? ["--allow-subagents"] : []), "--", "--output-format", "streaming-json", "--prompt-file", "/dev/stdin", "--cwd", request.repositoryPath, "--model", selection.model, "--reasoning-effort", selection.reasoning, "--max-turns", String(role.limits.maxTurns), "--tools", role.toolAllow.join(","), "--disallowed-tools", role.toolDeny.join(","), "--sandbox", "strict", "--permission-mode", "dontAsk", "--no-memory", ...(request.allowSubagents === true ? [] : ["--no-subagents"]), ...(!role.authority.network ? ["--disable-web-search"] : [])];
     return { ok: true, value: { ...common, args }, warnings: [] };
   }
   if (route.provider === "claude") {
-    if (role.sessionId !== null || role.authority.network || role.authority.externalAction) return { ok: false, warnings: ["claude_policy_unsupported"] };
+    if (role.authority.network || role.authority.externalAction) return { ok: false, warnings: ["claude_policy_unsupported"] };
     const modelArgs = selection.model === "*" ? [] : ["--model", selection.model];
     const requestedTools = new Set(role.toolAllow.map((tool) => tool.toLowerCase()));
     if ([...requestedTools].some((tool) => !["read", "search", "edit", "write"].includes(tool))) return { ok: false, warnings: ["claude_tool_policy_unsupported"] };
@@ -188,7 +205,6 @@ function buildInvocation(route: RouteDescriptor, selection: Selection, request: 
     return { ok: true, value: { ...common, args: ["--print", "--output-format", "stream-json", "--verbose", ...modelArgs, "--effort", selection.reasoning, "--permission-mode", "dontAsk", "--allowedTools", allowedTools, "--no-session-persistence"] }, warnings: [] };
   }
   if (route.provider === "agy") {
-    if (role.sessionId !== null) return { ok: false, warnings: ["agy_session_policy_unsupported"] };
     if (!role.authority.network) return { ok: false, warnings: ["agy_network_policy_unsupported"] };
     if (role.limits.tokenBudget !== Number.MAX_SAFE_INTEGER) return { ok: false, warnings: ["agy_token_budget_unsupported"] };
     const mode = role.authority.write ? "accept-edits" : "plan";
@@ -196,7 +212,6 @@ function buildInvocation(route: RouteDescriptor, selection: Selection, request: 
     return { ok: true, value: { ...common, args: ["--sandbox", "--add-dir", "__BEARING_PROMPT_DIR__", "--mode", mode, ...modelArgs, "--print", "Read and follow the complete task in @__BEARING_PROMPT_FILE__."], promptFile: true }, warnings: ["usage_unavailable", "provider_permissions_inherited"] };
   }
   if (route.provider === "opencode") {
-    if (role.sessionId !== null) return { ok: false, warnings: ["opencode_session_policy_unsupported"] };
     const modelArgs = selection.model === "*" ? [] : ["--model", selection.model];
     const variantArgs = selection.reasoning === "default" ? [] : ["--variant", selection.reasoning];
     const requestedTools = new Set(role.toolAllow.map((tool) => tool.toLowerCase()));
@@ -217,7 +232,6 @@ function buildInvocation(route: RouteDescriptor, selection: Selection, request: 
     return { ok: true, value: { ...common, args: ["run", "--format", "json", "--dir", request.repositoryPath, ...modelArgs, ...variantArgs, "--file", "__BEARING_PROMPT_FILE__", "Read and follow the attached task instructions."], promptFile: true, environment: { OPENCODE_PERMISSION: JSON.stringify(permissions) } }, warnings: [] };
   }
   if (route.provider === "pi") {
-    if (role.sessionId !== null) return { ok: false, warnings: ["pi_session_policy_unsupported"] };
     const modelArgs = selection.model === "*" ? [] : ["--model", selection.model];
     const args = ["--mode", "json", "--print", ...modelArgs, "--thinking", selection.reasoning, "--tools", role.toolAllow.join(","), "--exclude-tools", role.toolDeny.join(","), "--no-session", ...(!role.authority.network ? ["--offline"] : [])];
     return { ok: true, value: { ...common, args }, warnings: [] };

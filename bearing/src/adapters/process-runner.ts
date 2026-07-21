@@ -2,11 +2,14 @@ import { execFileSync, spawn, type ChildProcessWithoutNullStreams } from "node:c
 import { accessSync, constants, mkdtempSync, readFileSync, realpathSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { delimiter, isAbsolute, join, relative } from "node:path";
-import type { ProcessInvocation, ProcessResult, ProcessRunner, RouteDescriptor, RouteModelOption } from "./adapters.js";
+import { StringDecoder } from "node:string_decoder";
+import type { ProcessActivity, ProcessInvocation, ProcessResult, ProcessRunner, RouteDescriptor, RouteModelOption } from "./adapters.js";
 
 const MAX_STDOUT = 1024 * 1024;
 const MAX_STDERR = 64 * 1024;
 const MAX_EVENT_TEXT = 512 * 1024;
+const MAX_ACTIVITIES = 1024;
+const SAFE_ACTIVITY_VALUE = /^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$/;
 
 type SpawnPort = (executable: string, args: readonly string[], options: {
   readonly cwd: string;
@@ -78,7 +81,7 @@ function safe(value: unknown, depth = 0): unknown {
   return Object.fromEntries(Object.entries(value).slice(0, 64).flatMap(([key, entry]) => EVENT_DATA_KEYS.has(key) && !/key|secret|token|credential|authorization|password/i.test(key) ? [[key, safe(entry, depth + 1)]] : []));
 }
 
-function normalize(stdout: string, routeId: string): { events: readonly unknown[]; usage: { tokens: number } } | undefined {
+function normalize(stdout: string, routeId: string): { events: readonly unknown[]; usage: { tokens: number }; providerSessionId?: string } | undefined {
   const trimmed = stdout.trim();
   if (!trimmed) return undefined;
   let values: unknown[];
@@ -91,8 +94,10 @@ function normalize(stdout: string, routeId: string): { events: readonly unknown[
   }
   if (!values.length || values.length > 1024 || values.some((value) => typeof value !== "object" || value === null || Array.isArray(value))) return undefined;
   let tokens: number | undefined;
+  let providerSessionId: string | undefined;
   const events = values.map((value) => {
     const record = value as Record<string, unknown>;
+    if (routeId === "codex" && record.type === "thread.started" && typeof record.thread_id === "string" && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(record.thread_id)) providerSessionId = record.thread_id;
     const found = tokenUsage(record);
     if (found !== undefined) tokens = routeId === "opencode" ? (tokens ?? 0) + found : found;
     const type = typeof record.type === "string" ? record.type : typeof record.event === "string" ? record.event : "message";
@@ -103,11 +108,38 @@ function normalize(stdout: string, routeId: string): { events: readonly unknown[
     const data = agentMessage ?? partText ?? record.data ?? record.message ?? record.text ?? record.content ?? record.result ?? record.status;
     return { type, ...(data === undefined ? {} : { data: typeof data === "object" && data !== null && !Array.isArray(data) ? safe(data) : { content: safe(data) } }) };
   });
-  return tokens === undefined ? undefined : { events, usage: { tokens } };
+  return tokens === undefined ? undefined : { events, usage: { tokens }, ...(providerSessionId ? { providerSessionId } : {}) };
 }
 
 function mayHaveSideEffect(stdout: string): boolean {
   return /"(?:type|event)"\s*:\s*"[^"]*(?:tool|command|exec)/i.test(stdout);
+}
+
+function activity(line: string, sequence: number): ProcessActivity | undefined {
+  let value: unknown;
+  try { value = JSON.parse(line); } catch { return undefined; }
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return undefined;
+  const record = value as Record<string, unknown>;
+  const kind = activityValue(record.type) ?? activityValue(record.event);
+  if (!kind) return undefined;
+  const item = object(record.item);
+  const tool = object(record.tool);
+  const status = activityValue(record.status) ?? activityValue(item?.status);
+  const itemType = activityValue(item?.type);
+  const toolLike = /tool|command|exec/i.test(kind) || (itemType !== undefined && /tool|command|exec/i.test(itemType));
+  const toolName = activityValue(record.tool)
+    ?? activityValue(tool?.name)
+    ?? (toolLike ? activityValue(item?.name) ?? activityValue(record.name) ?? itemType : undefined);
+  return { sequence, kind, ...(status ? { status } : {}), ...(toolName ? { tool: toolName } : {}) };
+}
+
+function activityValue(value: unknown): string | undefined {
+  if (typeof value !== "string" || !SAFE_ACTIVITY_VALUE.test(value)) return undefined;
+  return value.replace(SECRET, "[redacted]") === value ? value : undefined;
+}
+
+function object(value: unknown): Record<string, unknown> | undefined {
+  return typeof value === "object" && value !== null && !Array.isArray(value) ? value as Record<string, unknown> : undefined;
 }
 
 /** Dependency-free production process port. Raw output is discarded after normalization. */
@@ -228,6 +260,22 @@ export class NodeProcessRunner implements ProcessRunner {
       let stderrSize = 0;
       let overflow = false;
       let settled = false;
+      const decoder = invocation.onActivity ? new StringDecoder("utf8") : undefined;
+      let activityRemainder = "";
+      let activitySequence = 0;
+      const emitActivity = (line: string): void => {
+        if (!invocation.onActivity || activitySequence >= MAX_ACTIVITIES) return;
+        const projected = activity(line.replace(/\r$/, ""), activitySequence + 1);
+        if (!projected) return;
+        activitySequence += 1;
+        try { invocation.onActivity(projected); } catch { /* observers cannot affect execution */ }
+      };
+      const flushActivity = (): void => {
+        if (!decoder || overflow) return;
+        const line = `${activityRemainder}${decoder.end()}`;
+        if (line.trim()) emitActivity(line);
+        activityRemainder = "";
+      };
       const finish = (result: ProcessResult): void => {
         if (settled) return;
         settled = true;
@@ -243,6 +291,11 @@ export class NodeProcessRunner implements ProcessRunner {
         stdoutSize += chunk.length;
         if (stdoutSize > MAX_STDOUT) { overflow = true; terminate(child); return; }
         stdout.push(chunk);
+        if (decoder) {
+          const lines = `${activityRemainder}${decoder.write(chunk)}`.split("\n");
+          activityRemainder = lines.pop() ?? "";
+          for (const line of lines) emitActivity(line);
+        }
       });
       child.stderr.on("data", (chunk: Buffer) => {
         if (settled || overflow) return;
@@ -251,6 +304,8 @@ export class NodeProcessRunner implements ProcessRunner {
       });
       child.on("error", () => finish({ exitCode: 1 }));
       child.on("close", (code) => {
+        if (settled) return;
+        flushActivity();
         const body = captured();
         if (this.cancelled.has(invocation.runId)) { finish(mayHaveSideEffect(body) ? { unknownSideEffect: true } : { cancelled: true }); return; }
         if (overflow) { finish(mayHaveSideEffect(body) ? { unknownSideEffect: true } : { exitCode: 0, events: "oversized" }); return; }

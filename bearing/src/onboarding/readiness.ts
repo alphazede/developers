@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { realpathSync, statSync } from "node:fs";
 import { BUILTIN_ROUTES, createAgentAdapter, routeFor, type ProcessRunner, type RouteDescriptor, type RouteModelOption } from "../adapters/adapters.js";
 import {
   parseAgentProfile,
@@ -39,7 +40,6 @@ export interface RouteInspection {
   readonly detected: boolean;
   readonly capabilities: readonly string[];
   readonly reasoning: string;
-  readonly models: readonly RouteModelOption[];
 }
 
 export type ReadinessResult =
@@ -85,30 +85,65 @@ function descriptor(selection: Selection): RouteDescriptor | undefined {
   return route?.reasoningLevels.includes(selection.reasoning) ? route : undefined;
 }
 
+function fallback(route: RouteDescriptor, current: { readonly model: string; readonly reasoning: string } | undefined): readonly RouteModelOption[] {
+  const model = current?.model ?? route.model;
+  const reasoning = route.reasoningLevels.includes(current?.reasoning ?? "") ? current!.reasoning : route.reasoningLevels[0]!;
+  return [{ model, label: model === "*" ? "Agent default" : model, reasoningLevels: route.reasoningLevels, defaultReasoning: reasoning }];
+}
+
+function normalized(options: readonly RouteModelOption[], fallbackOption: readonly RouteModelOption[]): readonly RouteModelOption[] {
+  const seen = new Set<string>();
+  const safe = options.flatMap((option) => {
+    const model = typeof option.model === "string" && /^[^\s\u0000-\u001f]{1,256}$/.test(option.model) ? option.model : undefined;
+    const levels = Array.isArray(option.reasoningLevels) ? option.reasoningLevels.filter((level): level is string => typeof level === "string" && REASONING_LEVELS.includes(level as typeof REASONING_LEVELS[number])).slice(0, REASONING_LEVELS.length) : [];
+    if (!model || !levels.length || seen.has(model)) return [];
+    seen.add(model);
+    return [{ model, label: model === "*" ? "Agent default" : model, reasoningLevels: levels, defaultReasoning: levels.includes(option.defaultReasoning) ? option.defaultReasoning : levels[0]! }];
+  });
+  return safe.length ? safe.slice(0, 64) : fallbackOption;
+}
+
 export class ReadinessService {
+  private readonly models = new Map<string, readonly RouteModelOption[]>();
   constructor(
     private readonly inspection: RouteInspectionPort,
     private readonly verification?: VerificationPort,
     private readonly overrides: RunOverrides = {},
   ) {}
 
-  inspect(repositoryPath = process.cwd()): readonly RouteInspection[] {
+  inspect(_repositoryPath = process.cwd()): readonly RouteInspection[] {
     return BUILTIN_ROUTES.slice(0, 16).map((route) => {
       const detected = this.inspection.executableAvailable(route.executable);
       const current = this.inspection.currentSelection?.(route);
-      const discovered = detected ? this.inspection.modelOptions?.(route, repositoryPath) ?? [] : [];
-      const models = discovered.length ? discovered : [{ model: current?.model ?? route.model, label: current?.model === "*" || !current ? "Agent default" : current.model, reasoningLevels: route.reasoningLevels, defaultReasoning: route.reasoningLevels.includes(current?.reasoning ?? "") ? current!.reasoning : route.reasoningLevels[0] }];
-      const selectedModel = models.find(({ model }) => model === current?.model) ?? models[0];
+      const selectedModel = fallback(route, current)[0]!;
       return {
         id: route.id,
         provider: route.provider,
         model: selectedModel.model,
         reasoning: selectedModel.reasoningLevels.includes(current?.reasoning ?? "") ? current!.reasoning : selectedModel.defaultReasoning,
-        models,
         detected,
         capabilities: route.capabilities.slice(0, 16),
       };
     });
+  }
+
+  discover(routeId: string, repositoryPath: string, detected = false): readonly RouteModelOption[] | undefined {
+    const route = BUILTIN_ROUTES.find((candidate) => candidate.id === routeId);
+    if (!route || (!detected && !this.inspection.executableAvailable(route.executable))) return undefined;
+    let repository: string;
+    try {
+      repository = realpathSync(repositoryPath);
+      if (!statSync(repository).isDirectory()) return undefined;
+    } catch { return undefined; }
+    const key = `${repository}\u0000${route.id}`;
+    const cached = this.models.get(key);
+    if (cached) return cached;
+    const safeFallback = fallback(route, this.inspection.currentSelection?.(route));
+    let discovered: readonly RouteModelOption[] = [];
+    try { discovered = this.inspection.modelOptions?.(route, repository) ?? []; } catch { /* static fallback */ }
+    const choices = normalized(discovered, safeFallback);
+    this.models.set(key, choices);
+    return choices;
   }
 
   async check(selection: Selection, repositoryPath = process.cwd()): Promise<ReadinessResult> {
@@ -119,10 +154,9 @@ export class ReadinessService {
     };
     const route = descriptor(effectiveSelection);
     const detected = route ? this.inspection.executableAvailable(route.executable) : false;
-    const discovered = route && detected ? this.inspection.modelOptions?.(route, repositoryPath) : undefined;
-    const models = discovered?.length ? discovered : undefined;
+    const models = route && detected ? this.discover(route.id, repositoryPath, true) : undefined;
     const selectedModel = models?.find(({ model }) => model === effectiveSelection.model);
-    if (!route || !detected || (models && (!selectedModel || !selectedModel.reasoningLevels.includes(effectiveSelection.reasoning)))) {
+    if (!route || !detected || !models || (this.inspection.modelOptions !== undefined && (!selectedModel || !selectedModel.reasoningLevels.includes(effectiveSelection.reasoning)))) {
       return { status: "blocked", detected, verified: false, code: "selection_unavailable", repair: "choose_detected_route" };
     }
     const resolved = resolveRun({ ...BASE_PROFILE, selection }, this.overrides, randomUUID());

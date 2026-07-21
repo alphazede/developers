@@ -1,4 +1,4 @@
-import { mkdtemp, mkdir, realpath, rm, symlink, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, readFile, realpath, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -14,6 +14,13 @@ class StubRunner implements ProcessRunner {
   constructor(private readonly result: ProcessResult, private readonly available = true) {}
   executableAvailable(): boolean { return this.available; }
   async run(invocation: ProcessInvocation): Promise<ProcessResult> { this.calls.push(invocation); return this.result; }
+}
+
+class QueueRunner implements ProcessRunner {
+  readonly calls: ProcessInvocation[] = [];
+  constructor(private readonly results: readonly ProcessResult[]) {}
+  executableAvailable(): boolean { return true; }
+  async run(invocation: ProcessInvocation): Promise<ProcessResult> { this.calls.push(invocation); return this.results[this.calls.length - 1] ?? { exitCode: 1 }; }
 }
 
 function resolved(selection: Selection): ResolvedRun {
@@ -35,7 +42,9 @@ function completed(text: string, tokens = 5): ProcessResult {
 }
 
 async function writePlanningPackage(root: string, directory = "docs/plans/import"): Promise<void> {
-  const plan = "# Plan\n", design = "# Design\n", seit = "# SEIT\n";
+  const plan = "# Plan\n";
+  const design = "---\ntype: design\nstatus: complete\n---\n\n## Use Cases and Communication Flows\n\nComplete flow.\n\n## Interface Option Check\n\ninterface_options: not needed - fixture\n\n## OOPDSA Implementation Design\n\nComplete contract.\n";
+  const seit = "---\ntype: seit\nstatus: complete\n---\n\n## Per-slice Verification and Validation Matrix\n\nComplete matrix.\n\n## Cross-cutting Checks\n\nComplete checks.\n";
   const implementation = "# Implementation\n\n## Phase 1 — Build\n\n### Slice 1.1 — Import\n\n**Implementation role.** Backend Engineer\n\n**Agent model route.** Codex agent default\n\n**Agent reasoning level.** medium.\n\n**Ponytail mode.** full\n\n**Review path.** native review\n\n**Required lint/static-analysis.** pnpm test\n";
   const escape = (value: string) => value.trim().replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;");
   await mkdir(join(root, directory), { recursive: true });
@@ -69,6 +78,71 @@ describe("JourneyService", () => {
     expect(await service.execute(input)).toEqual({ status: "failure", code: "cancelled", tokens: 5 });
   });
 
+  it("sets bearings locally once, with a bounded reusable map and no process call", async () => {
+    const input = await request({ stage: "set-bearings", workGoal: "Add safe account import" });
+    await mkdir(join(input.repositoryPath, "node_modules", "hidden"), { recursive: true });
+    await Promise.all([
+      mkdir(join(input.repositoryPath, ".bearing"), { recursive: true }),
+      writeFile(join(input.repositoryPath, "package.json"), '{"name":"fixture"}'),
+      writeFile(join(input.repositoryPath, ".env"), "API_KEY=not-for-the-map"),
+      writeFile(join(input.repositoryPath, "node_modules", "hidden", "secret.txt"), "not-for-the-map"),
+    ]);
+    const runner = new StubRunner(completed('BEARING_RESULT {"kind":"question","question":"unused"}'));
+    const service = new JourneyService(runner);
+    const result = await service.execute(input);
+    expect(result).toMatchObject({ status: "action", summary: "Bearings set locally.", tokens: 0 });
+    expect(runner.calls).toHaveLength(0);
+    if (result.status !== "action") throw new Error("missing local action");
+    expect(result.artifacts).toEqual([
+      expect.stringMatching(/^docs\/plans\/\d{4}-\d{2}-\d{2}-add-safe-account-import\/prompts\/repository-map\.md$/),
+      expect.stringMatching(/^docs\/plans\/\d{4}-\d{2}-\d{2}-add-safe-account-import\/plan-spec\.md$/),
+    ]);
+    const map = await readFile(join(input.repositoryPath, result.artifacts[0]), "utf8");
+    expect(map).toContain("`package.json`");
+    expect(map).not.toMatch(/API_KEY|not-for-the-map|node_modules|\.bearing|\.env/);
+    expect(service.activityTrail(input.runId).map(({ kind, status }) => [kind, status])).toEqual([
+      ["stage.started", "running"],
+      ["repository-map.started", "running"],
+      ["workspace.ready", "created"],
+    ]);
+    const resumed = await service.execute({ ...input, planDirectory: result.artifacts[1].replace(/\/plan-spec\.md$/, "") });
+    expect(resumed).toMatchObject({ status: "action", summary: "Bearings resumed locally.", artifacts: result.artifacts, tokens: 0 });
+    expect(runner.calls).toHaveLength(0);
+  });
+
+  it("keeps a bounded safe server-ordered activity trail and resets it for a new stage", async () => {
+    const runner: ProcessRunner = {
+      executableAvailable: () => true,
+      run: async (invocation) => {
+        if (invocation.args.includes("review")) {
+          invocation.onActivity?.({ sequence: 999, kind: "turn.completed", status: "completed" });
+          return completed("No findings.");
+        }
+        for (let index = 0; index < 22; index += 1) invocation.onActivity?.({ sequence: 900 + index, kind: "tool.started", status: "running", tool: "Read" });
+        invocation.onActivity?.({ sequence: 999, kind: "turn.completed", status: "sk-abcdefgh", tool: "private/source" } as never);
+        return completed('BEARING_RESULT {"kind":"question","question":"Continue?"}');
+      },
+    };
+    const service = new JourneyService(runner);
+    const input = await request({ priorOwnerQa: [] });
+    expect((await service.execute(input)).status).toBe("question");
+    const first = service.activityTrail(input.runId);
+    expect(first).toHaveLength(20);
+    expect(first.map((entry) => entry.sequence)).toEqual(Array.from({ length: 20 }, (_, index) => index + 5));
+    expect(first.every((entry) => !Number.isNaN(Date.parse(entry.recordedAt)))).toBe(true);
+    expect(JSON.stringify(first)).not.toMatch(/sk-abcdefgh|private|source|900|999/);
+    expect(first.at(-1)).toMatchObject({ kind: "turn.completed" });
+
+    expect((await service.execute({ ...input, stage: "review" })).status).toBe("action");
+    const review = service.activityTrail(input.runId);
+    expect(review[0]).toMatchObject({ sequence: 1, kind: "stage.started", status: "running" });
+    expect(review.at(-1)).toMatchObject({ kind: "turn.completed" });
+    expect(review).toHaveLength(2);
+    expect((await service.execute({ ...input, runId: "journey-isolated", stage: "gather-supplies" })).status).toBe("question");
+    expect(service.activityTrail(input.runId)).toEqual(review);
+    expect(service.activityTrail("journey-isolated")).toHaveLength(20);
+  });
+
   it("returns one owner question and builds the skill-specific bounded prompt", async () => {
     const runner = new StubRunner(completed('Working notes\nBEARING_RESULT {"kind":"question","question":"Should duplicate emails be skipped or rejected?"}', 149_937));
     const result = await new JourneyService(runner).execute(await request());
@@ -92,6 +166,25 @@ describe("JourneyService", () => {
     expect(runner.calls[0].args).not.toContain("workspace-write");
     expect(runner.calls[0].stdin).toMatch(/return every important unresolved owner question together/i);
     expect(runner.calls[0].stdin).toMatch(/Do not create or modify files during question discovery/i);
+  });
+
+  it("reuses only the matching Codex planning thread", async () => {
+    const thread = "123e4567-e89b-12d3-a456-426614174000";
+    const question = completed('BEARING_RESULT {"kind":"questions","questions":["Continue?"]}');
+    const runner = new QueueRunner([{ ...question, providerSessionId: thread }, question, question, question]);
+    const service = new JourneyService(runner);
+    const input = await request({ gatherMode: "questions", priorOwnerQa: [] });
+    expect((await service.execute(input)).status).toBe("question");
+    expect((await service.execute({ ...input, runId: "journey-2" })).status).toBe("question");
+    const changedSelection = { provider: "codex", model: "gpt-5.6-terra", reasoning: "medium" } as const;
+    expect((await service.execute({ ...input, runId: "journey-3", selection: changedSelection, run: resolved(changedSelection) })).status).toBe("question");
+    const otherRoot = await realpath(await mkdtemp(join(tmpdir(), "bearing-journey-other-"))); roots.push(otherRoot);
+    expect((await service.execute({ ...input, runId: "journey-4", repositoryPath: otherRoot })).status).toBe("question");
+    expect(runner.calls[0]?.args).not.toContain("resume");
+    expect(runner.calls[1]?.args).toEqual(expect.arrayContaining(["exec", "resume", thread]));
+    expect(runner.calls[2]?.args).not.toContain("resume");
+    expect(runner.calls[3]?.args).not.toContain("resume");
+    expect(runner.calls[0]?.args).toContain("read-only");
   });
 
   it("accepts a large valid question batch and reserves capacity for prior answers and the final check", async () => {
@@ -139,8 +232,8 @@ describe("JourneyService", () => {
     expect(runner.calls[0].args).not.toContain("--dangerously-skip-permissions");
   });
 
-  it("covers every stage with its existing skill or command", async () => {
-    const commands = { "set-bearings": "$to-plan", "gather-supplies": "$grill-with-docs", "map-route": "$design-driven-build", "draft-implementation": "$to-plan", "execute-explorer": "$conductor-orchestrate", "execute-expedition": "$ultimate-loop" } as const;
+  it("covers each model-driven stage with its existing skill or command", async () => {
+    const commands = { "gather-supplies": "$grill-with-docs", "map-route": "$design-driven-build", "draft-implementation": "$to-plan", "execute-explorer": "$conductor-orchestrate", "execute-expedition": "$ultimate-loop" } as const;
     for (const [stage, command] of Object.entries(commands) as [Exclude<JourneyStage, "review">, string][]) {
       const runner = new StubRunner(completed('BEARING_RESULT {"kind":"question","question":"Continue?"}'));
       expect((await new JourneyService(runner).execute(await request({ stage }))).status).toBe("question");
@@ -177,6 +270,16 @@ describe("JourneyService", () => {
     expect(runner.calls[0].stdin).toContain("do not use standard gate or gate-review");
   });
 
+  it("accepts Map the Route only as one complete gated planning package", async () => {
+    const input = await request({ stage: "map-route", planDirectory: "docs/plans/import" });
+    await writePlanningPackage(input.repositoryPath);
+    const runner = new StubRunner(completed('BEARING_RESULT {"kind":"action","summary":"Route and implementation drafted.","artifacts":["docs/plans/import/design.md","docs/plans/import/seit.md","docs/plans/import/implementation.md","docs/plans/import/review.html"]}'));
+    expect(await new JourneyService(runner).execute(input)).toMatchObject({ status: "action", planningReview: { phases: 1, slices: 1 } });
+    expect(runner.calls).toHaveLength(1);
+    expect(runner.calls[0].stdin).toMatch(/\$design-driven-build first[\s\S]*\$to-plan/);
+    expect(runner.calls[0].stdin).toMatch(/Interface Option Check[\s\S]*OOPDSA[\s\S]*implementation\.md/);
+  });
+
   it("rejects an implementation package that omits assignments or the complete embedded sources", async () => {
     const input = await request({ stage: "draft-implementation", planDirectory: "docs/plans/import" });
     await writePlanningPackage(input.repositoryPath);
@@ -187,7 +290,6 @@ describe("JourneyService", () => {
 
   it("requires each planning action to prove its stage artifacts", async () => {
     const cases: readonly [JourneyStage, string | undefined, readonly string[]][] = [
-      ["set-bearings", undefined, ["docs/plans/import/notes.md"]],
       ["gather-supplies", "docs/plans/import", ["docs/plans/import/notes.md"]],
       ["map-route", "docs/plans/import", ["docs/plans/import/design.md", "docs/plans/import/seit.md"]],
       ["draft-implementation", "docs/plans/import", ["docs/plans/import/notes.md"]],
@@ -209,9 +311,8 @@ describe("JourneyService", () => {
     expect((await new JourneyService(setRunner).execute(setInput)).status).toBe("action");
 
     const mapInput = await request({ stage: "map-route", planDirectory: "docs/plans/import" });
-    await mkdir(join(mapInput.repositoryPath, "docs/plans/import"), { recursive: true });
-    for (const name of ["design.md", "seit.md", "import-route-review.html"]) await writeFile(join(mapInput.repositoryPath, "docs/plans/import", name), "evidence\n");
-    const mapRunner = new StubRunner(completed('BEARING_RESULT {"kind":"action","summary":"Route mapped.","artifacts":["docs/plans/import/design.md","docs/plans/import/seit.md","docs/plans/import/import-route-review.html"]}'));
+    await writePlanningPackage(mapInput.repositoryPath);
+    const mapRunner = new StubRunner(completed('BEARING_RESULT {"kind":"action","summary":"Route mapped.","artifacts":["docs/plans/import/design.md","docs/plans/import/seit.md","docs/plans/import/implementation.md","docs/plans/import/review.html"]}'));
     expect((await new JourneyService(mapRunner).execute(mapInput)).status).toBe("action");
   });
 
