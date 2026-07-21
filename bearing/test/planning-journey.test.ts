@@ -42,7 +42,9 @@ function completed(text: string, tokens = 5): ProcessResult {
 }
 
 async function writePlanningPackage(root: string, directory = "docs/plans/import"): Promise<void> {
-  const plan = "# Plan\n", design = "# Design\n", seit = "# SEIT\n";
+  const plan = "# Plan\n";
+  const design = "---\ntype: design\nstatus: complete\n---\n\n## Use Cases and Communication Flows\n\nComplete flow.\n\n## Interface Option Check\n\ninterface_options: not needed - fixture\n\n## OOPDSA Implementation Design\n\nComplete contract.\n";
+  const seit = "---\ntype: seit\nstatus: complete\n---\n\n## Per-slice Verification and Validation Matrix\n\nComplete matrix.\n\n## Cross-cutting Checks\n\nComplete checks.\n";
   const implementation = "# Implementation\n\n## Phase 1 — Build\n\n### Slice 1.1 — Import\n\n**Implementation role.** Backend Engineer\n\n**Agent model route.** Codex agent default\n\n**Agent reasoning level.** medium.\n\n**Ponytail mode.** full\n\n**Review path.** native review\n\n**Required lint/static-analysis.** pnpm test\n";
   const escape = (value: string) => value.trim().replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;");
   await mkdir(join(root, directory), { recursive: true });
@@ -230,6 +232,16 @@ describe("JourneyService", () => {
     expect(runner.calls[0].stdin).toContain("do not use standard gate or gate-review");
   });
 
+  it("accepts Map the Route only as one complete gated planning package", async () => {
+    const input = await request({ stage: "map-route", planDirectory: "docs/plans/import" });
+    await writePlanningPackage(input.repositoryPath);
+    const runner = new StubRunner(completed('BEARING_RESULT {"kind":"action","summary":"Route and implementation drafted.","artifacts":["docs/plans/import/design.md","docs/plans/import/seit.md","docs/plans/import/implementation.md","docs/plans/import/review.html"]}'));
+    expect(await new JourneyService(runner).execute(input)).toMatchObject({ status: "action", planningReview: { phases: 1, slices: 1 } });
+    expect(runner.calls).toHaveLength(1);
+    expect(runner.calls[0].stdin).toMatch(/\$design-driven-build first[\s\S]*\$to-plan/);
+    expect(runner.calls[0].stdin).toMatch(/Interface Option Check[\s\S]*OOPDSA[\s\S]*implementation\.md/);
+  });
+
   it("rejects an implementation package that omits assignments or the complete embedded sources", async () => {
     const input = await request({ stage: "draft-implementation", planDirectory: "docs/plans/import" });
     await writePlanningPackage(input.repositoryPath);
@@ -261,9 +273,8 @@ describe("JourneyService", () => {
     expect((await new JourneyService(setRunner).execute(setInput)).status).toBe("action");
 
     const mapInput = await request({ stage: "map-route", planDirectory: "docs/plans/import" });
-    await mkdir(join(mapInput.repositoryPath, "docs/plans/import"), { recursive: true });
-    for (const name of ["design.md", "seit.md", "import-route-review.html"]) await writeFile(join(mapInput.repositoryPath, "docs/plans/import", name), "evidence\n");
-    const mapRunner = new StubRunner(completed('BEARING_RESULT {"kind":"action","summary":"Route mapped.","artifacts":["docs/plans/import/design.md","docs/plans/import/seit.md","docs/plans/import/import-route-review.html"]}'));
+    await writePlanningPackage(mapInput.repositoryPath);
+    const mapRunner = new StubRunner(completed('BEARING_RESULT {"kind":"action","summary":"Route mapped.","artifacts":["docs/plans/import/design.md","docs/plans/import/seit.md","docs/plans/import/implementation.md","docs/plans/import/review.html"]}'));
     expect((await new JourneyService(mapRunner).execute(mapInput)).status).toBe("action");
   });
 

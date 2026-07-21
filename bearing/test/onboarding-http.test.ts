@@ -241,7 +241,7 @@ describe("repository-first onboarding HTTP", () => {
   it("persists the verified route and drives the real journey through contained HTML evidence", async () => {
     const root = await mkdtemp(join(tmpdir(), "bearing-journey-")); roots.push(root);
     const planDirectory = `docs/plans/${new Date().toISOString().slice(0, 10)}-ship-bounded-evidence-without-losing-owner-control`;
-    const planning = { "plan-spec.md": "# Plan", "design.md": "# Design", "seit.md": "# SEIT", "implementation.md": "# Implementation\n\n## Phase 1 — Build\n\n### Slice 1.1 — Deliver\n\n**Implementation role.** Backend Engineer\n\n**Agent model route.** Codex agent default\n\n**Agent reasoning level.** low\n\n**Ponytail mode.** full\n\n**Review path.** native review\n\n**Required lint/static-analysis.** pnpm test" } as const;
+    const planning = { "plan-spec.md": "# Plan", "design.md": "---\ntype: design\nstatus: complete\n---\n\n## Use Cases and Communication Flows\n\nComplete flow.\n\n## Interface Option Check\n\ninterface_options: not needed - fixture\n\n## OOPDSA Implementation Design\n\nComplete contract.", "seit.md": "---\ntype: seit\nstatus: complete\n---\n\n## Per-slice Verification and Validation Matrix\n\nComplete matrix.\n\n## Cross-cutting Checks\n\nComplete checks.", "implementation.md": "# Implementation\n\n## Phase 1 — Build\n\n### Slice 1.1 — Deliver\n\n**Implementation role.** Backend Engineer\n\n**Agent model route.** Codex agent default\n\n**Agent reasoning level.** low\n\n**Ponytail mode.** full\n\n**Review path.** native review\n\n**Required lint/static-analysis.** pnpm test" } as const;
     const escaped = (value: string) => value.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;");
     const complete = (content?: string) => ({ exitCode: 0, events: [{ type: "complete", ...(content ? { data: { content } } : {}) }], usage: { tokens: 7 } });
     const action = (summary: string, artifacts: string[]) => `BEARING_RESULT ${JSON.stringify({ kind: "action", summary, artifacts })}`;
@@ -249,11 +249,9 @@ describe("repository-first onboarding HTTP", () => {
       complete("agent output without a Bearing envelope"),
       complete('BEARING_RESULT {"kind":"questions","questions":["Which acceptance risk matters most?"]}'),
       complete(action("Supplies gathered", [`${planDirectory}/plan-spec.md`])),
-      complete(action("Route mapped", [`${planDirectory}/design.md`, `${planDirectory}/seit.md`, `${planDirectory}/review.html`])),
-      complete(action("Implementation drafted", [`${planDirectory}/implementation.md`, `${planDirectory}/review.html`])),
+      complete(action("Route and implementation drafted", [`${planDirectory}/design.md`, `${planDirectory}/seit.md`, `${planDirectory}/implementation.md`, `${planDirectory}/review.html`])),
       complete(action("Review changes gathered", [`${planDirectory}/plan-spec.md`])),
-      complete(action("Route remapped", [`${planDirectory}/design.md`, `${planDirectory}/seit.md`, `${planDirectory}/review.html`])),
-      complete(action("Implementation redrafted", [`${planDirectory}/implementation.md`, `${planDirectory}/review.html`])),
+      complete(action("Route and implementation redrafted", [`${planDirectory}/design.md`, `${planDirectory}/seit.md`, `${planDirectory}/implementation.md`, `${planDirectory}/review.html`])),
       complete('BEARING_RESULT {"kind":"question","question":"May I replace the generated client?"}'),
       complete(action("Explorer completed bounded work", [`${planDirectory}/implementation.md`])),
       complete("No findings."),
@@ -283,11 +281,9 @@ describe("repository-first onboarding HTTP", () => {
     const finalPlanningQuestion = JSON.parse((await call(port, "GET", `/api/v1/runs/${runId}`, undefined, cookie)).body).pendingDecision;
     await postOwnerCommand(port, cookie, runId, "recordOwnerAnswer", { decisionId: finalPlanningQuestion.decisionId, answer: "No" });
     expect(JSON.parse((await journey("gather-supplies", { answer: "No" })).body)).toMatchObject({ status: "action" });
-    expect(JSON.parse((await journey("map-route")).body)).toMatchObject({ status: "action" });
-    expect(JSON.parse((await journey("draft-implementation")).body)).toMatchObject({ status: "action", planningReview: { phases: 1, slices: 1, assignments: [{ slice: "Slice 1.1 — Deliver", role: "Backend Engineer", model: "Codex agent default", reasoning: "low" }] } });
+    expect(JSON.parse((await journey("map-route")).body)).toMatchObject({ status: "action", planningReview: { phases: 1, slices: 1, assignments: [{ slice: "Slice 1.1 — Deliver", role: "Backend Engineer", model: "Codex agent default", reasoning: "low" }] } });
     expect(JSON.parse((await journey("gather-supplies", { reviewChange: "Add a rollback acceptance check" })).body)).toMatchObject({ status: "action", summary: "Review changes gathered" });
-    expect(JSON.parse((await journey("map-route")).body)).toMatchObject({ status: "action", summary: "Route remapped" });
-    expect(JSON.parse((await journey("draft-implementation")).body)).toMatchObject({ status: "action", summary: "Implementation redrafted" });
+    expect(JSON.parse((await journey("map-route")).body)).toMatchObject({ status: "action", summary: "Route and implementation redrafted" });
     expect((await journey("execute-explorer", { executionMode: "explorer", reviewCadence: "phase" })).status).toBe(409);
     await recordPlanningApproval(port, cookie, runId);
     expect(JSON.parse((await journey("execute-explorer", { executionMode: "explorer", reviewCadence: "phase" })).body)).toMatchObject({ status: "question", question: "May I replace the generated client?" });
@@ -297,8 +293,8 @@ describe("repository-first onboarding HTTP", () => {
     expect(JSON.parse((await journey("execute-explorer", { answer: "Yes, keep the public API stable" })).body)).toMatchObject({ status: "action" });
     const reviewed = JSON.parse((await journey("review")).body);
     expect(reviewed).toMatchObject({ status: "action", summary: "No findings." });
-    expect(reviewed.artifacts).toEqual([`${planDirectory}/prompts/repository-map.md`, `${planDirectory}/plan-spec.md`, `${planDirectory}/design.md`, `${planDirectory}/seit.md`, `${planDirectory}/review.html`, `${planDirectory}/implementation.md`]);
-    expect(reviewed.artifactLinks.map((link: { path: string }) => link.path)).toEqual([`${planDirectory}/prompts/repository-map.md`, `${planDirectory}/plan-spec.md`, `${planDirectory}/design.md`, `${planDirectory}/seit.md`, `${planDirectory}/review.html`, `${planDirectory}/implementation.md`]);
+    expect(reviewed.artifacts).toEqual([`${planDirectory}/prompts/repository-map.md`, `${planDirectory}/plan-spec.md`, `${planDirectory}/design.md`, `${planDirectory}/seit.md`, `${planDirectory}/implementation.md`, `${planDirectory}/review.html`]);
+    expect(reviewed.artifactLinks.map((link: { path: string }) => link.path)).toEqual([`${planDirectory}/prompts/repository-map.md`, `${planDirectory}/plan-spec.md`, `${planDirectory}/design.md`, `${planDirectory}/seit.md`, `${planDirectory}/implementation.md`, `${planDirectory}/review.html`]);
     const htmlLink = reviewed.artifactLinks.find((link: { path: string }) => link.path.endsWith("review.html")).url as string;
     expect((await call(port, "GET", htmlLink)).status).toBe(401);
     const artifact = await call(port, "GET", htmlLink, undefined, cookie);

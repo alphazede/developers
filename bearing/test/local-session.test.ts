@@ -297,7 +297,7 @@ describe("GET / native page and fragment secrecy", () => {
     expect(r.body).toContain("Safe to leave—resume this journey from History.");
     expect(r.body).toContain("Still active; this is taking longer than usual.");
     expect(r.body).toContain('"gather-supplies": { label: "5–60 minutes", max: 3600 }');
-    expect(r.body).toContain('"map-route": { label: "5–30 minutes", max: 1800 }');
+    expect(r.body).toContain('"map-route": { label: "10–35 minutes — design, validation, and implementation slicing", max: 2100 }');
     expect(r.body).toContain('"draft-implementation": { label: "about 5 minutes", max: 300 }');
     expect(r.body).toContain('recordTrail("Repository snapshot: "');
     expect(r.body).toContain("@keyframes wait-trail");

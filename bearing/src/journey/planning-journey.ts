@@ -39,7 +39,7 @@ export type JourneyResult =
 const STAGE_COMMAND: Readonly<Record<JourneyStage, string>> = {
   "set-bearings": "$to-plan",
   "gather-supplies": "$grill-with-docs",
-  "map-route": "$design-driven-build",
+  "map-route": "$design-driven-build first, then $to-plan",
   "draft-implementation": "$to-plan",
   "execute-explorer": "$conductor-orchestrate",
   "execute-expedition": "$ultimate-loop",
@@ -48,7 +48,7 @@ const STAGE_COMMAND: Readonly<Record<JourneyStage, string>> = {
 const STAGE_BOUNDARY: Readonly<Record<JourneyStage, string>> = {
   "set-bearings": "Create or resume only the plan directory, plan-spec.md stub, prompts directory, and repository map. Do not grill, design, draft implementation.md, or implement the work.",
   "gather-supplies": "Use the complete owner Q&A and update only the validated plan specification. Do not run design, draft implementation.md, or implement the work. Return an action receipt whose artifacts include the validated plan-spec.md path.",
-  "map-route": "Create only design.md, seit.md, and the generated review HTML in the validated plan directory. Do not draft implementation.md or implement the work. A successful action receipt must include all three relative paths.",
+  "map-route": "Explicitly invoke $design-driven-build first. Produce valid complete or amended design.md and seit.md, including Use Cases and Communication Flows, Interface Option Check, OOPDSA Implementation Design, SEIT per-slice verification, and cross-cutting checks. Only after those gates pass, explicitly invoke $to-plan to draft implementation.md and regenerate review.html. Do not execute implementation. A successful action receipt must include design.md, seit.md, implementation.md, and review.html in the validated plan directory.",
   "draft-implementation": "Draft implementation.md without executing any slice. Every slice must name its Implementation role, the exact onboarding Agent model route, its Agent reasoning level, Ponytail mode, Required lint/static-analysis, and Review path. The Review path must use the harness-native reviewer when available or the Surveyor fallback when unavailable; do not use standard gate or gate-review. Regenerate the existing review HTML so it embeds the complete route map or plan specification, design.md, seit.md, and implementation.md. A successful action receipt must include both implementation.md and the regenerated review HTML.",
   "execute-explorer": "Execute the approved implementation plan with Explorer and honor the recorded review cadence. Return only paths that actually exist.",
   "execute-expedition": "Execute the approved implementation plan with Expedition and honor the recorded review cadence. Return only paths that actually exist.",
@@ -146,7 +146,7 @@ function stageArtifactsValid(stage: JourneyStage, artifacts: readonly string[], 
   const routeReview = (path: string): boolean => posix.basename(path) === "review.html" || /^[A-Za-z0-9][A-Za-z0-9._-]*-route-review\.html$/.test(posix.basename(path));
   if (stage === "set-bearings") return artifacts.some(planSpec) && artifacts.some((path) => posix.basename(path) === "repository-map.md" && posix.dirname(posix.dirname(path)) === posix.dirname(artifacts.find(planSpec) ?? ""));
   if (stage === "gather-supplies") return artifacts.some((path) => inPlan(path) && planSpec(path));
-  if (stage === "map-route") return ["design.md", "seit.md"].every((name) => artifacts.some((path) => inPlan(path) && posix.basename(path) === name)) && artifacts.some((path) => inPlan(path) && routeReview(path));
+  if (stage === "map-route") return ["design.md", "seit.md", "implementation.md"].every((name) => artifacts.some((path) => inPlan(path) && posix.basename(path) === name)) && artifacts.some((path) => inPlan(path) && routeReview(path));
   if (stage === "draft-implementation") return artifacts.some((path) => inPlan(path) && posix.basename(path) === "implementation.md") && artifacts.some((path) => inPlan(path) && routeReview(path));
   return true;
 }
@@ -156,6 +156,11 @@ function escaped(value: string): string { return value.replaceAll("&", "&amp;").
 function field(section: string, name: string): string | undefined {
   const match = new RegExp(`^\\*\\*${name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\.\\*\\*\\s*(.+)$`, "mi").exec(section);
   return match?.[1]?.trim();
+}
+
+function completeArtifact(content: string, type: string, headings: readonly string[]): boolean {
+  if (!new RegExp(`^---[\\s\\S]*^type:\\s*${type}\\s*$[\\s\\S]*^status:\\s*(?:complete|amended)\\s*$[\\s\\S]*^---\\s*$`, "mi").test(content)) return false;
+  return headings.every((heading) => new RegExp(`^##\\s+${heading.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\s*\\n\\s*\\S`, "mi").test(content));
 }
 
 async function planningReview(root: string, planDirectory: string | undefined, selection: Selection): Promise<PlanningReview | undefined> {
@@ -170,6 +175,7 @@ async function planningReview(root: string, planDirectory: string | undefined, s
     if (!content.trim() || Buffer.byteLength(content) > MAX_PLANNING_ARTIFACT) throw new Error("invalid planning artifact");
     return content;
   }));
+  if (!completeArtifact(design, "design", ["Use Cases and Communication Flows", "Interface Option Check", "OOPDSA Implementation Design"]) || !completeArtifact(seit, "seit", ["Per-slice Verification and Validation Matrix", "Cross-cutting Checks"])) return undefined;
   if (![plan, design, seit, implementation].every((source) => review.includes(escaped(source.trim())))) return undefined;
 
   const headings = [...implementation.matchAll(/^###\s+(Slice\b[^\r\n]*)/gmi)];
@@ -269,9 +275,9 @@ export class JourneyService {
       if (this.cancelled.has(request.runId)) return { status: "failure", code: "cancelled", tokens };
     }
     if (!stageArtifactsValid(request.stage, parsed.artifacts, planDirectory)) return { status: "failure", code: "artifact_invalid", tokens };
-    const review = request.stage === "draft-implementation" ? await planningReview(repositoryPath, planDirectory, request.selection).catch(() => undefined) : undefined;
+    const review = request.stage === "map-route" || request.stage === "draft-implementation" ? await planningReview(repositoryPath, planDirectory, request.selection).catch(() => undefined) : undefined;
     if (this.cancelled.has(request.runId)) return { status: "failure", code: "cancelled", tokens };
-    if (request.stage === "draft-implementation" && !review) return { status: "failure", code: "artifact_invalid", tokens };
+    if ((request.stage === "map-route" || request.stage === "draft-implementation") && !review) return { status: "failure", code: "artifact_invalid", tokens };
     return { status: "action", summary: parsed.summary, artifacts: parsed.artifacts, tokens, ...(review ? { planningReview: review } : {}) };
   }
 
