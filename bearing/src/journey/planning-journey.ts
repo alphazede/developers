@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { lstat, readFile, readdir, realpath } from "node:fs/promises";
+import { lstat, readFile, readdir, realpath, writeFile } from "node:fs/promises";
 import { isAbsolute, posix, relative, resolve } from "node:path";
 import { createAgentAdapter, type ProcessActivity, type ProcessRunner } from "../adapters/adapters.js";
 import type { ResolvedRun, Selection } from "../profile/profile.js";
@@ -156,7 +156,7 @@ function stageArtifactsValid(stage: JourneyStage, artifacts: readonly string[], 
   const routeReview = (path: string): boolean => posix.basename(path) === "review.html" || /^[A-Za-z0-9][A-Za-z0-9._-]*-route-review\.html$/.test(posix.basename(path));
   if (stage === "set-bearings") return artifacts.some(planSpec) && artifacts.some((path) => posix.basename(path) === "repository-map.md" && posix.dirname(posix.dirname(path)) === posix.dirname(artifacts.find(planSpec) ?? ""));
   if (stage === "gather-supplies") return artifacts.some((path) => inPlan(path) && planSpec(path));
-  if (stage === "map-route") return ["design.md", "seit.md"].every((name) => artifacts.some((path) => inPlan(path) && posix.basename(path) === name)) && artifacts.some((path) => inPlan(path) && routeReview(path));
+  if (stage === "map-route") return ["design.md", "seit.md"].every((name) => artifacts.some((path) => inPlan(path) && posix.basename(path) === name));
   if (stage === "draft-implementation") return artifacts.some((path) => inPlan(path) && posix.basename(path) === "implementation.md") && artifacts.some((path) => inPlan(path) && routeReview(path));
   return true;
 }
@@ -173,21 +173,45 @@ function completeArtifact(content: string, type: string, headings: readonly stri
   return headings.every((heading) => new RegExp(`^##\\s+${heading.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\s*\\n\\s*\\S`, "mi").test(content));
 }
 
-async function designReviewArtifacts(root: string, planDirectory: string | undefined): Promise<readonly string[] | undefined> {
+function sourceSection(sources: readonly [string, string][]): string {
+  return `<section id="bearing-source-artifacts"><h2>Complete planning artifacts</h2><p>These are the complete source documents used for this review.</p>${sources.map(([name, content]) => `<details><summary>${escaped(name)}</summary><pre>${escaped(content.trim())}</pre></details>`).join("")}</section>`;
+}
+
+function completeReview(review: string, sources: readonly [string, string][]): string {
+  if (sources.every(([, source]) => review.includes(escaped(source.trim())))) return review;
+  const section = sourceSection(sources);
+  if (/<\/main\s*>/i.test(review)) return review.replace(/<\/main\s*>/i, `${section}</main>`);
+  if (/<\/body\s*>/i.test(review)) return review.replace(/<\/body\s*>/i, `<main>${section}</main></body>`);
+  const summary = review.trim() ? `<section><h2>Agent review summary</h2><pre>${escaped(review.trim())}</pre></section>` : "";
+  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Bearing planning review</title><style>body{font:16px/1.5 system-ui,sans-serif;max-width:1100px;margin:auto;padding:2rem;color:#17202a;background:#f7f8fa}main{background:#ffffffd9;padding:2rem;border:1px solid #67788a;border-radius:12px}details{margin:1rem 0}summary{cursor:pointer;font-weight:700}pre{white-space:pre-wrap;overflow-wrap:anywhere;background:#eef1f4;padding:1rem;border-radius:8px}</style></head><body><main><h1>Bearing planning review</h1>${summary}${section}</main></body></html>`;
+}
+
+async function designReviewArtifacts(root: string, planDirectory: string | undefined, repair = false, cancelled: () => boolean = () => false): Promise<readonly string[] | undefined> {
   if (!planDirectory) return undefined;
   const directory = resolve(root, planDirectory), names = await readdir(directory);
   const planName = names.find((name) => name === "plan-spec.md" || /^[A-Za-z0-9][A-Za-z0-9._-]*-route-map\.md$/.test(name));
-  const reviewName = names.find((name) => name === "review.html" || /^[A-Za-z0-9][A-Za-z0-9._-]*-route-review\.html$/.test(name));
-  if (!planName || !reviewName || !names.includes("design.md") || !names.includes("seit.md")) return undefined;
+  const reviewName = names.find((name) => name === "review.html" || /^[A-Za-z0-9][A-Za-z0-9._-]*-route-review\.html$/.test(name)) ?? "review.html";
+  if (!planName || !names.includes("design.md") || !names.includes("seit.md")) return undefined;
   const sourceNames = [planName, "design.md", "seit.md"];
-  if (!(await Promise.all([...sourceNames, reviewName].map((name) => containedPath(root, posix.join(planDirectory, name))))).every(Boolean)) return undefined;
-  const [plan, design, seit, review] = await Promise.all([...sourceNames, reviewName].map(async (name) => {
+  if (!(await Promise.all(sourceNames.map((name) => containedPath(root, posix.join(planDirectory, name))))).every(Boolean)) return undefined;
+  if (names.includes(reviewName) && !await containedPath(root, posix.join(planDirectory, reviewName))) return undefined;
+  const [plan, design, seit] = await Promise.all(sourceNames.map(async (name) => {
     const content = await readFile(resolve(directory, name), "utf8");
     if (!content.trim() || Buffer.byteLength(content) > MAX_PLANNING_ARTIFACT) throw new Error("invalid planning artifact");
     return content;
   }));
   if (!completeArtifact(design, "design", ["Use Cases and Communication Flows", "Interface Option Check", "OOPDSA Implementation Design"]) || !completeArtifact(seit, "seit", ["Per-slice Verification and Validation Matrix", "Cross-cutting Checks"])) return undefined;
-  if (![plan, design, seit].every((source) => review.includes(escaped(source.trim())))) return undefined;
+  const reviewPath = resolve(directory, reviewName);
+  if (names.includes(reviewName) && !(await lstat(reviewPath)).isFile()) return undefined;
+  const review = names.includes(reviewName) ? await readFile(reviewPath, "utf8") : "";
+  if (Buffer.byteLength(review) > MAX_PLANNING_ARTIFACT) return undefined;
+  const completed = completeReview(review, sourceNames.map((name, index) => [name, [plan, design, seit][index]] as [string, string]));
+  if (completed !== review && !repair) return undefined;
+  if (Buffer.byteLength(completed) > MAX_PLANNING_ARTIFACT) return undefined;
+  if (completed !== review) {
+    if (cancelled()) return undefined;
+    await writeFile(reviewPath, completed, "utf8");
+  }
   return ["design.md", "seit.md", reviewName].map((name) => posix.join(planDirectory, name));
 }
 
@@ -351,8 +375,9 @@ export class JourneyService {
       const design = await this.executeOnce(request, "map-route");
       tokens += design.tokens;
       if (design.status !== "action") return design;
-      try { designArtifacts = await designReviewArtifacts(request.repositoryPath, request.planDirectory); }
+      try { designArtifacts = await designReviewArtifacts(request.repositoryPath, request.planDirectory, true, () => this.cancelled.has(request.runId)); }
       catch { designArtifacts = undefined; }
+      if (this.cancelled.has(request.runId)) return { status: "failure", code: "cancelled", tokens };
       if (!designArtifacts) return { status: "failure", code: "artifact_invalid", tokens };
       this.recordActivity(request.runId, "map-route", { kind: "design.ready", status: "completed" });
     } else {

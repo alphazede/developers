@@ -359,6 +359,120 @@ describe("JourneyService", () => {
     expect(service.activityTrail(input.runId).map((entry) => entry.kind)).toEqual(["stage.started", "design.ready", "implementation-draft.started"]);
   });
 
+  it("repairs a summary-only design review before drafting implementation", async () => {
+    const input = await request({ stage: "map-route", planDirectory: "docs/plans/import" });
+    const directory = join(input.repositoryPath, "docs/plans/import");
+    await mkdir(directory, { recursive: true });
+    await writeFile(join(directory, "plan-spec.md"), planFixture);
+    const runner = new QueueRunner([
+      completed('BEARING_RESULT {"kind":"action","summary":"Design complete.","artifacts":["docs/plans/import/design.md","docs/plans/import/seit.md","docs/plans/import/review.html"]}', 7),
+      completed('BEARING_RESULT {"kind":"question","question":"Approve the implementation route?"}', 11),
+    ]);
+    const service = new JourneyService({
+      executableAvailable: () => true,
+      run: async (invocation) => {
+        if (runner.calls.length === 0) {
+          await Promise.all([
+            writeFile(join(directory, "design.md"), designFixture),
+            writeFile(join(directory, "seit.md"), seitFixture),
+            writeFile(join(directory, "review.html"), "<!doctype html><html><body><main><h1>Summary only</h1></main></body></html>"),
+          ]);
+        }
+        return runner.run(invocation);
+      },
+    });
+
+    expect(await service.execute(input)).toEqual({ status: "question", question: "Approve the implementation route?", tokens: 18 });
+    const review = await readFile(join(directory, "review.html"), "utf8");
+    expect(review).toContain('id="bearing-source-artifacts"');
+    expect(review).toContain(escapeFixture(planFixture));
+    expect(review).toContain(escapeFixture(designFixture));
+    expect(review).toContain(escapeFixture(seitFixture));
+  });
+
+  it("creates a complete review when a low-reasoning route omits the HTML artifact", async () => {
+    const input = await request({ stage: "map-route", planDirectory: "docs/plans/import" });
+    const directory = join(input.repositoryPath, "docs/plans/import");
+    await mkdir(directory, { recursive: true });
+    await writeFile(join(directory, "plan-spec.md"), planFixture);
+    const runner = new QueueRunner([
+      completed('BEARING_RESULT {"kind":"action","summary":"Design complete.","artifacts":["docs/plans/import/design.md","docs/plans/import/seit.md"]}', 7),
+      completed('BEARING_RESULT {"kind":"question","question":"Approve the implementation route?"}', 11),
+    ]);
+    const service = new JourneyService({
+      executableAvailable: () => true,
+      run: async (invocation) => {
+        if (runner.calls.length === 0) await Promise.all([writeFile(join(directory, "design.md"), designFixture), writeFile(join(directory, "seit.md"), seitFixture)]);
+        return runner.run(invocation);
+      },
+    });
+
+    expect(await service.execute(input)).toEqual({ status: "question", question: "Approve the implementation route?", tokens: 18 });
+    const review = await readFile(join(directory, "review.html"), "utf8");
+    expect(review).toContain("Bearing planning review");
+    expect(review).toContain(escapeFixture(planFixture));
+    expect(review).toContain(escapeFixture(designFixture));
+    expect(review).toContain(escapeFixture(seitFixture));
+  });
+
+  it("does not repair a stale review until the design stage runs again", async () => {
+    const input = await request({ stage: "map-route", planDirectory: "docs/plans/import" });
+    const directory = join(input.repositoryPath, "docs/plans/import");
+    await writeDesignPackage(input.repositoryPath);
+    await writeFile(join(directory, "plan-spec.md"), "# Revised Plan\n");
+    const runner = new QueueRunner([
+      completed('BEARING_RESULT {"kind":"action","summary":"Design amended.","artifacts":["docs/plans/import/design.md","docs/plans/import/seit.md","docs/plans/import/review.html"]}', 7),
+      completed('BEARING_RESULT {"kind":"question","question":"Approve the implementation route?"}', 11),
+    ]);
+
+    expect(await new JourneyService(runner).execute(input)).toEqual({ status: "question", question: "Approve the implementation route?", tokens: 18 });
+    expect(runner.calls).toHaveLength(2);
+    expect(runner.calls[0].stdin).toContain("Explicitly invoke $design-driven-build");
+    expect(await readFile(join(directory, "review.html"), "utf8")).toContain(escapeFixture("# Revised Plan\n"));
+  });
+
+  it("rejects a linked review target instead of overwriting it during repair", async () => {
+    const input = await request({ stage: "map-route", planDirectory: "docs/plans/import" });
+    const directory = join(input.repositoryPath, "docs/plans/import");
+    await mkdir(directory, { recursive: true });
+    await Promise.all([
+      writeFile(join(directory, "plan-spec.md"), planFixture),
+      writeFile(join(directory, "design.md"), designFixture),
+      writeFile(join(directory, "seit.md"), seitFixture),
+      writeFile(join(input.repositoryPath, "unrelated.html"), "do not replace"),
+    ]);
+    await symlink(join(input.repositoryPath, "unrelated.html"), join(directory, "review.html"));
+    const runner = new StubRunner(completed('BEARING_RESULT {"kind":"action","summary":"Design complete.","artifacts":["docs/plans/import/design.md","docs/plans/import/seit.md","docs/plans/import/review.html"]}', 7));
+
+    expect(await new JourneyService(runner).execute(input)).toEqual({ status: "failure", code: "artifact_invalid", tokens: 7 });
+    expect(await readFile(join(input.repositoryPath, "unrelated.html"), "utf8")).toBe("do not replace");
+  });
+
+  it("does not repair review HTML after the owner cancels the design action", async () => {
+    const input = await request({ stage: "map-route", planDirectory: "docs/plans/import" });
+    const directory = join(input.repositoryPath, "docs/plans/import");
+    await mkdir(directory, { recursive: true });
+    const summary = "<!doctype html><html><body><main><h1>Summary only</h1></main></body></html>";
+    await Promise.all([
+      writeFile(join(directory, "plan-spec.md"), planFixture),
+      writeFile(join(directory, "design.md"), designFixture),
+      writeFile(join(directory, "seit.md"), seitFixture),
+      writeFile(join(directory, "review.html"), summary),
+    ]);
+    let service!: JourneyService;
+    const runner: ProcessRunner = {
+      executableAvailable: () => true,
+      run: async () => {
+        service.cancel(input.runId);
+        return completed('BEARING_RESULT {"kind":"action","summary":"Design complete.","artifacts":["docs/plans/import/design.md","docs/plans/import/seit.md","docs/plans/import/review.html"]}', 7);
+      },
+    };
+    service = new JourneyService(runner);
+
+    expect(await service.execute(input)).toEqual({ status: "failure", code: "cancelled", tokens: 7 });
+    expect(await readFile(join(directory, "review.html"), "utf8")).toBe(summary);
+  });
+
   it("returns a blocking question from the implementation-draft call without rerunning valid design", async () => {
     const input = await request({ stage: "map-route", planDirectory: "docs/plans/import" });
     await writeDesignPackage(input.repositoryPath);
