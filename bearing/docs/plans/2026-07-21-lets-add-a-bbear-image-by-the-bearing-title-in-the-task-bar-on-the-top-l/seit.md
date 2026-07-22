@@ -30,8 +30,10 @@ remote image delivery, and unrelated workflow behavior.
 
 ## Required Commands
 
-- `pnpm typecheck`
-- `pnpm test -- test/local-session.test.ts`
+- **CMD-TYPECHECK** — `pnpm typecheck`
+- **CMD-FOCUSED-TEST** — `pnpm test -- test/local-session.test.ts`
+- **PROC-ASSET-INSPECTION** — Inspect the committed PNG at its rendered title-mark scale against the approved Bearing visual constraints.
+- **PROC-RESPONSIVE** — Inspect desktop and narrow title areas for the decorative mark, visible product label, and usable controls.
 
 The focused test command is mandatory for this narrow route/template change.
 Run the full `pnpm test` only if the focused test or shared template behavior
@@ -62,6 +64,15 @@ repository map. For this plan, the package-script equivalents are active:
 5. At desktop and narrow widths, inspect the title area: the mark is compact,
    decorative, visually compatible with Bearing, and does not hide the menu or
    status controls.
+
+## Traceability Matrix
+
+| SEIT row ID | Acceptance/risk ID | Design/contract ID | Boundary/test layer | Positive case | Negative/failure case | Command/procedure ID | Evidence |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| SEIT-1 | AC-1, RISK-1, RISK-2 | DES-1, CONTRACT-1 | asset/manual inspection | One local PNG is legible and visually compatible at title scale. | The asset is missing, empty, externally sourced, visually unsuitable, or expands the authorized brand scope. | PROC-ASSET-INSPECTION | Asset path and image-inspection record. |
+| SEIT-2 | AC-2, AC-3, AC-4 | DES-1, CONTRACT-2 | template/focused regression | Both title locations share the decorative image and preserve visible `Bearing` text. | A diamond remains, title locations diverge, or the image replaces the accessible text label. | CMD-TYPECHECK, CMD-FOCUSED-TEST | Typecheck and focused Vitest output. |
+| SEIT-3 | AC-5, RISK-2 | DES-2, CONTRACT-3 | HTTP route/security boundary | The literal asset route returns the fixed PNG with the required defensive headers. | An unknown path resolves, headers weaken, or user-controlled filesystem resolution is introduced. | CMD-FOCUSED-TEST | Focused HTTP assertion output. |
+| SEIT-4 | AC-6 | DES-1, CONTRACT-2 | responsive/manual browser check | Desktop and narrow layouts retain readable title text and usable controls. | The mark obscures text or reduces menu, focus, contrast, or touch-target usability. | PROC-RESPONSIVE | Desktop and narrow screenshot or inspection record. |
 
 ## Per-slice Verification and Validation Matrix
 

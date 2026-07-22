@@ -112,7 +112,7 @@ describe("NodePickerProcessRunner", () => {
     const bin = await root("bearing-picker-bin-"); await symlink(process.execPath, join(bin, "fake-picker")); process.env.PATH = bin;
     const pidFile = join(bin, "child.pid");
     const runner = new NodePickerProcessRunner();
-    const pending = runner.run("fake-picker", ["-e", `process.on('SIGTERM',function(){});require('node:fs').writeFileSync(${JSON.stringify(pidFile)},String(process.pid));setInterval(function(){},1000)`], bin, 200, 8);
+    const pending = runner.run("fake-picker", ["-e", "process.on('SIGTERM',function(){});require('node:fs').writeFileSync(process.argv[1],String(process.pid));setInterval(function(){},1000)", pidFile], bin, 200, 8);
     const result = await Promise.race([pending, new Promise<never>((_, reject) => setTimeout(() => reject(new Error("picker test hung")), 2000))]);
     expect(result).toMatchObject({ timedOut: true });
     const pid = Number(await readFile(pidFile, "utf8"));

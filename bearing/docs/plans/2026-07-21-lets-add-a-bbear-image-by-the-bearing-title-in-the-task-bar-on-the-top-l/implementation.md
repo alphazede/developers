@@ -10,12 +10,24 @@ seit: ./seit.md
 
 # Implementation — Add Bear Title Mark
 
+## Dependency waves
+
+- Wave 1: Slice 1.1 generates and approves the fixed local asset.
+- Wave 2: Slice 1.2 consumes the approved asset and adds the server/rendering behavior.
+- Wave 3: Slice 1.3 verifies the integrated route and responsive presentation.
+
 ## Phase 1 — Create and deliver the local title mark
 
 ### Slice 1.1 — Generate the compact bear title-mark asset
 
 **Goal.** Add one generated repository-local PNG that reads as a compact bear
 mark at title scale and matches the approved existing Bearing visual style.
+
+**Requirement IDs.** AC-1, RISK-1, RISK-2
+
+**Design IDs.** DES-1, CONTRACT-1
+
+**SEIT proof rows.** SEIT-1
 
 **Issue severity.** n/a
 
@@ -53,11 +65,35 @@ scale; no lint/static-analysis command applies to a PNG-only slice.
 matches the restrained Bearing style, contains no text/controls, and does not
 alter existing artwork.
 
+### 1.1 execution manifest
+
+**Write set.** `assets/bearing-title-mark.png` only.
+
+**Command IDs.** PROC-ASSET-INSPECTION
+
+**Commands.** Verify the generated PNG exists and has content.
+
+```bash
+test -s assets/bearing-title-mark.png
+```
+
+**Stop condition.** Stop if the image is missing, empty, or fails visual
+inspection at title scale.
+
+**Human decision.** The owner must approve the generated title mark before
+Slice 1.2 begins.
+
 ### Slice 1.2 — Serve and render the shared title mark
 
 **Goal.** Load and serve the fixed PNG through the existing local-session
 pattern, and replace the CSS diamond with the same decorative image in both
 desktop rail and responsive header title renderings.
+
+**Requirement IDs.** AC-2, AC-3, AC-4, AC-5, RISK-2
+
+**Design IDs.** DES-1, DES-2, CONTRACT-2, CONTRACT-3
+
+**SEIT proof rows.** SEIT-2, SEIT-3
 
 **Issue severity.** n/a
 
@@ -97,10 +133,33 @@ the next slice must pass before this slice is complete.
 beside visible `Bearing` text; the diamond is absent; the literal route returns
 the PNG with required headers; no generic route or remote URL is introduced.
 
+### 1.2 execution manifest
+
+**Write set.** `src/server/local-session.ts` only.
+
+**Command IDs.** CMD-TYPECHECK
+
+**Commands.** Run deterministic type validation.
+
+```bash
+pnpm typecheck
+```
+
+**Stop condition.** Stop if the approved asset contract cannot be implemented
+through the existing explicit local-session route and shared title markup.
+
+**Human decision.** None after the owner approves the Slice 1.1 asset.
+
 ### Slice 1.3 — Prove route, markup, and responsive regression behavior
 
 **Goal.** Extend focused local-session coverage and record desktop/narrow
 inspection evidence for the title-mark change.
+
+**Requirement IDs.** AC-2, AC-3, AC-4, AC-5, AC-6, RISK-2
+
+**Design IDs.** DES-1, DES-2, CONTRACT-2, CONTRACT-3
+
+**SEIT proof rows.** SEIT-2, SEIT-3, SEIT-4
 
 **Issue severity.** n/a
 
@@ -128,8 +187,8 @@ read-only Surveyor fallback.
 **Required VnV references.** `seit.md` — Required Commands, Integration Test
 Procedures, Per-slice Matrix slice 3, Cross-cutting Checks, and Gate Evidence.
 
-**Required lint/static-analysis.** `pnpm typecheck`; `pnpm test --
-test/local-session.test.ts`.
+**Required lint/static-analysis.** `pnpm typecheck`;
+`pnpm exec vitest run test/local-session.test.ts`.
 
 **Self-review record required?** no
 
@@ -139,6 +198,25 @@ test/local-session.test.ts`.
 accessibility treatment, PNG response headers, and retained 404 behavior.
 Desktop and narrow inspection confirms controls remain usable and no diamond
 remains.
+
+### 1.3 execution manifest
+
+**Write set.** `test/local-session.test.ts` only.
+
+**Command IDs.** CMD-FOCUSED-TEST, CMD-TYPECHECK, PROC-RESPONSIVE
+
+**Commands.** Run the focused regression test and type validation.
+
+```bash
+pnpm exec vitest run test/local-session.test.ts
+pnpm typecheck
+```
+
+**Stop condition.** Stop if focused assertions, type validation, or desktop and
+narrow visual inspection expose a route, accessibility, or layout regression.
+
+**Human decision.** The owner confirms the final desktop and narrow title-mark
+presentation before release.
 
 ## Execution boundary
 

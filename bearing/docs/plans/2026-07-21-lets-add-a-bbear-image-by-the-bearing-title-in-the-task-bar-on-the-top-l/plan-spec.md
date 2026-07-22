@@ -72,26 +72,26 @@ touch/focus behavior at the existing responsive breakpoint.
 
 ## Acceptance criteria
 
-- A newly generated bear PNG exists locally under `assets/`; it is designed as
+- **AC-1.** A newly generated bear PNG exists locally under `assets/`; it is designed as
   a compact title mark in the existing Bearing visual style.
-- No CSS diamond is rendered before the `Bearing` label in either the desktop
+- **AC-2.** No CSS diamond is rendered before the `Bearing` label in either the desktop
   rail or responsive header.
-- Both title locations render the same bear image and retain the visible
+- **AC-3.** Both title locations render the same bear image and retain the visible
   `Bearing` text.
-- The image is decorative (`alt=""` or equivalent) and does not become the
+- **AC-4.** The image is decorative (`alt=""` or equivalent) and does not become the
   sole accessible product label.
-- The local session server serves the new image as `image/png` with the same
+- **AC-5.** The local session server serves the new image as `image/png` with the same
   no-cache and `X-Content-Type-Options: nosniff` posture as its existing image
   routes.
-- Desktop and narrow layouts preserve the existing control access, readable
+- **AC-6.** Desktop and narrow layouts preserve the existing control access, readable
   contrast, focus behavior, and minimum touch-target constraints.
 
 ## Risks and open questions
 
-- The image must be generated during implementation; no external source image
+- **RISK-1.** The image must be generated during implementation; no external source image
   was supplied. The generated output therefore needs visual inspection against
   the existing Bearing assets before it is committed.
-- The image is an intentionally narrow visual change. No alternate brand,
+- **RISK-2.** The image is an intentionally narrow visual change. No alternate brand,
   favicon, or broader illustration refresh is authorized.
 
 ## Owner decisions

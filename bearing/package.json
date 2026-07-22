@@ -2,6 +2,7 @@
   "name": "@alphazede/bearing",
   "version": "0.1.0",
   "description": "Local browser control room for evidence-backed agent workflows.",
+  "author": "William Rumph / AlphaZede",
   "license": "MIT",
   "repository": {
     "type": "git",

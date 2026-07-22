@@ -244,24 +244,12 @@ async function readRegularFileNoFollow(
   | { ok: true; body: string }
   | { ok: false; reason: "manifest_missing" | "manifest_malformed" }
 > {
-  let before: Awaited<ReturnType<typeof lstat>>;
-  try {
-    before = await lstat(path);
-  } catch (err) {
-    return {
-      ok: false,
-      reason: isNodeError(err, "ENOENT") ? "manifest_missing" : "manifest_malformed",
-    };
-  }
-  if (!before.isFile()) return { ok: false, reason: "manifest_malformed" };
-
   let fh: Awaited<ReturnType<typeof open>> | null = null;
   try {
     fh = await open(path, constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0));
     const opened = await fh.stat();
-    if (!opened.isFile() || before.dev !== opened.dev || before.ino !== opened.ino) {
-      return { ok: false, reason: "manifest_malformed" };
-    }
+    const linked = await lstat(path);
+    if (!opened.isFile() || linked.isSymbolicLink() || !linked.isFile() || opened.dev !== linked.dev || opened.ino !== linked.ino) return { ok: false, reason: "manifest_malformed" };
     return { ok: true, body: await fh.readFile("utf8") };
   } catch (err) {
     return {

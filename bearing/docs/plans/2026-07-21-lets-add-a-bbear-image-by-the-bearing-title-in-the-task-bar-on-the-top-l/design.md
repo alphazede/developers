@@ -11,12 +11,12 @@ lenses_skipped: [DDD, EDD, RDD, ODD, PDD, GDD]
 
 ## Synthesis
 
-Replace the CSS diamond with one generated, repository-local PNG title mark.
+**DES-1.** Replace the CSS diamond with one generated, repository-local PNG title mark.
 The existing `Bearing` text remains visible and is the accessible product name;
 the image is decorative. `src/server/local-session.ts` remains the sole owner
 of embedded shell markup, styling, asset loading, and explicit asset routing.
 
-The selected lenses do not disturb the plan-spec stance. They sharpen it:
+**CONTRACT-1.** The selected lenses do not disturb the plan-spec stance. They sharpen it:
 the change must be a bounded local visual asset, served only from the existing
 local session boundary with no remote fetch, no user input, no new state, and
 no change to navigation or workflow behavior.
@@ -123,12 +123,12 @@ refresh are deliberately out of scope.
 **Surfaces touched.** The embedded app-shell brand markup/CSS and one explicit
 local static-asset HTTP path.
 
-**Contracts.** `GET /assets/bearing-title-mark.png` returns the fixed
+**CONTRACT-3.** `GET /assets/bearing-title-mark.png` returns the fixed
 repository-local PNG with `Content-Type: image/png`, accurate `Content-Length`,
 `Cache-Control: no-cache`, and `X-Content-Type-Options: nosniff`. Both title
 renderings use that fixed URL and render the image as decorative.
 
-**Compatibility commitments.** Existing four asset routes and all public API
+**CONTRACT-2.** Existing four asset routes and all public API
 routes retain their behavior. The `Bearing` text remains in both title
 locations, so the product label and responsive control contract do not change.
 
@@ -187,7 +187,7 @@ third-party dependency is required.
    because it expands the request surface and weakens the explicit-route
    boundary.
 
-**Selection rationale.** Option 2 reuses the existing local asset contract,
+**DES-2.** Option 2 reuses the existing local asset contract,
 keeps the generated asset inspectable in `assets/`, gives both title locations
 one stable URL, and avoids user-controlled filesystem resolution.
 

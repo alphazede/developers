@@ -9,11 +9,12 @@ describe("Bearing Codex plugin contract", () => {
     expect(manifest).toMatchObject({
       name: "bearing",
       skills: "./skills/",
-      author: { name: "AlphaZede" },
-      interface: { developerName: "AlphaZede" },
+      author: { name: "William Rumph / AlphaZede" },
+      interface: { developerName: "William Rumph / AlphaZede" },
     });
     expect(manifest.version).toMatch(/^0\.1\.0(?:\+codex\.\d{14})?$/);
     const packageJson = JSON.parse(await read("../package.json"));
+    expect(packageJson.author).toBe("William Rumph / AlphaZede");
     expect(packageJson.files).toEqual(expect.arrayContaining([
       ".codex-plugin/", "skills/",
     ]));

@@ -11,6 +11,8 @@ tags:
 
 Bearing is a local browser control room for planning agent work, recording owner decisions, and presenting evidence about what was completed, corrected, blocked, or left unperformed. It is a Work & Productivity hackathon project for founders and small teams that need bounded asynchronous work without surrendering approval or review authority.
 
+Bearing is a Codex plugin and skill created by William Rumph at AlphaZede.
+
 This is the initial public `0.1.0` release. It is a working local tool, not a hosted service or a claim that every provider route is ready on your machine.
 
 ## Install and start

@@ -1,45 +1,5 @@
 <!doctype html>
-<html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Bearing route review — Bear title mark</title>
-<style>body{margin:0;background:#010102;color:#f7f8f8;font:15px/1.5 system-ui,-apple-system,Segoe UI,sans-serif}main{max-width:1080px;margin:auto;padding:36px 24px 72px}h1{font-size:32px;line-height:1.1}h2{margin-top:36px;border-bottom:1px solid #34343a;padding-bottom:8px}h3{margin-top:24px}p,li{color:#d0d6e0}.meta{color:#8a8f98}.badge{display:inline-block;margin-right:8px;padding:3px 8px;border:1px solid #34343a;border-radius:999px;color:#d0d6e0;font:12px ui-monospace,monospace}pre{overflow:auto;padding:16px;border:1px solid #34343a;border-radius:8px;background:#0f1011;color:#d0d6e0;white-space:pre-wrap;overflow-wrap:anywhere}table{width:100%;border-collapse:collapse}th,td{border:1px solid #34343a;padding:10px;text-align:left;vertical-align:top}th{background:#18191a}code{color:#aeb6ff}details{margin:16px 0}summary{cursor:pointer;color:#aeb6ff;font-weight:650}.diagram{padding:16px;border-left:3px solid #5e6ad2;background:#141516;color:#d0d6e0}.empty{padding:16px;border:1px dashed #34343a;color:#8a8f98}</style>
-</head>
-<body>
-<main>
-<h1>Route review — Bear title mark</h1>
-<p class="meta">Generated pre-execution owner-review package · 2026-07-21 · no implementation has been performed.</p>
-<p><span class="badge">Plan: draft</span><span class="badge">Design: complete</span><span class="badge">SEIT: complete</span><span class="badge">Implementation: draft</span></p>
-<h2>Owner-approved outcome</h2>
-<p>Replace the lavender CSS diamond before <strong>Bearing</strong> with one generated, repository-local decorative bear title mark in the desktop journey rail and narrow responsive header. Keep the visible text label, explicit local PNG delivery, and existing controls.</p>
-<h2>Implementation assignments</h2>
-<table><thead><tr><th>Slice</th><th>Role</th><th>Model route</th><th>Reasoning</th><th>Review path</th></tr></thead><tbody><tr><td>1.1 Generate title-mark asset</td><td>Visual Designer</td><td>codex / gpt-5.6-terra</td><td>medium</td><td>Harness-native reviewer; Surveyor fallback</td></tr><tr><td>1.2 Serve and render title mark</td><td>Frontend Engineer</td><td>codex / gpt-5.6-terra</td><td>medium</td><td>Harness-native reviewer; Surveyor fallback</td></tr><tr><td>1.3 Prove regression behavior</td><td>QA Engineer</td><td>codex / gpt-5.6-terra</td><td>medium</td><td>Harness-native reviewer; Surveyor fallback</td></tr></tbody></table>
-<h2>Representative use cases</h2>
-<table><thead><tr><th>Case</th><th>Expected outcome</th></tr></thead><tbody><tr><td>Desktop workspace</td><td>Journey rail shows the bear mark beside the visible Bearing label; collapse/navigation controls are unchanged.</td></tr><tr><td>Narrow workspace</td><td>Responsive header shows the same mark and label without obscuring the mobile menu or status controls.</td></tr><tr><td>Local asset request</td><td>A literal local PNG route responds with image/png, content length, no-cache, and nosniff; unrelated paths remain 404.</td></tr></tbody></table>
-<h2>Communication flow</h2>
-<pre class="diagram">Browser GET / ──&gt; local-session template
-                       ├── desktop rail: [decorative bear] Bearing
-                       └── narrow header: [decorative bear] Bearing
-
-Browser GET /assets/bearing-title-mark.png
-                  └──&gt; explicit local-session route ──&gt; image/png response</pre>
-<p>Text equivalent: the page and image request are separate. Both title locations reference one fixed local asset; only the explicit route returns its bytes.</p>
-<h2>Architecture and V&amp;V</h2>
-<pre class="diagram">assets/bearing-title-mark.png
-        │ loaded once
-        ▼
-src/server/local-session.ts
-  ├── literal PNG response with defensive headers
-  └── shared title-mark presentation in rail and header
-        │
-        ▼
-Focused local-session tests + typecheck + desktop/narrow inspection</pre>
-<p>Text equivalent: one committed image flows through the existing local-session asset pattern to both title displays. Tests prove the route and markup contract; visual inspection proves the owner-visible result.</p>
-<h2>Source revisions and evidence</h2>
-<ul><li><code>plan-spec.md</code>, <code>design.md</code>, <code>seit.md</code>, and <code>implementation.md</code> are the 2026-07-21 owner-review baseline.</li><li><code>src/server/local-session.ts:35-38,147,156,161-162,1152-1169</code> establishes the asset, app-shell, and response patterns.</li><li><code>test/local-session.test.ts:227-233,268-274,434-451</code> establishes existing template, rail, and PNG response test patterns.</li><li><code>DESIGN.md:270-290</code> supplies Bearing visual and accessibility constraints.</li></ul>
-<h2>Complete planning sources</h2>
-<details open><summary>plan-spec.md</summary><pre>---
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Bearing planning review</title><style>body{font:16px/1.5 system-ui,sans-serif;max-width:1100px;margin:auto;padding:2rem;color:#17202a;background:#f7f8fa}main{background:#ffffff;padding:2rem;border:1px solid #67788a;border-radius:12px}nav{display:flex;gap:1rem;flex-wrap:wrap}figure{margin:2rem 0;padding:1rem;border:1px solid #a8b2bd;border-radius:8px}.flow{display:flex;align-items:center;gap:.65rem;flex-wrap:wrap}.flow span{padding:.55rem .8rem;background:#eef1f4;border-radius:6px}figcaption,summary{font-weight:700}.text-equivalent{margin-bottom:0}details{margin:1rem 0}summary{cursor:pointer}pre{white-space:pre-wrap;overflow-wrap:anywhere;background:#eef1f4;padding:1rem;border-radius:8px}</style></head><body><main><h1>Bearing planning review</h1><p>This deterministic view is generated from the four current planning sources.</p><nav id="bearing-source-links" aria-label="Planning artifact sources"><a href="./plan-spec.md">plan-spec.md</a> <a href="./design.md">design.md</a> <a href="./seit.md">seit.md</a> <a href="./implementation.md">implementation.md</a></nav><section aria-labelledby="bearing-diagrams"><h2 id="bearing-diagrams">Plan maps</h2><figure><div class="flow" role="img" aria-label="Planning flow from plan specification through final QA"><span>Plan specification</span><b>→</b><span>Design</span><b>→</b><span>SEIT test map</span><b>→</b><span>Implementation</span><b>→</b><span>Final QA</span></div><figcaption>Planning flow</figcaption><p class="text-equivalent">Text equivalent: acceptance and risks drive design contracts; SEIT maps those contracts to proof; implementation slices reference the map; final QA records actual evidence.</p></figure><figure><div class="flow" role="img" aria-label="Traceability from requirements to execution evidence"><span>AC / RISK</span><b>↔</b><span>DES / CONTRACT</span><b>↔</b><span>SEIT / CMD</span><b>↔</b><span>Slice manifest</span></div><figcaption>Traceability map</figcaption><p class="text-equivalent">Text equivalent: stable IDs connect each requirement or risk to its design boundary, positive and negative test cases, command, evidence, and bounded execution slice.</p></figure></section><section id="bearing-source-artifacts"><h2>Complete planning artifacts</h2><p>These are the complete source documents used for this review.</p><details><summary>plan-spec.md</summary><pre>---
 type: plan-spec
 name: lets-add-a-bbear-image-by-the-bearing-title-in-the-task-bar-on-the-top-l
 status: draft
@@ -113,26 +73,26 @@ touch/focus behavior at the existing responsive breakpoint.
 
 ## Acceptance criteria
 
-- A newly generated bear PNG exists locally under `assets/`; it is designed as
+- **AC-1.** A newly generated bear PNG exists locally under `assets/`; it is designed as
   a compact title mark in the existing Bearing visual style.
-- No CSS diamond is rendered before the `Bearing` label in either the desktop
+- **AC-2.** No CSS diamond is rendered before the `Bearing` label in either the desktop
   rail or responsive header.
-- Both title locations render the same bear image and retain the visible
+- **AC-3.** Both title locations render the same bear image and retain the visible
   `Bearing` text.
-- The image is decorative (`alt=""` or equivalent) and does not become the
+- **AC-4.** The image is decorative (`alt=""` or equivalent) and does not become the
   sole accessible product label.
-- The local session server serves the new image as `image/png` with the same
+- **AC-5.** The local session server serves the new image as `image/png` with the same
   no-cache and `X-Content-Type-Options: nosniff` posture as its existing image
   routes.
-- Desktop and narrow layouts preserve the existing control access, readable
+- **AC-6.** Desktop and narrow layouts preserve the existing control access, readable
   contrast, focus behavior, and minimum touch-target constraints.
 
 ## Risks and open questions
 
-- The image must be generated during implementation; no external source image
+- **RISK-1.** The image must be generated during implementation; no external source image
   was supplied. The generated output therefore needs visual inspection against
   the existing Bearing assets before it is committed.
-- The image is an intentionally narrow visual change. No alternate brand,
+- **RISK-2.** The image is an intentionally narrow visual change. No alternate brand,
   favicon, or broader illustration refresh is authorized.
 
 ## Owner decisions
@@ -173,8 +133,7 @@ desktop and narrow-layout checks.
 
 - `DESIGN.md`
 - `src/server/local-session.ts`
-</pre></details>
-<details open><summary>design.md</summary><pre>---
+</pre></details><details><summary>design.md</summary><pre>---
 type: design
 name: lets-add-a-bbear-image-by-the-bearing-title-in-the-task-bar-on-the-top-l
 status: complete
@@ -187,12 +146,12 @@ lenses_skipped: [DDD, EDD, RDD, ODD, PDD, GDD]
 
 ## Synthesis
 
-Replace the CSS diamond with one generated, repository-local PNG title mark.
+**DES-1.** Replace the CSS diamond with one generated, repository-local PNG title mark.
 The existing `Bearing` text remains visible and is the accessible product name;
 the image is decorative. `src/server/local-session.ts` remains the sole owner
 of embedded shell markup, styling, asset loading, and explicit asset routing.
 
-The selected lenses do not disturb the plan-spec stance. They sharpen it:
+**CONTRACT-1.** The selected lenses do not disturb the plan-spec stance. They sharpen it:
 the change must be a bounded local visual asset, served only from the existing
 local session boundary with no remote fetch, no user input, no new state, and
 no change to navigation or workflow behavior.
@@ -299,12 +258,12 @@ refresh are deliberately out of scope.
 **Surfaces touched.** The embedded app-shell brand markup/CSS and one explicit
 local static-asset HTTP path.
 
-**Contracts.** `GET /assets/bearing-title-mark.png` returns the fixed
+**CONTRACT-3.** `GET /assets/bearing-title-mark.png` returns the fixed
 repository-local PNG with `Content-Type: image/png`, accurate `Content-Length`,
 `Cache-Control: no-cache`, and `X-Content-Type-Options: nosniff`. Both title
 renderings use that fixed URL and render the image as decorative.
 
-**Compatibility commitments.** Existing four asset routes and all public API
+**CONTRACT-2.** Existing four asset routes and all public API
 routes retain their behavior. The `Bearing` text remains in both title
 locations, so the product label and responsive control contract do not change.
 
@@ -363,7 +322,7 @@ third-party dependency is required.
    because it expands the request surface and weakens the explicit-route
    boundary.
 
-**Selection rationale.** Option 2 reuses the existing local asset contract,
+**DES-2.** Option 2 reuses the existing local asset contract,
 keeps the generated asset inspectable in `assets/`, gives both title locations
 one stable URL, and avoids user-controlled filesystem resolution.
 
@@ -413,9 +372,7 @@ template owns presentation references; the handler owns bytes and headers.
   the exact local PNG response contract.
 - V-3: typecheck plus desktop/narrow visual checks prove the presentation
   change does not regress shell controls or accessibility labeling.
-
-</pre></details>
-<details open><summary>seit.md</summary><pre>---
+</pre></details><details><summary>seit.md</summary><pre>---
 type: seit
 name: lets-add-a-bbear-image-by-the-bearing-title-in-the-task-bar-on-the-top-l
 status: complete
@@ -447,8 +404,10 @@ remote image delivery, and unrelated workflow behavior.
 
 ## Required Commands
 
-- `pnpm typecheck`
-- `pnpm test -- test/local-session.test.ts`
+- **CMD-TYPECHECK** — `pnpm typecheck`
+- **CMD-FOCUSED-TEST** — `pnpm test -- test/local-session.test.ts`
+- **PROC-ASSET-INSPECTION** — Inspect the committed PNG at its rendered title-mark scale against the approved Bearing visual constraints.
+- **PROC-RESPONSIVE** — Inspect desktop and narrow title areas for the decorative mark, visible product label, and usable controls.
 
 The focused test command is mandatory for this narrow route/template change.
 Run the full `pnpm test` only if the focused test or shared template behavior
@@ -479,6 +438,15 @@ repository map. For this plan, the package-script equivalents are active:
 5. At desktop and narrow widths, inspect the title area: the mark is compact,
    decorative, visually compatible with Bearing, and does not hide the menu or
    status controls.
+
+## Traceability Matrix
+
+| SEIT row ID | Acceptance/risk ID | Design/contract ID | Boundary/test layer | Positive case | Negative/failure case | Command/procedure ID | Evidence |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| SEIT-1 | AC-1, RISK-1, RISK-2 | DES-1, CONTRACT-1 | asset/manual inspection | One local PNG is legible and visually compatible at title scale. | The asset is missing, empty, externally sourced, visually unsuitable, or expands the authorized brand scope. | PROC-ASSET-INSPECTION | Asset path and image-inspection record. |
+| SEIT-2 | AC-2, AC-3, AC-4 | DES-1, CONTRACT-2 | template/focused regression | Both title locations share the decorative image and preserve visible `Bearing` text. | A diamond remains, title locations diverge, or the image replaces the accessible text label. | CMD-TYPECHECK, CMD-FOCUSED-TEST | Typecheck and focused Vitest output. |
+| SEIT-3 | AC-5, RISK-2 | DES-2, CONTRACT-3 | HTTP route/security boundary | The literal asset route returns the fixed PNG with the required defensive headers. | An unknown path resolves, headers weaken, or user-controlled filesystem resolution is introduced. | CMD-FOCUSED-TEST | Focused HTTP assertion output. |
+| SEIT-4 | AC-6 | DES-1, CONTRACT-2 | responsive/manual browser check | Desktop and narrow layouts retain readable title text and usable controls. | The mark obscures text or reduces menu, focus, contrast, or touch-target usability. | PROC-RESPONSIVE | Desktop and narrow screenshot or inspection record. |
 
 ## Per-slice Verification and Validation Matrix
 
@@ -520,8 +488,7 @@ Before the design is considered implemented, retain:
 - desktop and narrow presentation evidence; and
 - a self-review confirming no generic file-serving route, remote image URL, or
   unrelated UI change was added.
-</pre></details>
-<details open><summary>implementation.md</summary><pre>---
+</pre></details><details><summary>implementation.md</summary><pre>---
 type: implementation
 name: lets-add-a-bbear-image-by-the-bearing-title-in-the-task-bar-on-the-top-l
 status: draft
@@ -533,12 +500,24 @@ seit: ./seit.md
 
 # Implementation — Add Bear Title Mark
 
+## Dependency waves
+
+- Wave 1: Slice 1.1 generates and approves the fixed local asset.
+- Wave 2: Slice 1.2 consumes the approved asset and adds the server/rendering behavior.
+- Wave 3: Slice 1.3 verifies the integrated route and responsive presentation.
+
 ## Phase 1 — Create and deliver the local title mark
 
 ### Slice 1.1 — Generate the compact bear title-mark asset
 
 **Goal.** Add one generated repository-local PNG that reads as a compact bear
 mark at title scale and matches the approved existing Bearing visual style.
+
+**Requirement IDs.** AC-1, RISK-1, RISK-2
+
+**Design IDs.** DES-1, CONTRACT-1
+
+**SEIT proof rows.** SEIT-1
 
 **Issue severity.** n/a
 
@@ -576,11 +555,35 @@ scale; no lint/static-analysis command applies to a PNG-only slice.
 matches the restrained Bearing style, contains no text/controls, and does not
 alter existing artwork.
 
+### 1.1 execution manifest
+
+**Write set.** `assets/bearing-title-mark.png` only.
+
+**Command IDs.** PROC-ASSET-INSPECTION
+
+**Commands.** Verify the generated PNG exists and has content.
+
+```bash
+test -s assets/bearing-title-mark.png
+```
+
+**Stop condition.** Stop if the image is missing, empty, or fails visual
+inspection at title scale.
+
+**Human decision.** The owner must approve the generated title mark before
+Slice 1.2 begins.
+
 ### Slice 1.2 — Serve and render the shared title mark
 
 **Goal.** Load and serve the fixed PNG through the existing local-session
 pattern, and replace the CSS diamond with the same decorative image in both
 desktop rail and responsive header title renderings.
+
+**Requirement IDs.** AC-2, AC-3, AC-4, AC-5, RISK-2
+
+**Design IDs.** DES-1, DES-2, CONTRACT-2, CONTRACT-3
+
+**SEIT proof rows.** SEIT-2, SEIT-3
 
 **Issue severity.** n/a
 
@@ -620,10 +623,33 @@ the next slice must pass before this slice is complete.
 beside visible `Bearing` text; the diamond is absent; the literal route returns
 the PNG with required headers; no generic route or remote URL is introduced.
 
+### 1.2 execution manifest
+
+**Write set.** `src/server/local-session.ts` only.
+
+**Command IDs.** CMD-TYPECHECK
+
+**Commands.** Run deterministic type validation.
+
+```bash
+pnpm typecheck
+```
+
+**Stop condition.** Stop if the approved asset contract cannot be implemented
+through the existing explicit local-session route and shared title markup.
+
+**Human decision.** None after the owner approves the Slice 1.1 asset.
+
 ### Slice 1.3 — Prove route, markup, and responsive regression behavior
 
 **Goal.** Extend focused local-session coverage and record desktop/narrow
 inspection evidence for the title-mark change.
+
+**Requirement IDs.** AC-2, AC-3, AC-4, AC-5, AC-6, RISK-2
+
+**Design IDs.** DES-1, DES-2, CONTRACT-2, CONTRACT-3
+
+**SEIT proof rows.** SEIT-2, SEIT-3, SEIT-4
 
 **Issue severity.** n/a
 
@@ -651,8 +677,8 @@ read-only Surveyor fallback.
 **Required VnV references.** `seit.md` — Required Commands, Integration Test
 Procedures, Per-slice Matrix slice 3, Cross-cutting Checks, and Gate Evidence.
 
-**Required lint/static-analysis.** `pnpm typecheck`; `pnpm test --
-test/local-session.test.ts`.
+**Required lint/static-analysis.** `pnpm typecheck`;
+`pnpm exec vitest run test/local-session.test.ts`.
 
 **Self-review record required?** no
 
@@ -663,14 +689,28 @@ accessibility treatment, PNG response headers, and retained 404 behavior.
 Desktop and narrow inspection confirms controls remain usable and no diamond
 remains.
 
+### 1.3 execution manifest
+
+**Write set.** `test/local-session.test.ts` only.
+
+**Command IDs.** CMD-FOCUSED-TEST, CMD-TYPECHECK, PROC-RESPONSIVE
+
+**Commands.** Run the focused regression test and type validation.
+
+```bash
+pnpm exec vitest run test/local-session.test.ts
+pnpm typecheck
+```
+
+**Stop condition.** Stop if focused assertions, type validation, or desktop and
+narrow visual inspection expose a route, accessibility, or layout regression.
+
+**Human decision.** The owner confirms the final desktop and narrow title-mark
+presentation before release.
+
 ## Execution boundary
 
 This document is a draft only. Do not generate the image, edit source/tests,
 run the listed commands, or begin a review until the owner approves the
 regenerated route review.
-</pre></details>
-<h2>Final QA</h2>
-<div class="empty"><strong>Planned-versus-actual closeout:</strong> empty. No implementation, tests, review, release, or activation has occurred. Populate this section only in the post-implementation regeneration.</div>
-</main>
-</body>
-</html>
+</pre></details></section><section id="bearing-final-qa" data-status="pending"><h2>Actual implementation and QA</h2><p>Pending implementation and validation.</p></section></main></body></html>

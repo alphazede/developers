@@ -2,7 +2,7 @@ import type { Artifact, Claim, Evidence, Finding, OutcomeClass, OwnerDecision, P
 import { OUTCOME_CLASSES } from "./contracts.js";
 
 type Record = Evidence | Artifact | Claim | Finding | OwnerDecision | Remediation | Survey;
-const MAX_ID = 128, MAX_TEXT = 4_096, MAX_HREF = 512, MAX_HASH = 80, MAX_REFS = 64, MAX_ANCESTRY = 32, MAX_RECORDS = 1_000;
+const MAX_ID = 128, MAX_TEXT = 4_096, MAX_HREF = 512, MAX_REFS = 64, MAX_ANCESTRY = 32, MAX_RECORDS = 1_000;
 const ID = /^[A-Za-z0-9][A-Za-z0-9._:-]*$/, MIME = /^[A-Za-z0-9!#$&^_.+-]+\/[A-Za-z0-9!#$&^_.+-]+$/;
 const keys = (value: unknown, required: readonly string[], optional: readonly string[] = []): value is { [key: string]: unknown } => !!value && typeof value === "object" && !Array.isArray(value) && required.every((key) => Object.hasOwn(value, key)) && Object.keys(value).every((key) => required.includes(key) || optional.includes(key));
 const text = (value: unknown, max = MAX_TEXT): value is string => typeof value === "string" && value.length > 0 && value.length <= max && !/[\x00-\x1f\x7f]/.test(value);

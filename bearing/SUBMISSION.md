@@ -42,15 +42,15 @@ Use one real recorded journey. Honest time-compression may remove waiting, but c
 | Evidence | Current local result |
 |---|---|
 | `pnpm typecheck` | PASS. |
-| `pnpm test` | PASS: 26 files, 315 tests. |
-| `pnpm test:integration` | PASS: 5 files, 64 tests. |
+| `pnpm test` | PASS: 26 files, 321 tests. |
+| `pnpm test:integration` | PASS: 5 files, 67 tests. |
 | `pnpm build` | PASS. |
 | `pnpm audit --audit-level=moderate` | PASS: no known vulnerabilities. |
-| Semgrep (`p/owasp-top-ten`, `p/github-actions`) | PASS: 103 rules across 32 tracked source, manifest, and workflow files; zero findings. |
+| Semgrep (`p/secrets`, `p/javascript`, `p/typescript`) | PASS: zero findings and zero blocking findings; one non-blocking rule timeout was reported. |
 | `npm pack --dry-run --json` | PASS: 60 files and an 11.7 MB tarball, limited to allowlisted content plus npm-required `package.json`; no TypeScript source, tests, private plans, transcripts, secrets, or unintended generated files observed. |
 | Clean tarball install and installed CLI smoke | PASS: installed `@alphazede/bearing@0.1.0` into an empty npm project, launched the npm-created `bearing` executable, and served the Bearing page on loopback. |
 | `pnpm eval:native` | PASS: 504 synthetic cells created and cleaned; machinery validation only, not provider evidence. |
-| Real browser journey | Selected-harness stages, durable owner Q&A, retryable loading/failure states, crew/cadence choice, native review boundary, and contained artifact serving are implemented and covered by focused integration tests. |
+| Real browser journey | PASS: Codex with Terra Medium completed all five artifacts, canonical pre-execution validation, Explorer with end-only review, the exact requested README-only change, native Surveyor evidence, `Evidence complete`, and successful History resume. |
 | Three fictional workflows | Deterministic provider-disabled projections with local evidence reports. |
 
 ## Submission provenance

@@ -41,11 +41,11 @@ function completed(text: string, tokens = 5): ProcessResult {
   return { exitCode: 0, events: [{ type: "item.completed", data: { content: text } }], usage: { tokens } };
 }
 
-const planFixture = "# Plan\n";
-const designFixture = "---\ntype: design\nstatus: complete\n---\n\n## Use Cases and Communication Flows\n\nComplete flow.\n\n## Interface Option Check\n\ninterface_options: not needed - fixture\n\n## OOPDSA Implementation Design\n\nComplete contract.\n";
-const seitFixture = "---\ntype: seit\nstatus: complete\n---\n\n## Per-slice Verification and Validation Matrix\n\nComplete matrix.\n\n## Cross-cutting Checks\n\nComplete checks.\n";
-const implementationFixture = "# Implementation\n\n## Phase 1 — Build\n\n### Slice 1.1 — Import\n\n**Implementation role.** Backend Engineer\n\n**Agent model route.** Codex agent default\n\n**Agent reasoning level.** medium.\n\n**Ponytail mode.** full\n\n**Review path.** native review\n\n**Required lint/static-analysis.** pnpm test\n";
-const escapeFixture = (value: string) => value.trim().replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;");
+const planFixture = "---\ntype: plan-spec\nstatus: complete\n---\n\n## Acceptance criteria\n\n- **AC-1** — Bounded account data is imported.\n\n## Risks and open questions\n\n- **RISK-1** — Invalid input must fail closed.\n";
+const designFixture = "---\ntype: design\nstatus: complete\n---\n\n## Use Cases and Communication Flows\n\nComplete flow.\n\n## Interface Option Check\n\ninterface_options: not needed - fixture\n\n## OOPDSA Implementation Design\n\n- **DES-1** — Use the existing import boundary.\n- **CONTRACT-1** — Reject invalid input without writes.\n";
+const seitFixture = "---\ntype: seit\nstatus: complete\n---\n\n## Required Commands\n\n- **CMD-UNIT** — `pnpm test`\n\n## Traceability Matrix\n\n| SEIT row ID | Acceptance/risk ID | Design/contract ID | Boundary/test layer | Positive case | Negative/failure case | Command/procedure ID | Evidence |\n| --- | --- | --- | --- | --- | --- | --- | --- |\n| SEIT-1 | AC-1 | DES-1, CONTRACT-1 | unit | valid input imports | invalid input fails closed | CMD-UNIT | test report |\n\n## Cross-cutting Checks\n\nComplete checks.\n";
+const implementationFixture = "---\ntype: implementation\nstatus: draft\nplan_spec: ./plan-spec.md\ndesign: ./design.md\nseit: ./seit.md\n---\n\n# Implementation\n\n## Phase 1 — Build\n\n### Slice 1.1 — Import\n\n**Goal.** Import bounded account data.\n\n**Requirement IDs.** AC-1\n\n**Design IDs.** DES-1, CONTRACT-1\n\n**SEIT proof rows.** SEIT-1\n\n**Type.** /tdd\n\n**Design lenses.** CDD\n\n**Implementation role.** Backend Engineer\n\n**Agent model route.** Codex agent default\n\n**Agent reasoning level.** medium.\n\n**Ponytail mode.** full\n\n**Review path.** native review\n\n### 1.1 execution manifest\n\n**Write set.** `src/import.ts` only.\n\n**Command IDs.** CMD-UNIT\n\n**Stop condition.** Stop if focused validation fails.\n\n**Human decision.** None.\n";
+const escapeFixture = (value: string) => value.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;");
 
 async function writeDesignPackage(root: string, directory = "docs/plans/import"): Promise<void> {
   await mkdir(join(root, directory), { recursive: true });
@@ -212,14 +212,17 @@ describe("JourneyService", () => {
     expect(runner.calls[0].stdin).toContain("do not copy a canned duration");
   });
 
-  it("discovers every grilling question in one read-only call and appends the final check", async () => {
+  it("discovers at most three material questions without a generic final check", async () => {
     const runner = new StubRunner(completed('BEARING_RESULT {"kind":"questions","questions":["Are all source files in this workspace?","Are there reference documents I should use?"],"nextStageEstimate":{"stage":"gather-supplies","minMinutes":4,"maxMinutes":9,"basis":"two owner decisions and one plan file"}}', 21));
     const result = await new JourneyService(runner).execute(await request({ priorOwnerQa: [], gatherMode: "questions" }));
-    expect(result).toEqual({ status: "question", question: "Are all source files in this workspace?", questions: ["Are all source files in this workspace?", "Are there reference documents I should use?", "Anything else?"], tokens: 21, nextStageEstimate: { stage: "gather-supplies", minMinutes: 4, maxMinutes: 9, basis: "two owner decisions and one plan file" } });
+    expect(result).toEqual({ status: "question", question: "Are all source files in this workspace?", questions: ["Are all source files in this workspace?", "Are there reference documents I should use?"], tokens: 21, nextStageEstimate: { stage: "gather-supplies", minMinutes: 4, maxMinutes: 9, basis: "two owner decisions and one plan file" } });
     expect(runner.calls).toHaveLength(1);
     expect(runner.calls[0].args).toContain("read-only");
     expect(runner.calls[0].args).not.toContain("workspace-write");
-    expect(runner.calls[0].stdin).toMatch(/return every important unresolved owner question together/i);
+    expect(runner.calls[0].stdin).toMatch(/at most 3 unresolved owner questions/i);
+    expect(runner.calls[0].stdin).toMatch(/materially changes scope, architecture, security, authority, or acceptance/i);
+    expect(runner.calls[0].stdin).toMatch(/safe defaults as assumptions instead of questions/i);
+    expect(runner.calls[0].stdin).not.toContain("Anything else?");
     expect(runner.calls[0].stdin).toMatch(/Do not create or modify files during question discovery/i);
     expect(runner.calls[0].stdin).toContain('"stage":"gather-supplies"');
   });
@@ -252,16 +255,19 @@ describe("JourneyService", () => {
     expect(runner.calls[0]?.args).toContain("read-only");
   });
 
-  it("accepts a large valid question batch and reserves capacity for prior answers and the final check", async () => {
-    const longQuestions = Array.from({ length: 4 }, (_, index) => `${index}:`.padEnd(4095, "x") + "?");
+  it("accepts three bounded questions, rejects a fourth, and accepts no material questions", async () => {
+    const longQuestions = Array.from({ length: 3 }, (_, index) => `${index}:`.padEnd(4095, "x") + "?");
     const runner = new StubRunner(completed(`BEARING_RESULT ${JSON.stringify({ kind: "questions", questions: longQuestions })}`));
     const result = await new JourneyService(runner).execute(await request({ gatherMode: "questions" }));
-    expect(result).toMatchObject({ status: "question", questions: [...longQuestions, "Anything else?"] });
-    expect(runner.calls[0].stdin).toContain("Return at most 60 questions");
+    expect(result).toMatchObject({ status: "question", questions: longQuestions });
+    expect(runner.calls[0].stdin).toContain("at most 3 unresolved owner questions");
 
-    const overCapacity = Array.from({ length: 61 }, (_, index) => `Question ${index}?`);
+    const overCapacity = Array.from({ length: 4 }, (_, index) => `Question ${index}?`);
     const rejected = new StubRunner(completed(`BEARING_RESULT ${JSON.stringify({ kind: "questions", questions: overCapacity })}`));
     expect(await new JourneyService(rejected).execute(await request({ gatherMode: "questions" }))).toEqual({ status: "failure", code: "result_malformed", tokens: 5 });
+
+    const none = new StubRunner(completed('BEARING_RESULT {"kind":"questions","questions":[]}'));
+    expect(await new JourneyService(none).execute(await request({ gatherMode: "questions" }))).toEqual({ status: "question", questions: [], tokens: 5 });
   });
 
   it("does not restart grilling after the complete answer set is submitted", async () => {
@@ -336,15 +342,19 @@ describe("JourneyService", () => {
     const runner = new StubRunner(completed('BEARING_RESULT {"kind":"action","summary":"Implementation plan drafted.","artifacts":["docs/plans/import/implementation.md","docs/plans/import/review.html"]}', 11));
     expect(await new JourneyService(runner).execute(input)).toEqual({ status: "action", summary: "Implementation plan drafted.", artifacts: ["docs/plans/import/implementation.md", "docs/plans/import/review.html"], tokens: 11, planningReview: { phases: 1, slices: 1, assignments: [{ slice: "Slice 1.1 — Import", role: "Backend Engineer", model: "Codex agent default", reasoning: "medium" }] } });
     expect(runner.calls[0].stdin).toContain("docs/plans/import");
-    expect(runner.calls[0].stdin).toMatch(/Regenerate the existing review HTML.*implementation\.md/);
+    expect(runner.calls[0].stdin).toMatch(/Bearing generates review\.html deterministically.*do not write or summarize it/i);
     expect(runner.calls[0].stdin).toContain("do not use standard gate or gate-review");
+    expect(runner.calls[0].stdin).toContain("exactly the standalone lowercase value `full` or `off`");
+    const baseline = await readFile(join(input.repositoryPath, input.planDirectory!, "review.html"), "utf8");
+    expect(baseline.match(/<section id="bearing-final-qa" data-status="pending">/g)).toHaveLength(1);
+    expect(baseline).not.toContain('<section id="bearing-final-qa" data-status="complete">');
   });
 
   it("repairs a stale final review with exact current planning sources", async () => {
     const input = await request({ stage: "draft-implementation", planDirectory: "docs/plans/import" });
     await writePlanningPackage(input.repositoryPath);
     const directory = join(input.repositoryPath, input.planDirectory!);
-    const currentSeit = seitFixture.replace("Complete matrix.", "Current matrix with <new> evidence.");
+    const currentSeit = `\n${seitFixture.replace("test report", "current <new> test report")}\n`;
     const currentImplementation = implementationFixture.replace("pnpm test", "pnpm typecheck & pnpm test");
     await Promise.all([
       writeFile(join(directory, "seit.md"), currentSeit),
@@ -355,15 +365,130 @@ describe("JourneyService", () => {
     expect(await new JourneyService(runner).execute(input)).toMatchObject({ status: "action", planningReview: { phases: 1, slices: 1 } });
     const review = await readFile(join(directory, "review.html"), "utf8");
     expect(review).toContain('id="bearing-source-artifacts"');
+    expect(review).toContain('id="bearing-source-links"');
+    for (const name of ["plan-spec.md", "design.md", "seit.md", "implementation.md"]) expect(review).toContain(`href="./${name}"`);
     expect(review).toContain(escapeFixture(currentSeit));
     expect(review).toContain(escapeFixture(currentImplementation));
+    expect(review.match(/id="bearing-source-artifacts"/g)).toHaveLength(1);
+    expect(review.match(/id="bearing-source-links"/g)).toHaveLength(1);
+  });
+
+  it("replaces model-authored review content with the deterministic renderer", async () => {
+    const input = await request({ stage: "draft-implementation", planDirectory: "docs/plans/import" });
+    await writePlanningPackage(input.repositoryPath);
+    const reviewPath = join(input.repositoryPath, input.planDirectory!, "review.html");
+    const review = (await readFile(reviewPath, "utf8")).replace("</body>", '<nav id="bearing-source-links-extra">Keep nav</nav><section id="bearing-source-artifacts-extra">Keep section</section></body>');
+    await writeFile(reviewPath, review);
+    const receipt = completed('BEARING_RESULT {"kind":"action","summary":"Implementation plan drafted.","artifacts":["docs/plans/import/implementation.md","docs/plans/import/review.html"]}');
+
+    expect(await new JourneyService(new StubRunner(receipt)).execute(input)).toMatchObject({ status: "action" });
+    const repaired = await readFile(reviewPath, "utf8");
+    expect(repaired).not.toContain("Keep nav");
+    expect(repaired).not.toContain("Keep section");
+    expect(repaired.match(/id="bearing-source-links"/g)).toHaveLength(1);
+    expect(repaired).toContain("Planning flow");
+    expect(repaired).toContain("Traceability map");
+    expect(repaired.match(/Text equivalent:/g)).toHaveLength(2);
+  });
+
+  it("accepts execution only with one complete current final-QA review", async () => {
+    const draft = await request({ stage: "draft-implementation", planDirectory: "docs/plans/import" });
+    await writePlanningPackage(draft.repositoryPath);
+    const draftReceipt = completed('BEARING_RESULT {"kind":"action","summary":"Implementation plan drafted.","artifacts":["docs/plans/import/implementation.md","docs/plans/import/review.html"]}');
+    expect(await new JourneyService(new StubRunner(draftReceipt)).execute(draft)).toMatchObject({ status: "action" });
+    const reviewPath = join(draft.repositoryPath, draft.planDirectory!, "review.html");
+    const baseline = await readFile(reviewPath, "utf8");
+    const pending = '<section id="bearing-final-qa" data-status="pending"><h2>Actual implementation and QA</h2><p>Pending implementation and validation.</p></section>';
+    const complete = '<section id="bearing-final-qa" data-status="complete"><h2>Actual implementation and QA</h2><p>Planned versus actual: README changed exactly as planned.</p><p>Validation evidence: focused checks passed.</p></section>';
+    expect(baseline.match(/id="bearing-final-qa"/g)).toHaveLength(1);
+    expect(baseline).toContain(pending);
+    await writeFile(join(draft.repositoryPath, "README.md"), "# Updated\n");
+    const artifacts = ["README.md", "docs/plans/import/review.html"];
+    const execute = async (review: string, returnedArtifacts = artifacts) => {
+      await writeFile(reviewPath, review);
+      const runner = new StubRunner(completed(`BEARING_RESULT ${JSON.stringify({ kind: "action", summary: "Execution complete.", artifacts: returnedArtifacts })}`));
+      const result = await new JourneyService(runner).execute({ ...draft, stage: "execute-explorer" });
+      expect(runner.calls[0].stdin).toContain('<section id="bearing-final-qa" data-status="complete">');
+      expect(runner.calls[0].stdin).toContain('attribute-free `<p>` and use plain text only: no nested HTML, markup, `<`, or `>`');
+      expect(runner.calls[0].stdin).toContain("review.html and every actual changed artifact");
+      return result;
+    };
+
+    expect(await execute(baseline)).toEqual({ status: "failure", code: "artifact_invalid", tokens: 5 });
+    expect(await execute(baseline.replace(pending, complete), ["README.md"])).toEqual({ status: "failure", code: "artifact_invalid", tokens: 5 });
+    expect(await execute(baseline.replace(pending, `${complete}${complete}`))).toEqual({ status: "failure", code: "artifact_invalid", tokens: 5 });
+    expect(await execute(baseline.replace(pending, complete.replace("</section>", "")))).toEqual({ status: "failure", code: "artifact_invalid", tokens: 5 });
+    expect(await execute(baseline.replace(pending, complete).replace('href="./implementation.md"', 'href="./missing.md"'))).toEqual({ status: "failure", code: "artifact_invalid", tokens: 5 });
+    expect(await execute(baseline.replace(pending, complete).replace(escapeFixture(planFixture), "stale plan"))).toEqual({ status: "failure", code: "artifact_invalid", tokens: 5 });
+    const attributeOnly = '<section id="bearing-final-qa" data-status="complete" data-planned="Planned versus actual: claimed" data-validation="Validation evidence: claimed"><h2>Actual implementation and QA</h2></section>';
+    expect(await execute(baseline.replace(pending, attributeOnly))).toEqual({ status: "failure", code: "artifact_invalid", tokens: 5 });
+    const hiddenParagraph = '<section id="bearing-final-qa" data-status="complete"><h2>Actual implementation and QA</h2><p hidden>Planned versus actual: claimed.</p><p>Validation evidence: focused checks passed.</p></section>';
+    expect(await execute(baseline.replace(pending, hiddenParagraph))).toEqual({ status: "failure", code: "artifact_invalid", tokens: 5 });
+    const hiddenStyle = '<section id="bearing-final-qa" data-status="complete"><h2>Actual implementation and QA</h2><p style="display:none">Planned versus actual: claimed.</p><p>Validation evidence: focused checks passed.</p></section>';
+    expect(await execute(baseline.replace(pending, hiddenStyle))).toEqual({ status: "failure", code: "artifact_invalid", tokens: 5 });
+    const nestedCarrier = '<section id="bearing-final-qa" data-status="complete"><h2>Actual implementation and QA</h2><p><strong>Planned versus actual:</strong> claimed.</p><p>Validation evidence: focused checks passed.</p></section>';
+    expect(await execute(baseline.replace(pending, nestedCarrier))).toEqual({ status: "failure", code: "artifact_invalid", tokens: 5 });
+    const commentOnly = '<section id="bearing-final-qa" data-status="complete"><h2>Actual implementation and QA</h2><!-- Planned versus actual: claimed --><!-- Validation evidence: claimed --></section>';
+    expect(await execute(baseline.replace(pending, commentOnly))).toEqual({ status: "failure", code: "artifact_invalid", tokens: 5 });
+    expect(await execute(`${baseline}<!-- ${complete} -->`)).toEqual({ status: "failure", code: "artifact_invalid", tokens: 5 });
+    const missingPlannedEvidence = '<section id="bearing-final-qa" data-status="complete"><h2>Actual implementation and QA</h2><p>Planned versus actual:</p><p>Validation evidence: focused checks passed.</p></section>';
+    expect(await execute(baseline.replace(pending, missingPlannedEvidence))).toEqual({ status: "failure", code: "artifact_invalid", tokens: 5 });
+
+    const completedReview = baseline.replace(pending, complete);
+    expect(await execute(completedReview)).toEqual({ status: "action", summary: "Execution complete.", artifacts, tokens: 5 });
+    const retained = await readFile(reviewPath, "utf8");
+    for (const [name, source] of [["plan-spec.md", planFixture], ["design.md", designFixture], ["seit.md", seitFixture], ["implementation.md", implementationFixture]]) {
+      expect(retained).toContain(`href="./${name}"`);
+      expect(retained).toContain(escapeFixture(source));
+    }
+  });
+
+  it("rejects structurally invalid implementation plans before returning execution choices", async () => {
+    const input = await request({ stage: "draft-implementation", planDirectory: "docs/plans/import" });
+    await writeDesignPackage(input.repositoryPath);
+    const receipt = completed('BEARING_RESULT {"kind":"action","summary":"Implementation plan drafted.","artifacts":["docs/plans/import/implementation.md","docs/plans/import/review.html"]}');
+    const validSliceTwo = implementationFixture.replaceAll("1.1", "1.2").replace("Import bounded account data.", "Verify bounded account data.").replace("src/import.ts", "test/import.test.ts");
+    const cases = [
+      implementationFixture.replace(/\n### 1\.1 execution manifest[\s\S]*$/, ""),
+      implementationFixture.replace(/\n\*\*Human decision\.\*\*[\s\S]*$/, ""),
+      implementationFixture.replace("`src/import.ts` only.", "`src/*.ts`."),
+      implementationFixture.replace("`src/import.ts` only.", "`../../secret` only."),
+      implementationFixture.replace("`src/import.ts` only.", "`/etc/passwd` only."),
+      implementationFixture.replace("`src/import.ts` only.", "`C:/Windows/system.ini` only."),
+      implementationFixture.replace("**Requirement IDs.** AC-1", "**Requirement IDs.** AC-9"),
+      implementationFixture.replace("**Design IDs.** DES-1, CONTRACT-1", "**Design IDs.** DES-9"),
+      implementationFixture.replace("**SEIT proof rows.** SEIT-1", "**SEIT proof rows.** SEIT-9"),
+      implementationFixture.replace("**Command IDs.** CMD-UNIT", "**Command IDs.** CMD-UNKNOWN"),
+      implementationFixture.replace("### Slice 1.1", "### slice 1.1"),
+      `${implementationFixture}\n${validSliceTwo}`,
+      `## Dependencies\n\n- Wave 1: Slice 1.1.\n- Wave 3: Slice 1.2.\n\n${implementationFixture}\n${validSliceTwo}`,
+    ];
+
+    for (const implementation of cases) {
+      await Promise.all([
+        writeFile(join(input.repositoryPath, input.planDirectory!, "implementation.md"), implementation),
+        writeFile(join(input.repositoryPath, input.planDirectory!, "review.html"), `<html><body>${[planFixture, designFixture, seitFixture, implementation].map((value) => `<pre>${escapeFixture(value)}</pre>`).join("")}</body></html>`),
+      ]);
+      expect(await new JourneyService(new StubRunner(receipt)).execute(input)).toEqual({ status: "failure", code: "artifact_invalid", tokens: 5 });
+    }
+
+    const valid = `## Dependencies\n\n- Wave 1: Slice 1.1.\n- Wave 2: Slice 1.2.\n\n${implementationFixture}\n${validSliceTwo}`;
+    await Promise.all([
+      writeFile(join(input.repositoryPath, input.planDirectory!, "implementation.md"), valid),
+      writeFile(join(input.repositoryPath, input.planDirectory!, "review.html"), `<html><body>${[planFixture, designFixture, seitFixture, valid].map((value) => `<pre>${escapeFixture(value)}</pre>`).join("")}</body></html>`),
+    ]);
+    expect(await new JourneyService(new StubRunner(receipt)).execute(input)).toMatchObject({ status: "action", planningReview: { slices: 2 } });
+
+    const noWrites = implementationFixture.replace("**Write set.** `src/import.ts` only.", "**Write set.** No writes required.");
+    await writeFile(join(input.repositoryPath, input.planDirectory!, "implementation.md"), noWrites);
+    expect(await new JourneyService(new StubRunner(receipt)).execute(input)).toMatchObject({ status: "action", planningReview: { slices: 1 } });
   });
 
   it("accepts supported per-slice routing independent of onboarding and rejects invalid routing fields", async () => {
     const input = await request({ stage: "draft-implementation", planDirectory: "docs/plans/import" });
     await writeDesignPackage(input.repositoryPath);
     const writeSlice = async (model: string, reasoning: string, ponytail: string): Promise<void> => {
-      const implementation = `# Implementation\n\n## Phase 1 — Build\n\n### Slice 1.1 — Import\n\n**Implementation role.** Backend Engineer\n\n**Agent model route.** ${model}\n\n**Agent reasoning level.** ${reasoning}\n\n**Ponytail mode.** ${ponytail}\n\n**Review path.** native review\n\n**Required lint/static-analysis.** pnpm test\n`;
+      const implementation = implementationFixture.replace("Codex agent default", model).replace("medium.", reasoning).replace("**Ponytail mode.** full", `**Ponytail mode.** ${ponytail}`);
       await Promise.all([
         writeFile(join(input.repositoryPath, input.planDirectory!, "implementation.md"), implementation),
         writeFile(join(input.repositoryPath, input.planDirectory!, "review.html"), `<html><body>${[planFixture, designFixture, seitFixture, implementation].map((value) => `<pre>${escapeFixture(value)}</pre>`).join("")}</body></html>`),
@@ -375,6 +500,10 @@ describe("JourneyService", () => {
       await writeSlice(model, reasoning, "full");
       expect(await new JourneyService(new StubRunner(receipt)).execute(input)).toMatchObject({ status: "action", planningReview: { assignments: [{ model, reasoning }] } });
     }
+    await writeSlice("Codex agent default", "medium", "off");
+    expect(await new JourneyService(new StubRunner(receipt)).execute(input)).toMatchObject({ status: "action", planningReview: { assignments: [{ model: "Codex agent default", reasoning: "medium" }] } });
+    await writeSlice("Codex agent default", "medium", "off — documentation-only slice");
+    expect(await new JourneyService(new StubRunner(receipt)).execute(input)).toMatchObject({ status: "failure", code: "artifact_invalid" });
     await writeSlice("Gork Build", "high", "full");
     expect(await new JourneyService(new StubRunner(receipt)).execute(input)).toMatchObject({ status: "failure", code: "artifact_invalid" });
     await writeSlice("Grok Build", "ultra", "full");
@@ -399,15 +528,37 @@ describe("JourneyService", () => {
     expect(await new JourneyService(new StubRunner(receipt)).execute(input)).toMatchObject({ status: "failure", code: "artifact_invalid" });
   });
 
-  it("accepts only bounded agent next-stage estimates", async () => {
+  it("retains bounded estimates and drops only invalid optional estimate metadata", async () => {
     const input = await request({ gatherMode: "apply", planDirectory: "docs/plans/import" });
     await mkdir(join(input.repositoryPath, input.planDirectory!), { recursive: true });
     await writeFile(join(input.repositoryPath, input.planDirectory!, "plan-spec.md"), planFixture);
     const valid = new StubRunner(completed('BEARING_RESULT {"kind":"action","summary":"Plan saved.","artifacts":["docs/plans/import/plan-spec.md"],"nextStageEstimate":{"stage":"map-route","minMinutes":8,"maxMinutes":14,"basis":"repository map and two design surfaces"}}'));
     expect(await new JourneyService(valid).execute(input)).toMatchObject({ status: "action", nextStageEstimate: { stage: "map-route", minMinutes: 8, maxMinutes: 14 } });
     expect(valid.calls[0].stdin).toContain("Do not estimate from repository inspection size alone");
-    const invalid = new StubRunner(completed('BEARING_RESULT {"kind":"action","summary":"Plan saved.","artifacts":["docs/plans/import/plan-spec.md"],"nextStageEstimate":{"stage":"map-route","minMinutes":14,"maxMinutes":8,"basis":"bad range"}}'));
-    expect(await new JourneyService(invalid).execute(input)).toEqual({ status: "failure", code: "result_malformed", tokens: 5 });
+    expect(valid.calls[0].stdin).toContain("Keep the estimate basis at most 280 characters");
+
+    const basisAtLimit = "x".repeat(280);
+    const atLimit = new JourneyService(new StubRunner(completed(`BEARING_RESULT ${JSON.stringify({ kind: "action", summary: "Plan saved.", artifacts: ["docs/plans/import/plan-spec.md"], nextStageEstimate: { stage: "map-route", minMinutes: 8, maxMinutes: 14, basis: basisAtLimit } })}`)));
+    expect(await atLimit.execute(input)).toMatchObject({ status: "action", nextStageEstimate: { basis: basisAtLimit } });
+    expect(atLimit.activityTrail(input.runId).some((entry) => entry.kind === "estimate.dropped")).toBe(false);
+
+    const basisOverLimit = "x".repeat(281);
+    const overlongAction = new JourneyService(new StubRunner(completed(`BEARING_RESULT ${JSON.stringify({ kind: "action", summary: "Plan saved.", artifacts: ["docs/plans/import/plan-spec.md"], nextStageEstimate: { stage: "map-route", minMinutes: 8, maxMinutes: 14, basis: basisOverLimit } })}`)));
+    expect(await overlongAction.execute(input)).toEqual({ status: "action", summary: "Plan saved.", artifacts: ["docs/plans/import/plan-spec.md"], tokens: 5 });
+    expect(overlongAction.activityTrail(input.runId)).toEqual(expect.arrayContaining([expect.objectContaining({ kind: "estimate.dropped", status: "basis_too_long" })]));
+
+    const invalid = new JourneyService(new StubRunner(completed('BEARING_RESULT {"kind":"action","summary":"Plan saved.","artifacts":["docs/plans/import/plan-spec.md"],"nextStageEstimate":{"stage":"map-route","minMinutes":14,"maxMinutes":8,"basis":"bad range"}}')));
+    expect(await invalid.execute(input)).toEqual({ status: "action", summary: "Plan saved.", artifacts: ["docs/plans/import/plan-spec.md"], tokens: 5 });
+    expect(invalid.activityTrail(input.runId)).toEqual(expect.arrayContaining([expect.objectContaining({ kind: "estimate.dropped", status: "invalid" })]));
+
+    const wrongStage = new JourneyService(new StubRunner(completed('BEARING_RESULT {"kind":"action","summary":"Plan saved.","artifacts":["docs/plans/import/plan-spec.md"],"nextStageEstimate":{"stage":"review","minMinutes":8,"maxMinutes":14,"basis":"wrong stage"}}')));
+    expect(await wrongStage.execute(input)).toEqual({ status: "action", summary: "Plan saved.", artifacts: ["docs/plans/import/plan-spec.md"], tokens: 5 });
+    expect(wrongStage.activityTrail(input.runId)).toEqual(expect.arrayContaining([expect.objectContaining({ kind: "estimate.dropped", status: "stage_invalid" })]));
+
+    const questionInput = await request({ runId: "estimate-question" });
+    const overlongQuestion = new JourneyService(new StubRunner(completed(`BEARING_RESULT ${JSON.stringify({ kind: "question", question: "Continue?", nextStageEstimate: { stage: "gather-supplies", minMinutes: 8, maxMinutes: 14, basis: basisOverLimit } })}`)));
+    expect(await overlongQuestion.execute(questionInput)).toEqual({ status: "question", question: "Continue?", tokens: 5 });
+    expect(overlongQuestion.activityTrail(questionInput.runId)).toEqual(expect.arrayContaining([expect.objectContaining({ kind: "estimate.dropped", status: "basis_too_long" })]));
   });
 
   it("requests and accepts one generic execution estimate before mode selection", async () => {
@@ -441,7 +592,7 @@ describe("JourneyService", () => {
           await writeDesignPackage(input.repositoryPath);
           return completed('BEARING_RESULT {"kind":"action","summary":"Design complete.","artifacts":["docs/plans/import/design.md","docs/plans/import/seit.md","docs/plans/import/review.html"]}', 7);
         }
-        await writePlanningPackage(input.repositoryPath);
+        await writeFile(join(input.repositoryPath, "docs/plans/import/implementation.md"), implementationFixture);
         return completed('BEARING_RESULT {"kind":"action","summary":"Implementation drafted.","artifacts":["docs/plans/import/implementation.md","docs/plans/import/review.html"]}', 11);
       },
     };
@@ -453,6 +604,16 @@ describe("JourneyService", () => {
     expect(calls[0].stdin).not.toContain("draft implementation.md and regenerate");
     expect(calls[1].stdin).toContain("Explicitly invoke $to-plan");
     expect(service.activityTrail(input.runId).map((entry) => entry.kind)).toEqual(["stage.started", "design.ready", "implementation-draft.started"]);
+    const reviewPath = join(input.repositoryPath, "docs/plans/import/review.html");
+    const firstReview = await readFile(reviewPath, "utf8");
+    for (const [name, source] of [["plan-spec.md", planFixture], ["design.md", designFixture], ["seit.md", seitFixture], ["implementation.md", implementationFixture]]) {
+      expect(firstReview).toContain(`href="./${name}"`);
+      expect(firstReview).toContain(escapeFixture(source));
+    }
+    expect(firstReview.match(/id="bearing-source-links"/g)).toHaveLength(1);
+    expect(firstReview.match(/id="bearing-source-artifacts"/g)).toHaveLength(1);
+    expect(await service.execute({ ...input, stage: "draft-implementation" })).toMatchObject({ status: "action", planningReview: { slices: 1 } });
+    expect(await readFile(reviewPath, "utf8")).toBe(firstReview);
   });
 
   it("repairs a summary-only design review before drafting implementation", async () => {
@@ -511,20 +672,18 @@ describe("JourneyService", () => {
     expect(review).toContain(escapeFixture(seitFixture));
   });
 
-  it("does not repair a stale review until the design stage runs again", async () => {
+  it("regenerates a stale review from a current valid plan before drafting", async () => {
     const input = await request({ stage: "map-route", planDirectory: "docs/plans/import" });
     const directory = join(input.repositoryPath, "docs/plans/import");
     await writeDesignPackage(input.repositoryPath);
-    await writeFile(join(directory, "plan-spec.md"), "# Revised Plan\n");
-    const runner = new QueueRunner([
-      completed('BEARING_RESULT {"kind":"action","summary":"Design amended.","artifacts":["docs/plans/import/design.md","docs/plans/import/seit.md","docs/plans/import/review.html"]}', 7),
-      completed('BEARING_RESULT {"kind":"question","question":"Approve the implementation route?"}', 11),
-    ]);
+    const revisedPlan = planFixture.replace("Bounded account data is imported.", "Revised bounded account data is imported.");
+    await writeFile(join(directory, "plan-spec.md"), revisedPlan);
+    const runner = new QueueRunner([completed('BEARING_RESULT {"kind":"question","question":"Approve the implementation route?"}', 11)]);
 
-    expect(await new JourneyService(runner).execute(input)).toEqual({ status: "question", question: "Approve the implementation route?", tokens: 18 });
-    expect(runner.calls).toHaveLength(2);
-    expect(runner.calls[0].stdin).toContain("Explicitly invoke $design-driven-build");
-    expect(await readFile(join(directory, "review.html"), "utf8")).toContain(escapeFixture("# Revised Plan\n"));
+    expect(await new JourneyService(runner).execute(input)).toEqual({ status: "question", question: "Approve the implementation route?", tokens: 11 });
+    expect(runner.calls).toHaveLength(1);
+    expect(runner.calls[0].stdin).toContain("Explicitly invoke $to-plan");
+    expect(await readFile(join(directory, "review.html"), "utf8")).toContain(escapeFixture(revisedPlan));
   });
 
   it("rejects a linked review target instead of overwriting it during repair", async () => {
@@ -544,7 +703,7 @@ describe("JourneyService", () => {
     expect(await readFile(join(input.repositoryPath, "unrelated.html"), "utf8")).toBe("do not replace");
   });
 
-  it("does not repair review HTML after the owner cancels the design action", async () => {
+  it("renders the deterministic design review before a later owner cancellation", async () => {
     const input = await request({ stage: "map-route", planDirectory: "docs/plans/import" });
     const directory = join(input.repositoryPath, "docs/plans/import");
     await mkdir(directory, { recursive: true });
@@ -566,7 +725,10 @@ describe("JourneyService", () => {
     service = new JourneyService(runner);
 
     expect(await service.execute(input)).toEqual({ status: "failure", code: "cancelled", tokens: 7 });
-    expect(await readFile(join(directory, "review.html"), "utf8")).toBe(summary);
+    const review = await readFile(join(directory, "review.html"), "utf8");
+    expect(review).not.toBe(summary);
+    expect(review).toContain("Bearing planning review");
+    expect(review).toContain(escapeFixture(planFixture));
   });
 
   it("returns a blocking question from the implementation-draft call without rerunning valid design", async () => {

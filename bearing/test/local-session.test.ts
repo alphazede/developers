@@ -378,6 +378,13 @@ describe("GET / native page and fragment secrecy", () => {
     expect(r.body).toContain("Only clean, proven-merged temporary lanes are removed.");
     expect(r.body).toContain('cleanupMergedWorktrees: document.getElementById("cleanup-worktrees").checked');
     expect(r.body).toContain('id="journey-retry" type="button" hidden>Retry');
+    expect(r.body).toContain('id="recovery-report" hidden');
+    expect(r.body).toContain('id="dismiss-recovery-report" type="button">Not now</button>');
+    expect(r.body).toContain('https://github.com/alphazede/developers/issues/new?title=');
+    expect(r.body).toContain('https://github.com/alphazede/developers/security/advisories/new');
+    expect(r.body).toContain('window.open("https://github.com/alphazede/developers/issues/new?title="');
+    expect(r.body).toContain('document.getElementById("dismiss-recovery-report").addEventListener("click", function () { document.getElementById("recovery-report").hidden = true; });');
+    expect(r.body).not.toContain('fetch("https://github.com/alphazede/developers');
     expect(r.body).toContain('setStatus(phaseNames[stage] + " is working…", true)');
     expect(r.body).toContain("This run reached its token budget before the phase completed. Retry after lowering reasoning with /model or raise the CLI budget.");
     expect(r.body).toContain("Your answers and planning files are saved. Bearing could not verify the generated implementation package.");
@@ -441,6 +448,10 @@ describe("GET / native page and fragment secrecy", () => {
     expect(r.body).toContain('document.getElementById("launch-bearing").disabled = false;');
     expect(r.body).toContain('history-button');
     expect(r.body).toContain('id="clear-history"');
+    expect(r.body.match(/var hasSavedResult = !!\(entry\.stage && entry\.lastResult\)/g)).toHaveLength(2);
+    expect(r.body).toContain('entry.status === "complete" && hasSavedResult ? "View completed evidence"');
+    expect(r.body).toContain('setStatus(entry.status === "complete" ? "Opened completed journey evidence." : "Resumed the saved journey.", false)');
+    expect(r.body).not.toContain('entry.status !== "complete"');
     expect(r.body).toContain('remove.textContent = "Delete"');
     expect(r.body).toContain('method: "DELETE"');
     expect(r.body).toContain("Generated files will stay in the repository.");
@@ -465,7 +476,8 @@ describe("GET / native page and fragment secrecy", () => {
     // If the fragment leaked into req.url the path check would 404; a 200 proves
     // the server only ever saw "/" on the initial GET.
     expect(r.body).not.toContain("Rejected");
-    const script = /<script>([\s\S]*)<\/script>/.exec(r.body)?.[1];
+    const scriptStart = r.body.indexOf("<script>"), scriptEnd = r.body.lastIndexOf("</script>");
+    const script = scriptStart >= 0 && scriptEnd > scriptStart ? r.body.slice(scriptStart + "<script>".length, scriptEnd) : undefined;
     expect(script).toBeDefined();
     expect(() => new Function(script!)).not.toThrow();
 
@@ -497,10 +509,13 @@ describe("GET / native page and fragment secrecy", () => {
     }
   });
 
-  it("returns 404 for unknown routes under a valid Host", async () => {
-    const { port } = await launch();
-    const r = await call(port, { method: "GET", path: "/api/v1/nope" });
-    expect(r.status).toBe(404);
+  it("authenticates before protected route selection and returns 404 only after authentication", async () => {
+    const { port, cap } = await launch();
+    for (const path of ["/api/v1/routes", "/api/v1/workflows", "/api/v1/workflows/example/report", "/api/v1/workflows/example", "/api/v1/runs/example"]) {
+      expect((await call(port, { method: "GET", path })).status).toBe(401);
+    }
+    const cookie = await exchangeCookie(port, cap);
+    expect((await call(port, { method: "GET", path: "/api/v1/nope", headers: { cookie } })).status).toBe(404);
   });
 });
 
